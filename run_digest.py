@@ -2,15 +2,15 @@
 """
 Signal Discord Digest Pipeline
 - Reads Discord text export
-- Chunks into ~50k-token pieces
+- Chunks into ~10k-token pieces
 - Per-chunk: summary + evidence selection + time anchoring via Gemma 4
 - Final chronological summary
-- Outputs static HTML report
+- Outputs modern news-style static HTML report
 """
 from __future__ import annotations
 
 import argparse
-import html
+import html as html_mod
 import json
 import os
 import re
@@ -31,6 +31,7 @@ ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:
 CHARS_PER_TOKEN = 3.5
 MAX_CONCURRENT = 5
 KEY_MIN_GAP_S = 3.0
+MIN_CONTENT_LEN = 200
 
 ENV_KEY_FILES = [
     Path.home() / ".config" / "legal_evidence_rag" / "keys.env",
@@ -89,13 +90,7 @@ def load_keys() -> list[str]:
 
 # ── API call ────────────────────────────────────────────────────
 
-def call_gemma(
-    prompt: str,
-    model: str,
-    scheduler: KeyScheduler,
-    temperature: float = 0.3,
-    max_tokens: int = 8192,
-) -> str:
+def call_gemma(prompt, model, scheduler, temperature=0.5, max_tokens=8192):
     endpoint = ENDPOINT_TPL.format(model=model)
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -104,417 +99,301 @@ def call_gemma(
     for attempt in range(20):
         key = scheduler.acquire()
         try:
-            resp = requests.post(
-                f"{endpoint}?key={key}",
-                json=body,
-                headers={"Content-Type": "application/json"},
-                timeout=120,
-            )
+            resp = requests.post(f"{endpoint}?key={key}", json=body,
+                                 headers={"Content-Type": "application/json"}, timeout=180)
         except requests.RequestException as e:
             print(f"    Network error (attempt {attempt+1}): {e}", flush=True)
-            _backoff(resp=None)
-            continue
+            _backoff(None); continue
 
         if resp.status_code == 429 or resp.status_code >= 500:
             print(f"    API {resp.status_code} (key ...{key[-6:]}), backing off", flush=True)
-            _backoff(resp)
-            continue
+            _backoff(resp); continue
 
         if not resp.ok:
             print(f"    API error {resp.status_code}: {resp.text[:200]}", flush=True)
-            _backoff(resp)
-            continue
+            _backoff(resp); continue
 
         data = resp.json()
-        text = ""
         try:
             text = data["candidates"][0]["content"]["parts"][0]["text"]
+            if text: return text
         except (KeyError, IndexError):
-            print(f"    Empty response, retrying...", flush=True)
-            time.sleep(3)
-            continue
-
-        if text:
-            return text
-
+            pass
+        print(f"    Empty response, retrying...", flush=True)
+        time.sleep(3)
     raise RuntimeError("Failed after 20 attempts")
 
 
-def _backoff(resp=None):
+def _backoff(resp):
     if resp is not None:
         ra = resp.headers.get("Retry-After")
         if ra:
-            try:
-                time.sleep(float(ra))
-                return
-            except ValueError:
-                pass
+            try: time.sleep(float(ra)); return
+            except ValueError: pass
     now = time.time()
-    to_next_min = 60 - (now % 60)
-    jitter = (hash(str(now)) % 500) / 1000
-    time.sleep(to_next_min + jitter)
-
-# ── Structured output parsing ───────────────────────────────────
-
-def parse_envelope(text: str) -> dict[int, str]:
-    m = re.search(r"<\s*data\s*>([\s\S]*?)<\s*/\s*data\s*>", text, re.IGNORECASE)
-    if not m:
-        raise ValueError("Missing <data> wrapper")
-    inner = m.group(1)
-    items = {}
-    for im in re.finditer(r"<\s*id:(\d+)\s*>([\s\S]*?)<\s*/\s*id:\1\s*>", inner, re.IGNORECASE):
-        items[int(im.group(1))] = im.group(2).strip()
-    if not items:
-        raise ValueError("No <id:n> items")
-    return items
+    time.sleep(60 - (now % 60) + (hash(str(now)) % 500) / 1000)
 
 
-def call_gemma_structured(prompt: str, model: str, scheduler: KeyScheduler) -> dict[int, str]:
-    for _ in range(10):
+def call_gemma_validated(prompt, model, scheduler):
+    for attempt in range(10):
         raw = call_gemma(prompt, model, scheduler)
-        try:
-            return parse_envelope(raw)
-        except ValueError as e:
-            print(f"    Structured parse failed: {e}, retrying...", flush=True)
-    raise RuntimeError("Structured output failed after 10 retries")
+        if len(raw.strip()) >= MIN_CONTENT_LEN:
+            return raw.strip()
+        print(f"    Response too short ({len(raw)} chars), retrying ({attempt+1}/10)...", flush=True)
+    raise RuntimeError("Failed to get substantial response after 10 retries")
 
 # ── Tokenizer / chunking ───────────────────────────────────────
 
-def estimate_tokens(text: str) -> int:
+def estimate_tokens(text):
     return int(len(text) / CHARS_PER_TOKEN)
 
-
-def chunk_text(text: str, token_limit: int) -> list[str]:
+def chunk_text(text, token_limit):
     msg_re = re.compile(r"^\[\d{4}\. \d{1,2}\. \d{1,2}\. (?:오전|오후) \d{1,2}:\d{2}\]")
     lines = text.split("\n")
-    messages: list[str] = []
-    current: list[str] = []
-
+    messages, current = [], []
     for line in lines:
         if msg_re.match(line) and current:
             messages.append("\n".join(current))
             current = [line]
         else:
             current.append(line)
-    if current:
-        messages.append("\n".join(current))
+    if current: messages.append("\n".join(current))
 
-    chunks: list[str] = []
-    buf: list[str] = []
-    buf_tokens = 0
-
+    chunks, buf, buf_tokens = [], [], 0
     for msg in messages:
         t = estimate_tokens(msg)
         if buf_tokens + t > token_limit and buf:
             chunks.append("\n\n".join(buf))
-            buf = []
-            buf_tokens = 0
+            buf, buf_tokens = [], 0
         buf.append(msg)
         buf_tokens += t
-
-    if buf:
-        chunks.append("\n\n".join(buf))
+    if buf: chunks.append("\n\n".join(buf))
     return chunks
 
-
-def extract_time_range(chunk: str) -> tuple[str | None, str | None, str]:
+def extract_time_range(chunk):
     ts_re = re.compile(r"\[(\d{4})\. (\d{1,2})\. (\d{1,2})\. (오전|오후) (\d{1,2}):(\d{2})\]")
     first = last = None
     for m in ts_re.finditer(chunk):
         y, mo, d, period, h, mi = m.groups()
         hour = int(h)
-        if period == "오후" and hour != 12:
-            hour += 12
-        if period == "오전" and hour == 12:
-            hour = 0
+        if period == "오후" and hour != 12: hour += 12
+        if period == "오전" and hour == 12: hour = 0
         dt = datetime(int(y), int(mo), int(d), hour, int(mi))
-        if first is None or dt < first:
-            first = dt
-        if last is None or dt > last:
-            last = dt
+        if first is None or dt < first: first = dt
+        if last is None or dt > last: last = dt
     fmt = lambda d: d.strftime("%Y-%m-%d %H:%M") if d else "?"
-    return (
-        first.isoformat() if first else None,
-        last.isoformat() if last else None,
-        f"{fmt(first)} ~ {fmt(last)}",
-    )
+    return (first.isoformat() if first else None,
+            last.isoformat() if last else None,
+            f"{fmt(first)} ~ {fmt(last)}")
 
 # ── Prompts ─────────────────────────────────────────────────────
 
-def build_chunk_prompt(chunk: str, idx: int, total: int, time_label: str) -> str:
-    return f"""당신은 디스코드 서버 대화 분석 전문가입니다.
+def build_chunk_prompt(chunk, idx, total, time_label):
+    return f"""다음 디스코드 대화({time_label})를 한국어로 분석해주세요.
 
-아래는 디스코드 서버 대화 기록의 {total}개 청크 중 {idx + 1}번째입니다.
-시간 범위: {time_label}
+누가 무슨 이야기를 했는지 구체적으로 요약하세요. 유저이름과 기술적 세부사항을 반드시 포함하세요.
+가장 중요한 발언 3~5개를 원문 인용하고 왜 중요한지 설명하세요.
+주요 사건을 시간순으로 나열하세요.
 
-다음 작업을 수행하세요:
+{chunk}"""
 
-1. **요약**: 이 구간에서 논의된 주요 주제, 핵심 결론, 중요 사건을 구체적으로 요약하세요.
-2. **핵심 근거**: 가장 중요한 발언 3~7개를 원문 인용과 함께 선택하고, 왜 중요한지 한 줄씩 설명하세요.
-3. **시간 앵커**: 주요 사건/전환점의 정확한 시간을 기록하세요.
+def build_final_prompt(chunk_results):
+    sections = [f"[{cr['time_label']}] {cr['summary'][:600]}" for cr in chunk_results]
+    body = "\n---\n".join(sections)
+    return f"""다음은 디스코드 서버 3일간(2026-04-06~09) 대화의 시간대별 요약입니다. 이를 종합해서 한국어로 뉴스레터를 작성해주세요.
 
-반드시 아래 형식으로 출력하세요:
+헤드라인: 3일간 가장 핵심적인 내용을 한 문장으로 작성하고, 3~5문장으로 전체 개요를 써주세요.
+주요 스토리: 3~5개 주요 토픽을 각각 소제목 + 3~5문장으로 정리해주세요.
+타임라인: 3일간 주요 사건을 시간순으로 나열해주세요.
+인상적인 발언: 대화 중 가장 중요했거나 재미있었던 발언 5개를 골라주세요.
+활발한 참여자: 누가 가장 활발했고 어떤 기여를 했는지 정리해주세요.
 
-<data>
-<id:1>요약 내용</id:1>
-<id:2>핵심 근거 목록 (각 근거를 번호와 원문 인용으로)</id:2>
-<id:3>시간 앵커 목록 (시각: 사건 형태로)</id:3>
-</data>
+요약 데이터:
+{body}"""
 
---- 대화 기록 시작 ---
-{chunk}
---- 대화 기록 끝 ---"""
+# ── HTML rendering ──────────────────────────────────────────────
 
+def esc(s):
+    return html_mod.escape(s or "")
 
-def build_final_prompt(chunk_results: list[dict]) -> str:
-    sections = []
+def render_md(s):
+    if not s: return ""
+    t = esc(s)
+    t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+    t = re.sub(r"(?<!\*)\*([^\*\n]+?)\*(?!\*)", r"<em>\1</em>", t)
+    t = re.sub(r"`(.+?)`", r"<code>\1</code>", t)
+    t = re.sub(r"^##\s*(.+)$", r"<h4>\1</h4>", t, flags=re.MULTILINE)
+    t = re.sub(r"^#\s*(.+)$", r"<h3>\1</h3>", t, flags=re.MULTILINE)
+    t = re.sub(r"^(\s*)[\*\-]\s+(.+)$", r"\1<li>\2</li>", t, flags=re.MULTILINE)
+    t = re.sub(r"^(\s*)\d+\.\s+(.+)$", r"\1<li>\2</li>", t, flags=re.MULTILINE)
+    t = re.sub(r"((?:<li>.*?</li>\n?)+)", r"<ul>\1</ul>", t)
+    t = re.sub(r"^&gt;\s*(.+)$", r"<blockquote>\1</blockquote>", t, flags=re.MULTILINE)
+    t = t.replace("\n\n", "</p><p>")
+    return f"<div class='rendered-content'>{t}</div>"
+
+def generate_html(chunk_results, final_text, meta):
+    cards = []
     for i, cr in enumerate(chunk_results):
-        sections.append(f"""## 청크 {i+1} ({cr['time_label']})
-
-### 요약
-{cr['summary']}
-
-### 핵심 근거
-{cr['evidence']}
-
-### 시간 앵커
-{cr['time_anchors']}""")
-
-    body = "\n\n---\n\n".join(sections)
-    return f"""당신은 디스코드 서버 활동 보고서 작성 전문가입니다.
-
-아래는 디스코드 서버 3일치 대화를 시간순으로 청크별 분석한 결과입니다.
-모든 청크의 분석 결과를 종합하여 최종 보고서를 작성하세요.
-
-요구사항:
-1. **전체 타임라인**: 3일간 시간 흐름에 따른 주요 사건/논의를 시간순으로 정리
-2. **주제별 정리**: 핵심 주제를 분류하고 각 주제의 논의 내용과 결론을 정리
-3. **핵심 인사이트**: 서버에서 가장 중요했던 결정, 발견, 합의사항
-4. **주요 참여자 활동**: 활발한 참여자와 그들의 주요 기여
-
-반드시 아래 형식으로 출력하세요:
-
-<data>
-<id:1>전체 타임라인 (시간순 주요 사건)</id:1>
-<id:2>주제별 정리</id:2>
-<id:3>핵심 인사이트</id:3>
-<id:4>주요 참여자 활동</id:4>
-</data>
-
---- 청크별 분석 결과 ---
-{body}
---- 끝 ---"""
-
-# ── HTML generation ─────────────────────────────────────────────
-
-def generate_html(chunk_results: list[dict], final: dict, meta: dict) -> str:
-    def esc(s):
-        return html.escape(s or "")
-
-    def md(s):
-        if not s:
-            return ""
-        t = esc(s)
-        t = t.replace("\n", "<br/>")
-        t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
-        t = re.sub(r"`(.+?)`", r"<code>\1</code>", t)
-        return t
-
-    chunk_cards = []
-    for i, cr in enumerate(chunk_results):
-        chunk_cards.append(f"""
-        <div class="chunk-card">
-          <div class="time-anchor">{esc(cr['time_label'])}</div>
-          <div class="summary"><strong>Chunk {i+1} Summary</strong><br/>{md(cr['summary'])}</div>
-          <div class="evidence"><strong>Key Evidence</strong><br/>{md(cr['evidence'])}</div>
-          <div class="anchors"><strong>Time Anchors</strong><br/>{md(cr['time_anchors'])}</div>
-        </div>""")
+        cards.append(f"""
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">{esc(cr['time_label'])}</span> Chunk {i+1}</summary>
+          <div class="chunk-body">{render_md(cr['summary'])}</div>
+        </details>""")
 
     return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Signal - Discord 3-Day Digest</title>
+<title>Signal Daily - Discord Digest</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&display=swap');
 :root {{
-  --bg: #4a5942; --secondary-bg: #3e4637;
-  --accent: #c4b550; --secondary-accent: #958831;
-  --text: #dedfd6; --secondary-text: #d8ded3; --text-3: #a0aa95;
-  --border-light: #8c9284; --border-dark: #292c21;
+  --bg:#fafafa;--surface:#fff;--text-primary:#1a1a2e;--text-secondary:#555570;
+  --text-muted:#8888a0;--accent:#2563eb;--accent-light:#eff6ff;
+  --border:#e5e7eb;--border-light:#f3f4f6;--tag-bg:#e0e7ff;--tag-text:#3730a3;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);--radius:12px;
 }}
-*,*::before,*::after {{ box-sizing: border-box; }}
-* {{ margin: 0; padding: 0; }}
-@font-face {{
-  font-family: ArialPixel;
-  src: url("https://cdn.jsdelivr.net/gh/ekmas/cs16.css@main/ArialPixel.ttf") format("truetype");
-}}
-body {{
-  font-family: ArialPixel, system-ui, sans-serif;
-  background: var(--bg); color: var(--text);
-  padding: 20px; line-height: 1.6;
-}}
-h1 {{ color: var(--accent); text-align: center; font-size: 1.8em; margin-bottom: 4px; font-weight: 400; }}
-.subtitle {{ text-align: center; color: var(--text-3); margin-bottom: 20px; font-size: 0.9em; }}
-h2 {{ color: var(--accent); font-size: 1.3em; margin: 16px 0 8px; font-weight: 400; }}
-h3 {{ color: var(--secondary-accent); font-size: 1.05em; margin: 10px 0 4px; font-weight: 400; }}
-.final-summary {{
-  padding: 16px; margin-bottom: 20px;
-  border: 2px solid var(--accent); background: rgba(0,0,0,0.2);
-}}
-.chunk-card {{
-  margin-bottom: 14px; padding: 10px;
-  border: 1px solid var(--border-light); background: rgba(0,0,0,0.15);
-}}
-.chunk-card .time-anchor {{ color: var(--accent); font-size: 0.9em; margin-bottom: 6px; }}
-.chunk-card .summary {{ margin-bottom: 8px; }}
-.chunk-card .evidence {{ font-size: 0.9em; color: var(--text-3); margin-bottom: 6px; }}
-.chunk-card .anchors {{ font-size: 0.85em; color: var(--text-3); }}
-strong {{ color: var(--secondary-text); }}
-code {{ background: var(--secondary-bg); padding: 1px 4px; }}
-.container {{ max-width: 900px; margin: 0 auto; }}
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:'Noto Sans KR','Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text-primary);line-height:1.7;-webkit-font-smoothing:antialiased}}
+.container{{max-width:760px;margin:0 auto;padding:0 20px}}
+.site-header{{border-bottom:1px solid var(--border);padding:24px 0;margin-bottom:32px}}
+.site-header .container{{display:flex;justify-content:space-between;align-items:center}}
+.site-name{{font-size:1.1rem;font-weight:700;letter-spacing:-.02em;color:var(--accent)}}
+.site-meta{{font-size:.8rem;color:var(--text-muted)}}
+.hero{{margin-bottom:40px}}
+.hero h1{{font-size:2rem;font-weight:700;line-height:1.3;letter-spacing:-.03em;margin-bottom:16px}}
+.period-badge{{display:inline-block;font-size:.75rem;font-weight:500;color:var(--tag-text);background:var(--tag-bg);padding:4px 10px;border-radius:20px;margin-bottom:12px}}
+.section{{margin-bottom:36px}}
+.section-label{{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:12px}}
+.story-card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:16px;box-shadow:var(--shadow)}}
+.chunk-detail{{border:1px solid var(--border-light);border-radius:8px;margin-bottom:8px;overflow:hidden}}
+.chunk-detail summary{{padding:10px 16px;cursor:pointer;font-size:.85rem;color:var(--text-muted);background:var(--bg);user-select:none}}
+.chunk-detail summary:hover{{background:var(--border-light)}}
+.chunk-time{{font-family:'Inter',monospace;font-size:.8rem;color:var(--accent);margin-right:8px}}
+.chunk-body{{padding:16px;font-size:.9rem;color:var(--text-secondary)}}
+blockquote{{border-left:2px solid var(--border);padding-left:12px;margin:8px 0;color:var(--text-muted);font-style:italic}}
+code{{background:var(--border-light);padding:2px 5px;border-radius:3px;font-size:.85em}}
+h3{{font-size:1rem;font-weight:600;margin:12px 0 6px}}
+h4{{font-size:.9rem;font-weight:600;margin:8px 0 4px}}
+ul{{margin:8px 0;padding-left:20px;list-style:none}}
+li{{position:relative;padding-left:14px;margin-bottom:6px;color:var(--text-secondary);font-size:.95rem}}
+li::before{{content:'';position:absolute;left:0;top:10px;width:5px;height:5px;border-radius:50%;background:var(--accent)}}
+strong{{color:var(--text-primary)}} em{{color:var(--text-secondary)}}
+.rendered-content{{line-height:1.8}}
+.site-footer{{border-top:1px solid var(--border);padding:20px 0;margin-top:40px;text-align:center;font-size:.75rem;color:var(--text-muted)}}
+@media(max-width:600px){{.hero h1{{font-size:1.5rem}}.container{{padding:0 16px}}}}
 </style>
 </head>
 <body>
-<div class="container">
-<h1>Signal - Discord 3-Day Digest</h1>
-<div class="subtitle">{esc(meta.get('period',''))} | {esc(meta.get('guild',''))} | Generated {esc(meta.get('generated',''))}</div>
+<header class="site-header"><div class="container">
+  <div class="site-name">Signal Daily</div>
+  <div class="site-meta">{esc(meta.get('guild',''))} &middot; {esc(meta.get('generated',''))}</div>
+</div></header>
+<main class="container">
+  <div class="hero">
+    <span class="period-badge">{esc(meta.get('period',''))}</span>
+    <h1>Discord 3-Day Digest</h1>
+  </div>
+  <div class="section">
+    <div class="section-label">Overview</div>
+    <div class="story-card">{render_md(final_text)}</div>
+  </div>
+  <div class="section">
+    <div class="section-label">Detailed Analysis ({len(chunk_results)} chunks)</div>
+    {"".join(cards)}
+  </div>
+</main>
+<footer class="site-footer"><div class="container">
+  Signal Daily &mdash; Auto-generated Discord digest powered by Gemma 4
+</div></footer>
+</body></html>"""
 
-<div class="final-summary">
-<h2>Final Digest</h2>
-<h3>Timeline</h3>
-<div>{md(final.get('timeline',''))}</div>
-<h3>Topics</h3>
-<div>{md(final.get('topics',''))}</div>
-<h3>Insights</h3>
-<div>{md(final.get('insights',''))}</div>
-<h3>Contributors</h3>
-<div>{md(final.get('contributors',''))}</div>
-</div>
-
-<h2>Chunk Details ({len(chunk_results)} chunks)</h2>
-{"".join(chunk_cards)}
-</div>
-</body>
-</html>"""
-
-# ── Main pipeline ───────────────────────────────────────────────
+# ── Main ────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Discord Digest Pipeline")
     parser.add_argument("input", help="Discord text export file")
     parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--chunk-tokens", type=int, default=50000)
+    parser.add_argument("--chunk-tokens", type=int, default=10000)
     parser.add_argument("--output", default="docs/index.html")
-    parser.add_argument("--state", default="digest_state.json", help="State file for resume")
+    parser.add_argument("--state", default="digest_state.json")
     args = parser.parse_args()
 
     keys = load_keys()
-    if not keys:
-        print("ERROR: No API keys found. Set GEMINI_API_KEYS or check keys.env", file=sys.stderr)
-        sys.exit(1)
+    if not keys: print("ERROR: No API keys found.", file=sys.stderr); sys.exit(1)
     print(f"Loaded {len(keys)} API keys")
-
     scheduler = KeyScheduler(keys)
 
-    # Load or resume state
-    state: dict[str, Any] = {"chunks": [], "chunk_results": [], "final": None}
+    state = {"chunks": [], "chunk_results": [], "final_text": ""}
     state_path = Path(args.state)
     if state_path.exists():
         state = json.loads(state_path.read_text())
-        print(f"Resumed state: {len(state.get('chunk_results',[]))} chunks already done")
+        print(f"Resumed: {len(state.get('chunk_results',[]))} chunks done")
 
-    # Read input
     text = Path(args.input).read_text(encoding="utf-8")
     print(f"Input: {len(text)} chars, ~{estimate_tokens(text)} tokens")
 
-    # Extract metadata from header
     guild = ""
     for line in text.split("\n")[:10]:
-        if line.startswith("Guild: "):
-            guild = line[7:].strip()
+        if line.startswith("Guild: "): guild = line[7:].strip()
 
-    # Chunk
     if not state["chunks"]:
         state["chunks"] = chunk_text(text, args.chunk_tokens)
         print(f"Created {len(state['chunks'])} chunks")
     else:
-        print(f"Using {len(state['chunks'])} chunks from saved state")
+        print(f"Using {len(state['chunks'])} chunks from state")
 
     for i, c in enumerate(state["chunks"]):
         _, _, label = extract_time_range(c)
         print(f"  Chunk {i+1}: ~{estimate_tokens(c)} tokens, {label}")
 
-    # Phase 1: Per-chunk analysis (parallel)
     existing = {cr["chunk_index"] for cr in state.get("chunk_results", [])}
     todo = [i for i in range(len(state["chunks"])) if i not in existing]
 
     if todo:
-        print(f"\nPhase 1: Analyzing {len(todo)} chunks (5 concurrent, {len(keys)} keys)...")
-
+        print(f"\nPhase 1: Analyzing {len(todo)} chunks...")
         def process_chunk(idx):
             chunk = state["chunks"][idx]
             first_iso, _, time_label = extract_time_range(chunk)
             prompt = build_chunk_prompt(chunk, idx, len(state["chunks"]), time_label)
-            print(f"  Chunk {idx+1}: sending to {args.model}...", flush=True)
-            items = call_gemma_structured(prompt, args.model, scheduler)
-            result = {
-                "chunk_index": idx,
-                "time_label": time_label,
-                "first_time": first_iso,
-                "summary": items.get(1, ""),
-                "evidence": items.get(2, ""),
-                "time_anchors": items.get(3, ""),
-            }
-            print(f"  Chunk {idx+1}: done", flush=True)
-            return result
+            print(f"  Chunk {idx+1}: sending...", flush=True)
+            summary = call_gemma_validated(prompt, args.model, scheduler)
+            print(f"  Chunk {idx+1}: done ({len(summary)} chars)", flush=True)
+            return {"chunk_index": idx, "time_label": time_label, "first_time": first_iso, "summary": summary}
 
         with ThreadPoolExecutor(max_workers=MAX_CONCURRENT) as pool:
             futures = {pool.submit(process_chunk, i): i for i in todo}
             for future in as_completed(futures):
                 try:
-                    result = future.result()
-                    state["chunk_results"].append(result)
-                    # Save checkpoint
+                    state["chunk_results"].append(future.result())
                     state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2))
                 except Exception as e:
-                    idx = futures[future]
-                    print(f"  Chunk {idx+1} FAILED: {e}", flush=True)
+                    print(f"  Chunk {futures[future]+1} FAILED: {e}", flush=True)
 
-    # Sort chronologically
     state["chunk_results"].sort(key=lambda x: x.get("first_time") or f"z{x['chunk_index']}")
-    print(f"\nPhase 1 complete: {len(state['chunk_results'])} chunks analyzed")
+    print(f"\nPhase 1 complete: {len(state['chunk_results'])} chunks")
 
-    # Phase 2: Final summary
-    if not state.get("final"):
-        print("\nPhase 2: Generating final digest...")
+    if not state.get("final_text"):
+        print("\nPhase 2: Final digest...")
         final_prompt = build_final_prompt(state["chunk_results"])
-        print(f"  Final prompt: ~{estimate_tokens(final_prompt)} tokens")
-        items = call_gemma_structured(final_prompt, args.model, scheduler)
-        state["final"] = {
-            "timeline": items.get(1, ""),
-            "topics": items.get(2, ""),
-            "insights": items.get(3, ""),
-            "contributors": items.get(4, ""),
-        }
+        print(f"  Prompt: ~{estimate_tokens(final_prompt)} tokens")
+        state["final_text"] = call_gemma_validated(final_prompt, args.model, scheduler)
         state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2))
-        print("  Final digest generated!")
+        print(f"  Done: {len(state['final_text'])} chars")
 
-    # Generate HTML
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    fl = state["chunk_results"][0]["time_label"] if state["chunk_results"] else ""
+    ll = state["chunk_results"][-1]["time_label"] if state["chunk_results"] else ""
     meta = {
-        "period": state["chunk_results"][0]["time_label"].split("~")[0].strip()
-            + " ~ " + state["chunk_results"][-1]["time_label"].split("~")[-1].strip()
-        if state["chunk_results"] else "",
+        "period": fl.split("~")[0].strip() + " ~ " + ll.split("~")[-1].strip() if fl else "",
         "guild": guild,
         "generated": datetime.now().strftime("%Y-%m-%d %H:%M KST"),
     }
-    html_content = generate_html(state["chunk_results"], state["final"], meta)
+    html_content = generate_html(state["chunk_results"], state["final_text"], meta)
     out_path.write_text(html_content, encoding="utf-8")
     print(f"\nOutput: {out_path} ({len(html_content)} bytes)")
-    print("Done!")
-
 
 if __name__ == "__main__":
     main()

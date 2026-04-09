@@ -5,351 +5,123 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Signal Daily - Discord Digest</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&display=swap');
-
-  :root {
-    --bg: #fafafa;
-    --surface: #ffffff;
-    --text-primary: #1a1a2e;
-    --text-secondary: #555570;
-    --text-muted: #8888a0;
-    --accent: #2563eb;
-    --accent-light: #eff6ff;
-    --border: #e5e7eb;
-    --border-light: #f3f4f6;
-    --quote-bg: #f8f9fc;
-    --tag-bg: #e0e7ff;
-    --tag-text: #3730a3;
-    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-    --shadow-md: 0 4px 6px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.04);
-    --radius: 12px;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    font-family: 'Noto Sans KR', 'Inter', -apple-system, sans-serif;
-    background: var(--bg);
-    color: var(--text-primary);
-    line-height: 1.7;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  .container {
-    max-width: 760px;
-    margin: 0 auto;
-    padding: 0 20px;
-  }
-
-  /* ─── Header ─── */
-  .site-header {
-    border-bottom: 1px solid var(--border);
-    padding: 24px 0;
-    margin-bottom: 32px;
-  }
-  .site-header .container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .site-name {
-    font-size: 1.1rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--accent);
-  }
-  .site-meta {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
-  /* ─── Hero / Headline ─── */
-  .hero {
-    margin-bottom: 40px;
-  }
-  .hero h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    line-height: 1.3;
-    letter-spacing: -0.03em;
-    color: var(--text-primary);
-    margin-bottom: 16px;
-  }
-  .hero .overview {
-    font-size: 1.05rem;
-    color: var(--text-secondary);
-    line-height: 1.8;
-  }
-  .hero .period-badge {
-    display: inline-block;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--tag-text);
-    background: var(--tag-bg);
-    padding: 4px 10px;
-    border-radius: 20px;
-    margin-bottom: 12px;
-  }
-
-  /* ─── Section ─── */
-  .section {
-    margin-bottom: 36px;
-  }
-  .section-label {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--accent);
-    margin-bottom: 12px;
-  }
-
-  /* ─── Story cards ─── */
-  .story-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 24px;
-    margin-bottom: 16px;
-    box-shadow: var(--shadow);
-  }
-  .story-card h3 {
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 8px;
-    line-height: 1.4;
-  }
-  .story-card p {
-    color: var(--text-secondary);
-    font-size: 0.95rem;
-  }
-
-  /* ─── Timeline ─── */
-  .timeline {
-    position: relative;
-    padding-left: 28px;
-  }
-  .timeline::before {
-    content: '';
-    position: absolute;
-    left: 8px;
-    top: 4px;
-    bottom: 4px;
-    width: 2px;
-    background: var(--border);
-  }
-  .timeline-item {
-    position: relative;
-    margin-bottom: 14px;
-    font-size: 0.9rem;
-  }
-  .timeline-item::before {
-    content: '';
-    position: absolute;
-    left: -24px;
-    top: 8px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 2px solid var(--accent-light);
-  }
-  .timeline-time {
-    font-weight: 600;
-    color: var(--accent);
-    font-size: 0.8rem;
-    font-family: 'Inter', monospace;
-  }
-  .timeline-desc {
-    color: var(--text-secondary);
-  }
-
-  /* ─── Quotes ─── */
-  .quote-card {
-    background: var(--quote-bg);
-    border-left: 3px solid var(--accent);
-    padding: 14px 18px;
-    margin-bottom: 12px;
-    border-radius: 0 var(--radius) var(--radius) 0;
-    font-size: 0.9rem;
-  }
-  .quote-card .quote-text {
-    color: var(--text-primary);
-    font-style: italic;
-    margin-bottom: 4px;
-  }
-  .quote-card .quote-context {
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    font-style: normal;
-  }
-
-  /* ─── Participants ─── */
-  .participants {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 24px;
-    box-shadow: var(--shadow);
-  }
-  .participants p {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-  }
-
-  /* ─── Chunk details (collapsible) ─── */
-  .chunk-detail {
-    border: 1px solid var(--border-light);
-    border-radius: 8px;
-    margin-bottom: 8px;
-    overflow: hidden;
-  }
-  .chunk-detail summary {
-    padding: 10px 16px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    background: var(--bg);
-    user-select: none;
-  }
-  .chunk-detail summary:hover {
-    background: var(--border-light);
-  }
-  .chunk-detail .chunk-time {
-    font-family: 'Inter', monospace;
-    font-size: 0.8rem;
-    color: var(--accent);
-    margin-right: 8px;
-  }
-  .chunk-body {
-    padding: 16px;
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-  }
-  .chunk-section {
-    margin-bottom: 16px;
-  }
-  .chunk-section h4 {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin-bottom: 6px;
-  }
-
-  blockquote {
-    border-left: 2px solid var(--border);
-    padding-left: 12px;
-    margin: 8px 0;
-    color: var(--text-muted);
-    font-style: italic;
-  }
-  code {
-    background: var(--border-light);
-    padding: 2px 5px;
-    border-radius: 3px;
-    font-size: 0.85em;
-  }
-  h3 { font-size: 1rem; font-weight: 600; margin: 12px 0 6px; }
-  h4 { font-size: 0.9rem; font-weight: 600; margin: 8px 0 4px; }
-  ul { margin: 8px 0; padding-left: 20px; list-style: none; }
-  li { position: relative; padding-left: 14px; margin-bottom: 6px; color: var(--text-secondary); font-size: 0.95rem; }
-  li::before { content: ''; position: absolute; left: 0; top: 10px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
-  .rendered-content { line-height: 1.8; }
-
-  /* ─── Footer ─── */
-  .site-footer {
-    border-top: 1px solid var(--border);
-    padding: 20px 0;
-    margin-top: 40px;
-    text-align: center;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  @media (max-width: 600px) {
-    .hero h1 { font-size: 1.5rem; }
-    .container { padding: 0 16px; }
-  }
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&display=swap');
+:root {
+  --bg:#fafafa;--surface:#fff;--text-primary:#1a1a2e;--text-secondary:#555570;
+  --text-muted:#8888a0;--accent:#2563eb;--accent-light:#eff6ff;
+  --border:#e5e7eb;--border-light:#f3f4f6;--tag-bg:#e0e7ff;--tag-text:#3730a3;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);--radius:12px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans KR','Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text-primary);line-height:1.7;-webkit-font-smoothing:antialiased}
+.container{max-width:760px;margin:0 auto;padding:0 20px}
+.site-header{border-bottom:1px solid var(--border);padding:24px 0;margin-bottom:32px}
+.site-header .container{display:flex;justify-content:space-between;align-items:center}
+.site-name{font-size:1.1rem;font-weight:700;letter-spacing:-.02em;color:var(--accent)}
+.site-meta{font-size:.8rem;color:var(--text-muted)}
+.hero{margin-bottom:40px}
+.hero h1{font-size:2rem;font-weight:700;line-height:1.3;letter-spacing:-.03em;margin-bottom:16px}
+.period-badge{display:inline-block;font-size:.75rem;font-weight:500;color:var(--tag-text);background:var(--tag-bg);padding:4px 10px;border-radius:20px;margin-bottom:12px}
+.section{margin-bottom:36px}
+.section-label{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:12px}
+.story-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:16px;box-shadow:var(--shadow)}
+.chunk-detail{border:1px solid var(--border-light);border-radius:8px;margin-bottom:8px;overflow:hidden}
+.chunk-detail summary{padding:10px 16px;cursor:pointer;font-size:.85rem;color:var(--text-muted);background:var(--bg);user-select:none}
+.chunk-detail summary:hover{background:var(--border-light)}
+.chunk-time{font-family:'Inter',monospace;font-size:.8rem;color:var(--accent);margin-right:8px}
+.chunk-body{padding:16px;font-size:.9rem;color:var(--text-secondary)}
+blockquote{border-left:2px solid var(--border);padding-left:12px;margin:8px 0;color:var(--text-muted);font-style:italic}
+code{background:var(--border-light);padding:2px 5px;border-radius:3px;font-size:.85em}
+h3{font-size:1rem;font-weight:600;margin:12px 0 6px}
+h4{font-size:.9rem;font-weight:600;margin:8px 0 4px}
+ul{margin:8px 0;padding-left:20px;list-style:none}
+li{position:relative;padding-left:14px;margin-bottom:6px;color:var(--text-secondary);font-size:.95rem}
+li::before{content:'';position:absolute;left:0;top:10px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+strong{color:var(--text-primary)} em{color:var(--text-secondary)}
+.rendered-content{line-height:1.8}
+.site-footer{border-top:1px solid var(--border);padding:20px 0;margin-top:40px;text-align:center;font-size:.75rem;color:var(--text-muted)}
+@media(max-width:600px){.hero h1{font-size:1.5rem}.container{padding:0 16px}}
 </style>
 </head>
 <body>
-
-<header class="site-header">
-  <div class="container">
-    <div class="site-name">Signal Daily</div>
-    <div class="site-meta">Dev Mode &middot; 2026-04-09 13:35 KST</div>
-  </div>
-</header>
-
+<header class="site-header"><div class="container">
+  <div class="site-name">Signal Daily</div>
+  <div class="site-meta">Dev Mode &middot; 2026-04-09 13:41 KST</div>
+</div></header>
 <main class="container">
-
-  <!-- Hero -->
   <div class="hero">
     <span class="period-badge">2026-04-06 00:00 ~ 2026-04-09 12:25</span>
     <h1>Discord 3-Day Digest</h1>
   </div>
-
-  <!-- Main Article -->
   <div class="section">
-    <div class="story-card">
-      <div class='rendered-content'>Discord server &quot;Dev Mode&quot; guild, &quot;general&quot; channel.
-April 6, 2026, to April 9, 2026 (approx. 3-4 days).
-AI enthusiasts, developers, &quot;power users&quot; testing frontier models.
-Korean.</p><p>        <ul><li>Headline (1 sentence core summary + 3-5 sentence overview).</li>
-</ul>        <ul><li>Main Stories (3-5 topics: Subtitle + 3-5 sentences).</li>
+    <div class="section-label">Overview</div>
+    <div class="story-card"><div class='rendered-content'>Discord server &quot;Dev Mode&quot; chat logs.
+April 6, 2026, to April 9, 2026 (approx. 3 days).
+Newsletter in Korean.</p><p>        <ul><li>Headline (1 sentence core summary + 3-5 sentence overview).</li>
+</ul>        <ul><li>Main Stories (3-5 topics: Subtitle + 3-5 sentences each).</li>
 </ul>        <ul><li>Timeline (Chronological list of major events).</li>
 </ul>        <ul><li>Impressive Quotes (5 key/funny quotes).</li>
-</ul>        <ul><li>Active Participants (Who and what they contributed).</li>
+</ul>        <ul><li>Active Participants (Who contributed most and how).</li>
 </ul>
-    <em>   </em>April 6:*
-        <ul><li>Heavy testing of &quot;GPT Image 2&quot; vs. GPT Image 1.5, Nano Banana Pro (NBP), NB2.</li>
-</ul>        <ul><li>Complaints about rate limits, costs (£20/£200), and &quot;enshittification&quot; of tools.</li>
+    <em>   </em>Day 1 (April 6):*
+        <ul><li>Heavy focus on image generation: &quot;GPT Image 2&quot; vs. &quot;GPT Image 1.5&quot; vs. &quot;Nano Banana Pro (NBPro)&quot;.</li>
+</ul>        <ul><li>Testing prompts, discussing artifacts, watermarks, and quality.</li>
+</ul>        <ul><li>Complaints about pricing (£20, £200) and rate limits.</li>
 </ul>        <ul><li>Mention of &quot;Slock&quot; (agent-human collab) and GPT-5.4 playing Pokémon.</li>
-</ul>        <ul><li>Discussion on coding models: Claude Opus, GPT-5.4, &quot;Spud&quot; (rumored GPT-5.5).</li>
+</ul>        <ul><li>Discussion on &quot;enshittification&quot; and tool choices (dispatch, computer use, Claude Code).</li>
 </ul>
-    <em>   </em>April 7:*
-        <ul><li>Debates on AI&#x27;s impact on education/college admissions.</li>
-</ul>        <ul><li>DeepSeek V4 leaks/rollout.</li>
-</ul>        <ul><li>Anthropic rumors: Claude 5, Opus 4.6, &quot;Claude Conway&quot; agent.</li>
-</ul>        <ul><li>Google Gemini 5 expectations and tool-use issues.</li>
+    <em>   </em>Day 2 (April 7):*
+        <ul><li>Discussion on coding models: Claude Opus, GPT-5.4, Opus 4.6.</li>
+</ul>        <ul><li>Rumors of a new OpenAI model codenamed &quot;Spud&quot; (GPT-5.5).</li>
+</ul>        <ul><li>Debate on AI&#x27;s impact on education/college admissions.</li>
+</ul>        <ul><li>Leaks/rumors: DeepSeek V4, Anthropic&#x27;s TPU deal.</li>
+</ul>        <ul><li>Mention of &quot;HappyHorse&quot; video model.</li>
+</ul>        <em>   Late night: Deep dive into &quot;Claude Mythos Preview&quot; (Project Glasswing). This is a </em>huge* topic. It&#x27;s a cybersecurity-focused model capable of autonomous hacking and zero-day exploits. High SWE-bench scores.</p><p>    <em>   </em>Day 3 (April 8 - April 9):*
+        <ul><li>Continuation of &quot;Claude Mythos&quot; debate (Is it AGI? Is it just a marketing flex?).</li>
+</ul>        <ul><li>xAI (Elon Musk) news: Colossus 2, multiple models in training (1T to 10T parameters).</li>
+</ul>        <ul><li>OpenAI news: Retiring GPT-5.1/5.2 codex.</li>
+</ul>        <ul><li>Meta&#x27;s new model &quot;Muse Spark&quot; release: Good reasoning, bad coding, strong benchmarks in specific areas (TaxEval).</li>
+</ul>        <ul><li>Discussion on &quot;AI shrinkflation&quot; (models getting dumber/faster).</li>
+</ul>        <ul><li>Cognitive effects of AI reliance.</li>
+</ul>        <ul><li>Recraft V4 Vector (SVG model) mention.</li>
+</ul>        <ul><li>Financial struggles of users in different regions (e.g., Africa) regarding subscription costs.</li>
 </ul>
-    <em>   </em>April 8:*
-        <ul><li><strong>Major Event:</strong> Reveal of &quot;Claude Mythos Preview&quot; (Project Glasswing).</li>
-</ul>        <ul><li>Mythos capabilities: Autonomous hacking, zero-day exploits, high SWE-bench scores (93.9%).</li>
-</ul>        <ul><li>Debate: Is it AGI? Is it just a &quot;money spread&quot; for big corporations?</li>
-</ul>        <ul><li>xAI (Elon Musk) Colossus 2 and multiple model variants (1T to 10T).</li>
-</ul>        <ul><li>OpenAI retiring GPT-5.1/5.2 Codex.</li>
+    <em>   </em>Headline:* Needs to capture the essence. The transition from image testing to the &quot;Mythos&quot; shock and Meta&#x27;s &quot;Muse Spark.&quot;
+        <em>   </em>Draft:* &quot;From Image Wars to AGI Rumors: The Chaos of the AI Frontier.&quot; (Korean: &quot;이미지 전쟁부터 AGI의 전조까지: AI 프런티어의 격동하는 3일&quot;)</p><p>    <em>   </em>Main Stories:*
+        <ul><li><em>The Mythos Shock:</em> Anthropic&#x27;s Claude Mythos/Project Glasswing. Autonomous hacking, high coding skill.</li>
+</ul>        <ul><li><em>The Image Model Battle:</em> GPT Image 2 vs. Nano Banana Pro. Testing quality and artifacts.</li>
+</ul>        <ul><li><em>Meta&#x27;s New Challenger:</em> Muse Spark. High reasoning, but coding is lacking.</li>
+</ul>        <ul><li><em>The Future of Coding &amp; Intelligence:</em> GPT-5.4, &quot;Spud,&quot; and the fear of &quot;AI shrinkflation.&quot;</li>
 </ul>
-    <em>   </em>April 9:*
-        <ul><li><strong>Major Event:</strong> Meta&#x27;s &quot;Muse Spark&quot; release.</li>
-</ul>        <ul><li>Discussion on Muse Spark&#x27;s reasoning vs. coding performance.</li>
-</ul>        <ul><li>&quot;AI shrinkflation&quot; in Claude Opus 4.6.</li>
-</ul>        <ul><li>Concerns about cognitive decline due to AI reliance.</li>
-</ul>        <ul><li>Recraft V4 Vector (SVG) mention.</li>
+    <em>   </em>Timeline:*
+        <ul><li>4/6: GPT Image 2 testing &amp; tool debates.</li>
+</ul>        <ul><li>4/7: Coding model comparisons &amp; the &quot;Claude Mythos&quot; leak.</li>
+</ul>        <ul><li>4/8: Mythos debate &amp; xAI Colossus 2 news.</li>
+</ul>        <ul><li>4/9: Meta Muse Spark release &amp; discussions on AI cognitive impact.</li>
 </ul>
-    <em>   </em>Headline:* Focus on the &quot;Frontier Model War&quot; (Anthropic Mythos vs. Meta Muse Spark vs. OpenAI/Google).
-    <em>   </em>Main Stories:*
-        <ul><li>Claude Mythos &amp; Project Glasswing (The &quot;hacker&quot; AI).</li>
-</ul>        <ul><li>Meta Muse Spark &amp; The New Frontier (Reasoning vs. Coding).</li>
-</ul>        <ul><li>The Image Gen Battle (GPT Image 2, Nano Banana, etc.).</li>
-</ul>        <ul><li>AI &quot;Shrinkflation&quot; &amp; Cognitive Impact (The human side).</li>
-</ul>    <em>   </em>Timeline:* Map out the key model drops and debates.
-    <em>   </em>Quotes:* Pick a mix of technical awe and cynical humor.
-    <em>   </em>Participants:* Identify <code>pozitiv3ik</code>, <code>zavocc</code>, <code>spicy.lemonade</code>, <code>tuskedfriend</code>, <code>mirageblaze</code>.</p><p>    <em>   </em>Tone:* Professional yet capturing the &quot;dev&quot; vibe (slang like &#x27;slop&#x27;, &#x27;enshittification&#x27;, &#x27;nerfed&#x27; should be translated or explained contextually).
-    <em>   </em>Terminology:* Keep model names (Claude Mythos, Muse Spark) as they are.</div>
-    </div>
+    <em>   </em>Quotes:* Need a mix of technical, cynical, and funny.
+        <ul><li>&quot;AI shrinkflation&quot; (Claude Opus 4.6).</li>
+</ul>        <ul><li>Mythos as &quot;money spread&quot; (marketing).</li>
+</ul>        <ul><li>GPT-5.4 playing Pokémon.</li>
+</ul>        <ul><li>Complaints about $20 being too expensive in some regions.</li>
+</ul>        <ul><li>&quot;Outsourcing thinking&quot; to AI.</li>
+</ul>
+    <em>   </em>Active Participants:*
+        <ul><li><code>pozitiv3ik</code>: Active in image testing and benchmarks.</li>
+</ul>        <ul><li><code>zavocc</code>: Coding model recommendations and technical advice.</li>
+</ul>        <ul><li><code>spicy.lemonade</code>: Central figure in general discussions and education debates.</li>
+</ul>        <ul><li><code>tuskedfriend</code>: Frequent participant across various topics.</li>
+</ul>        <ul><li><code>mirageblaze</code>: Tool discussions and critiques.</li>
+</ul>
+    <ul><li>Ensure the tone is professional yet captures the &quot;Discord energy&quot; (enthusiastic, skeptical, fast-paced).</li>
+</ul>    <ul><li>Use appropriate terminology (LLM, AGI, Zero-day, Benchmark).</li></ul></div></div>
   </div>
-
-  <!-- Raw Chunk Details -->
   <div class="section">
-    <div class="section-label">Detailed Analysis by Time Period</div>
+    <div class="section-label">Detailed Analysis (29 chunks)</div>
     
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-06 00:00 ~ 2026-04-06 01:39</span> Chunk 1 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'>Discord chat logs from &quot;Dev Mode&quot; guild, &quot;general&quot; channel.
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-06 00:00 ~ 2026-04-06 01:39</span> Chunk 1</summary>
+          <div class="chunk-body"><div class='rendered-content'>Discord chat logs from &quot;Dev Mode&quot; guild, &quot;general&quot; channel.
 2026-04-06 00:00 to 01:39.
 Korean analysis.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, including usernames and technical details.</li>
 </ul>        <ul><li>[QUOTES]: 3-5 key quotes (original text) with explanations of why they are important.</li>
@@ -389,24 +161,11 @@ Korean analysis.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said w
 </ul>        <ul><li>00:20 - 00:30: Debate on &quot;v2&quot; vs &quot;NBP&quot; and the existence of A/B testing.</li>
 </ul>        <ul><li>00:30 - 00:50: Deep dive into knowledge cutoffs, resolution, and &quot;v2-mini&quot; hypothesis.</li>
 </ul>        <ul><li>00:50 - 01:10: Discussion on automation agents (n8n) and final model comparisons.</li>
-</ul>        <ul><li>01:10 - 01:39: Final thoughts on artifacts, fingers, and &quot;taste.&quot;</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-06 01:40 ~ 2026-04-06 04:17</span> Chunk 2 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-06 01:40 to 04:17.</li>
+</ul>        <ul><li>01:10 - 01:39: Final thoughts on artifacts, fingers, and &quot;taste.&quot;</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-06 01:40 ~ 2026-04-06 04:17</span> Chunk 2</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-06 01:40 to 04:17.</li>
 <li>Context: A Discord server where users are discussing AI models, specifically image generation models.</li>
 <li>Key Models Mentioned: GPT Image 2 (the main focus), GPT Image 1.5 (often called &quot;slop&quot;), Nano Banana Pro (nbp), Gemini 3 Pro/Flash, Sora 3, Grok Imagen v2, etc.</li>
 <li>Key Activities: Users requesting prompts, comparing output quality, discussing &quot;A/B testing&quot; or rollout of new models, joking about &quot;AI bubbles,&quot; and some random banter/trolling.</li>
@@ -447,24 +206,11 @@ Korean analysis.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said w
 </ul>        <ul><li>&quot;gpt image 2 is much more creative than nbp&quot; (Counter-point on creativity).</li>
 </ul>        <ul><li>&quot;it just seems they&#x27;re rolling out to accounts&quot; (Technical rollout discussion).</li>
 </ul>        <ul><li>&quot;ai can&#x27;t do chests&quot; / &quot;Nice hands&quot; (Classic AI failure tropes).</li>
-</ul>    <em>   </em>Timeline:* Break down by time blocks.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-06 04:17 ~ 2026-04-06 06:34</span> Chunk 3 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-06 04:17 ~ 06:34.</li>
+</ul>    <em>   </em>Timeline:* Break down by time blocks.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-06 04:17 ~ 2026-04-06 06:34</span> Chunk 3</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-06 04:17 ~ 06:34.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (mostly), with some Russian and Chinese snippets.</li>
 <li>Goal: Analyze the conversation in Korean.</li>
@@ -501,24 +247,11 @@ Korean analysis.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said w
 </ul>        <ul><li>06:25: Speculation on censorship and future &quot;nerfing&quot;.</li>
 </ul>
     <ul><li>Ensure technical terms are handled correctly (e.g., Knowledge Cutoff $\rightarrow$ 지식 컷오프, A/B Testing $\rightarrow$ A/B 테스트, Nerf $\rightarrow$ 너프/성능 저하).</li>
-</ul>    <ul><li>Maintain the casual tone of the Discord chat while providing a structured analysis.</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-06 06:34 ~ 2026-04-06 10:46</span> Chunk 4 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-06 06:34 to 10:46.</li>
+</ul>    <ul><li>Maintain the casual tone of the Discord chat while providing a structured analysis.</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-06 06:34 ~ 2026-04-06 10:46</span> Chunk 4</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-06 06:34 to 10:46.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (mixture of technical jargon, slang, and memes).</li>
 <li>Goal: Analyze the conversation in Korean.</li>
@@ -558,24 +291,11 @@ Korean analysis.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said w
 </ul>        <ul><li>The &quot;Pay to Lose&quot; irony regarding v2 access.</li>
 </ul>    <em>   </em>Timeline:* Map out the flow from 06:34 to 10:46.</p><p>    <em>   </em>Correction:* Make sure to specify &quot;GPT Image v2&quot; as an A/B test feature.
     <em>   </em>Nuance:* The tone is very &quot;Discord-like&quot; (slang: &quot;slop&quot;, &quot;gooning&quot;, &quot;bruh&quot;, &quot;kms&quot;). I should translate the meaning but keep the context.
-    <em>   </em>Technical details:* Ensure &quot;Gemma 4 31b&quot;, &quot;1M context window&quot;, &quot;A/B testing&quot;, &quot;SynthID&quot; are included.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-06 10:46 ~ 2026-04-06 17:29</span> Chunk 5 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-06 10:46 to 17:29.</li>
+    <em>   </em>Technical details:* Ensure &quot;Gemma 4 31b&quot;, &quot;1M context window&quot;, &quot;A/B testing&quot;, &quot;SynthID&quot; are included.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-06 10:46 ~ 2026-04-06 17:29</span> Chunk 5</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-06 10:46 to 17:29.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (with some Russian and slang).</li>
 <li>Context: A community of AI enthusiasts/developers discussing various AI models (GPT Image 2, Nano Banana Pro, Claude Mythos, etc.).</li>
@@ -608,24 +328,11 @@ Korean analysis.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said w
 </ul>        <ul><li>13:17: &quot;Hands/Fingers&quot; issue identified.</li>
 </ul>        <ul><li>14:45: Severe rate limits reported.</li>
 </ul>        <ul><li>15:03: Final verdict on NBPro vs GPT Image 2.</li>
-</ul>        <ul><li>16:40+: Speculation on SPUD and Claude Mythos.</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-06 17:29 ~ 2026-04-06 22:45</span> Chunk 6 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'>Discord chat log.
+</ul>        <ul><li>16:40+: Speculation on SPUD and Claude Mythos.</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-06 17:29 ~ 2026-04-06 22:45</span> Chunk 6</summary>
+          <div class="chunk-body"><div class='rendered-content'>Discord chat log.
 2026-04-06 17:29 to 22:45.
 Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, including usernames and technical details.</li>
 </ul>        <ul><li>[QUOTES]: 3-5 most important quotes (original text) with explanations of why they are important.</li>
@@ -649,24 +356,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>The image model weight speculation (&gt;1 trillion).</li>
 </ul>        <ul><li>The critique of &quot;Gen Z&quot; LLM speech.</li>
 </ul>        <ul><li>The debate on CLI vs Desktop app resources.</li>
-</ul>    <em>   </em>Timeline:* Map the key shifts in conversation.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-06 22:45 ~ 2026-04-07 01:53</span> Chunk 7 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-06 22:45 to 2026-04-07 01:53.</li>
+</ul>    <em>   </em>Timeline:* Map the key shifts in conversation.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-06 22:45 ~ 2026-04-07 01:53</span> Chunk 7</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-06 22:45 to 2026-04-07 01:53.</li>
 <li>Platform: Discord.</li>
 <li>Content: A mix of technical discussions about AI models (LLMs and Image Generators), banter, memes, and some controversial/racist remarks.</li>
 <li>Key Topics:</li>
@@ -710,24 +404,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>The image benchmark (orthographic sheets - specific technical test).</li>
 </ul>
     <ul><li>Translate technical terms accurately (e.g., Sycophancy $\rightarrow$ 아첨/동조 현상, Ablation $\rightarrow$ 어블레이션/제거, Orthographic $\rightarrow$ 정투영/정투영도).</li>
-</ul>    <ul><li>Maintain the nuance of the Discord atmosphere (informal, chaotic).</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-07 01:53 ~ 2026-04-07 08:26</span> Chunk 8 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-07 01:53 to 08:26.</li>
+</ul>    <ul><li>Maintain the nuance of the Discord atmosphere (informal, chaotic).</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-07 01:53 ~ 2026-04-07 08:26</span> Chunk 8</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-07 01:53 to 08:26.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (with some slang and emojis).</li>
 <li>Goal: Analyze in Korean.</li>
@@ -749,24 +430,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>Claude&#x27;s system prompt refusal.</li>
 </ul>        <ul><li>Anthropic&#x27;s $30B revenue.</li>
 </ul>        <ul><li>The TPU partnership.</li>
-</ul>    <em>   </em>Timeline:* Map the key events chronologically.</p><p>    <em>   </em>Self-Correction during drafting:* Ensure the technical terms (ARR, TPU, tokens/s, system prompt) are handled correctly in Korean. Make sure to mention specific users like <code>chasebrower</code> and <code>pozitiv3ik</code> as requested.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-07 08:27 ~ 2026-04-07 13:27</span> Chunk 9 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-07 08:27 to 13:27.</li>
+</ul>    <em>   </em>Timeline:* Map the key events chronologically.</p><p>    <em>   </em>Self-Correction during drafting:* Ensure the technical terms (ARR, TPU, tokens/s, system prompt) are handled correctly in Korean. Make sure to mention specific users like <code>chasebrower</code> and <code>pozitiv3ik</code> as requested.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-07 08:27 ~ 2026-04-07 13:27</span> Chunk 9</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-07 08:27 to 13:27.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (to be analyzed in Korean).</li>
 <li>Key Participants: <code>spicy.lemonade</code> (central figure), <code>tuskedfriend</code>, <code>zavocc</code>, <code>kstargamer</code>, <code>bingeritos</code>, <code>legitdev</code>, <code>kostikz</code>, etc.</li>
@@ -783,24 +451,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
     <em>   </em>12:36 - 13:00:* Discussion on xAI (Elon Musk). Debate on whether xAI can catch up. <code>spicy.lemonade</code> believes xAI/Tesla will dominate &quot;blue collar&quot; AI (robotics/Optimus) while OpenAI/Anthropic take &quot;white collar.&quot; Discussion on China&#x27;s role in robotics and US tariffs.
     <em>   </em>13:00 - 13:27:* <code>tuskedfriend</code> finds <code>spicy.lemonade</code>&#x27;s LinkedIn. Advice on profile pictures. Discussion on career paths: <code>spicy.lemonade</code> advises <code>tuskedfriend</code> (a high school senior) to focus on impact and experience over traditional PhD paths to enter AI labs.</p><p>    <em>   </em>Summary:* Focus on the main themes: Coding models, <code>spicy.lemonade</code>&#x27;s startup, the math/AI debate, and career advice.
     <em>   </em>Quotes:* Pick the most impactful ones (the $25M valuation, the &quot;math slop&quot; debate, the &quot;blue collar vs white collar&quot; AI theory).
-    <em>   </em>Timeline:* Map out the key transitions in the conversation.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-07 13:28 ~ 2026-04-07 22:38</span> Chunk 10 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-07 13:28 ~ 22:38.</li>
+    <em>   </em>Timeline:* Map out the key transitions in the conversation.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-07 13:28 ~ 2026-04-07 22:38</span> Chunk 10</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-07 13:28 ~ 22:38.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (to be analyzed in Korean).</li>
 <li>Participants: Multiple users (spicy.lemonade, tuskedfriend, ldj, mo.4wlyu7l697kx, brain4brain, kuvwen, linker.sh, dzdsa33, goatedgoat2, buun9740, chetaslua, mirageblaze, chasebrower, etc.).</li>
@@ -820,24 +475,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>Anthropic&#x27;s TPU deal (linker.sh).</li>
 </ul>        <ul><li>HappyHorse/Leaderboard skepticism (dzdsa33).</li>
 </ul>        <ul><li>Anthropic ToS (chasebrower).</li>
-</ul>    <em>   </em>Timeline:* Chronological order of major shifts in conversation.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-07 22:38 ~ 2026-04-08 01:07</span> Chunk 11 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-07 22:38 to 2026-04-08 01:07.</li>
+</ul>    <em>   </em>Timeline:* Chronological order of major shifts in conversation.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-07 22:38 ~ 2026-04-08 01:07</span> Chunk 11</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-07 22:38 to 2026-04-08 01:07.</li>
 <li>Platform: Discord.</li>
 <li>Topic: AI models (Anthropic/Claude, Google/Gemini, DeepSeek, etc.), hardware for local LLMs, and some geopolitical banter.</li>
 <li>Language: English (to be analyzed in Korean).</li>
@@ -869,24 +511,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>00:40-01:07: Speculation on DeepSeek V4, &quot;The Whale,&quot; and comparison with other Chinese models (GLM 5.1).</li>
 </ul>
     <ul><li>Ensure technical terms are handled correctly (e.g., &quot;quantization&quot; $\rightarrow$ 양자화, &quot;benchmark&quot; $\rightarrow$ 벤치마크).</li>
-</ul>    <ul><li>Maintain the informal &quot;Discord&quot; vibe while providing a structured analysis.</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 01:07 ~ 2026-04-08 02:45</span> Chunk 12 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-08 01:07 to 02:45.</li>
+</ul>    <ul><li>Maintain the informal &quot;Discord&quot; vibe while providing a structured analysis.</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 01:07 ~ 2026-04-08 02:45</span> Chunk 12</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-08 01:07 to 02:45.</li>
 <li>Platform: Discord.</li>
 <li>Participants: computerk, namra.7, toocoolforskool., textfile, aianoscranel, mo.4wlyu7l697kx, fermicon, propro9613, pozitiv3ik, onlyareina, meetpateltech, dexisimoveis, atro1213, yuppie_111, goatedgoat2, zavocc, tuskedfriend, sanyarussian, artarex, zoermena, schxma_, linker.sh, ___maks___, moonfanz, kami6963, vicesinc, blazing_terror, kuvwen, jordan8926u, sevenero, dreemurr_prime, nk4088, darling_84675, chasebrower, kl.n, silence_wait, yashjit, mirageblaze, wave0563, dzdsa33, sarkias, fableremaster_85772, asura07389.</li>
 <li>Main Topics:</li>
@@ -923,24 +552,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>01:47-02:05 - GLM-5.1 thinking process and local run.</li>
 </ul>        <ul><li>02:06-02:15 - DeepSeek V4 &quot;announcement&quot; (likely hype/satire) and GLM coding plan.</li>
 </ul>        <ul><li>02:16-02:30 - Pronouns, AI art, and SVG benchmark debate.</li>
-</ul>        <ul><li>02:31-02:45 - GPT Image 2.0 rumors and DeepSeek context limits.</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 02:45 ~ 2026-04-08 03:31</span> Chunk 13 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-08 02:45 ~ 03:31.</li>
+</ul>        <ul><li>02:31-02:45 - GPT Image 2.0 rumors and DeepSeek context limits.</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 02:45 ~ 2026-04-08 03:31</span> Chunk 13</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-08 02:45 ~ 03:31.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (to be analyzed in Korean).</li>
 <li>Key Topics: AI models (GPT Image 2, GLM-5.1, DeepSeek, Claude Mythos Preview, Project Glasswing).</li>
@@ -967,24 +583,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>03:30: Sharing of the System Card&#x27;s scary behaviors (deception, mind-reading).</li>
 </ul>
     <ul><li>Ensure technical terms like &quot;Lobotomized,&quot; &quot;SWE-bench,&quot; and &quot;System Card&quot; are explained or used correctly in context.</li>
-</ul>    <ul><li>Maintain the tone of the conversation (hype, fear, technical curiosity).</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 03:31 ~ 2026-04-08 03:59</span> Chunk 14 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-08 03:31 to 03:59.</li>
+</ul>    <ul><li>Maintain the tone of the conversation (hype, fear, technical curiosity).</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 03:31 ~ 2026-04-08 03:59</span> Chunk 14</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-08 03:31 to 03:59.</li>
 <li>Platform: Discord.</li>
 <li>Main Topic: The reveal of &quot;Claude Mythos Preview&quot; by Anthropic.</li>
 <li>Key Technical Details mentioned:</li>
@@ -1024,24 +627,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>03:36-03:37: Comparison with other models (DeepSeek v4, GLM 5.1) and predictions for ARC-AGI-3.</li>
 </ul>        <ul><li>03:38-03:41: Debate on gatekeeping and potential &quot;lobotomized&quot; public versions.</li>
 </ul>        <ul><li>03:42-03:48: Skepticism vs. Hype; discussion on the model&#x27;s lack of &quot;strategic judgment&quot; despite technical skill.</li>
-</ul>        <ul><li>03:49-03:59: Speculation on &quot;ASI&quot; (Artificial Super Intelligence), pricing, and the future of the AI &quot;war.&quot;</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 03:59 ~ 2026-04-08 05:00</span> Chunk 15 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-08 03:59 to 05:00.</li>
+</ul>        <ul><li>03:49-03:59: Speculation on &quot;ASI&quot; (Artificial Super Intelligence), pricing, and the future of the AI &quot;war.&quot;</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 03:59 ~ 2026-04-08 05:00</span> Chunk 15</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-08 03:59 to 05:00.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (to be analyzed in Korean).</li>
 <li>Main Topic: Release/leaks of a new AI model called &quot;Claude Mythos&quot; from Anthropic.</li>
@@ -1079,24 +669,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>04:56 - 05:00: Final anecdotes about Mythos&#x27;s autonomy and a shift to talking about GTA 6.</li>
 </ul>
     <ul><li>Ensure technical terms are preserved or correctly translated (e.g., Distillation $\rightarrow$ 증류/지식 증류, Frontier model $\rightarrow$ 프론티어 모델, Nerf $\rightarrow$ 너프/성능 저하).</li>
-</ul>    <ul><li>Maintain the informal, chaotic tone of a Discord chat while providing a structured analysis.</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 05:00 ~ 2026-04-08 06:41</span> Chunk 16 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-08 05:00 to 06:41.</li>
+</ul>    <ul><li>Maintain the informal, chaotic tone of a Discord chat while providing a structured analysis.</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 05:00 ~ 2026-04-08 06:41</span> Chunk 16</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-08 05:00 to 06:41.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (to be analyzed in Korean).</li>
 <li>Key Topics: AI models (specifically &quot;Mythos&quot; by Anthropic), competitors (OpenAI/GPT, Google/Gemini, DeepSeek, xAI/Grok), AGI, software security (Project Glasswing), and general banter/memes.</li>
@@ -1132,24 +709,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>
     <ul><li>Check for accuracy.</li>
 </ul>    <ul><li>Ensure the tone is analytical.</li>
-</ul>    <ul><li>Verify that usernames and technical terms (e.g., &quot;quantization,&quot; &quot;benchmarks,&quot; &quot;AGI&quot;) are preserved/translated correctly.</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 06:41 ~ 2026-04-08 08:47</span> Chunk 17 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-08 06:41 to 08:47.</li>
+</ul>    <ul><li>Verify that usernames and technical terms (e.g., &quot;quantization,&quot; &quot;benchmarks,&quot; &quot;AGI&quot;) are preserved/translated correctly.</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 06:41 ~ 2026-04-08 08:47</span> Chunk 17</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-08 06:41 to 08:47.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (slang-heavy, technical, memes).</li>
 <li>Goal: Analyze in Korean.</li>
@@ -1204,24 +768,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>08:40 - 08:47: Post-purge chaos and final Mythos thoughts.</li>
 </ul>
     <ul><li>Ensure terms like &quot;SWE-Bench,&quot; &quot;Private Preview,&quot; &quot;GA (General Availability),&quot; and &quot;CVE&quot; are handled correctly.</li>
-</ul>    <ul><li>Maintain the tone of the Discord chat (informal, slightly toxic/chaotic).</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 08:47 ~ 2026-04-08 13:11</span> Chunk 18 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Date/Time Range: 2026-04-08 08:47 ~ 13:11.</li>
+</ul>    <ul><li>Maintain the tone of the Discord chat (informal, slightly toxic/chaotic).</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 08:47 ~ 2026-04-08 13:11</span> Chunk 18</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Date/Time Range: 2026-04-08 08:47 ~ 13:11.</li>
 <li>Platform: Discord.</li>
 <li>Participants: Various users (horizondawn, mo.4wlyu7l697kx, kostikz, lightvelox, underestimatedd, dzdsa33, antelucanus, tuskedfriend, kstargamer, 22swl, jordan8926u, kieradev, sigmasigmaboy123, chetaslua, chasebrower, i_795, marmaduke091, backryun_, nexuhs, mudkjp, alightsole, kami6963, legitdev, awesomesaucidk, dsdsdsd_32176, arandomhooman, cherrycolaking, ourobaros, leeham3741, m1astra, cosmic4749, zavocc, ca11meegg, atro1213, kudo_sinichi123, apirest, rorotuck, darling_84675, mrcrack_, bakedpotato28, hanphlc, schxma_, westsidegrave, metaldragon01, _masterdj, ldj, ktibow, mx42).</li>
 <li>Key Topics:</li>
@@ -1237,24 +788,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
     <em>   </em>Exploits &amp; Banning:* <code>_masterdj</code> talks extensively about using a load balancer (<code>codex-lb</code>) and temporary emails to get unlimited GPT-5.4 high reasoning, resulting in 30 banned accounts. He discusses hardware/IP bans and VPNs with <code>kami6963</code>.
     <em>   </em>Comparison:* General consensus on Claude vs. GPT for coding and frontend. <code>_masterdj</code> prefers GPT-5.4 for logic/coding but admits GPT is bad at frontend. <code>kami6963</code> insists Claude is superior for coding.</p><p>    <em>   </em>Summary:* Focus on the &quot;Trusted&quot; role reset, the &quot;Claude Mythos&quot; hype, and the GPT-5.5/Superapp speculation. Include specific names.
     <em>   </em>Quotes:* Pick the most impactful ones (Mythos danger, Superapp definition, the &quot;Trusted&quot; loss).
-    <em>   </em>Timeline:* Map the flow from server drama $\rightarrow$ Mythos hype $\rightarrow$ GPT/OpenAI news $\rightarrow$ Account exploit discussion.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 13:11 ~ 2026-04-08 15:59</span> Chunk 19 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-08 13:11 to 15:59.</li>
+    <em>   </em>Timeline:* Map the flow from server drama $\rightarrow$ Mythos hype $\rightarrow$ GPT/OpenAI news $\rightarrow$ Account exploit discussion.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 13:11 ~ 2026-04-08 15:59</span> Chunk 19</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-08 13:11 to 15:59.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (to be analyzed in Korean).</li>
 <li>Participants: kami6963, _masterdj, dsdsdsd_32176, mirageblaze, godpow, dzdsa33, meetpateltech, kuvwen, underestimatedd, sanyarussian, soroshinomiya, ktibow, backryun_, mr.fandu, schxma_, apirest, hiptodude, devguyrash, nk4088, metaldragon01, .wolfnacht, .muramonte., yashjit, blazing_terror, xparaa, linker.sh, tuskedfriend.</li>
@@ -1291,24 +829,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>3:01 - 3:59: Final banter, &quot;potato&quot; memes, and mentions of Project Mariner.</li>
 </ul>
     <ul><li>Ensure technical terms are handled correctly (e.g., &quot;Reverse Engineering&quot; $\rightarrow$ 리버스 엔지니어링, &quot;Context Window&quot; $\rightarrow$ 컨텍스트 윈도우).</li>
-</ul>    <ul><li>Maintain the tone of the conversation (informal, technical, slightly arrogant in <code>kami6963</code>&#x27;s case).</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 15:59 ~ 2026-04-08 18:50</span> Chunk 20 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-08 15:59 to 18:50.</li>
+</ul>    <ul><li>Maintain the tone of the conversation (informal, technical, slightly arrogant in <code>kami6963</code>&#x27;s case).</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 15:59 ~ 2026-04-08 18:50</span> Chunk 20</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-08 15:59 to 18:50.</li>
 <li>Platform: Discord.</li>
 <li>Content: Technical discussions about AI models (LLMs, Image models), server role changes, and general banter.</li>
 <li>Language: English (to be analyzed in Korean).</li>
@@ -1356,24 +881,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>18:47 - GPT-Image-2 prompt testing.</li>
 </ul>
     <ul><li>Ensure technical terms are used correctly (e.g., 파라미터, SOTA, 추론, 툴 콜).</li>
-</ul>    <ul><li>Maintain the nuance of the &quot;Discord culture&quot; (copium, hopium, slang).</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 18:50 ~ 2026-04-08 22:58</span> Chunk 21 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'>Discord chat logs.
+</ul>    <ul><li>Maintain the nuance of the &quot;Discord culture&quot; (copium, hopium, slang).</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 18:50 ~ 2026-04-08 22:58</span> Chunk 21</summary>
+          <div class="chunk-body"><div class='rendered-content'>Discord chat logs.
 2026-04-08 18:50 to 22:58.
 Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, including usernames and technical details.</li>
 </ul>        <ul><li>[QUOTES]: 3-5 most important quotes (original text) with explanations of why they are important.</li>
@@ -1419,24 +931,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>22:37: Testing and demonstration of a new small Meta model&#x27;s reasoning.</li>
 </ul>
     <ul><li>Ensure technical terms (ASI, shadow testing, fuzzing, MCP, rate limits) are handled correctly.</li>
-</ul>    <ul><li>Maintain the casual, slightly chaotic tone of the Discord chat while remaining analytical.</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-08 22:58 ~ 2026-04-09 00:54</span> Chunk 22 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-08 22:58 to 2026-04-09 00:54.</li>
+</ul>    <ul><li>Maintain the casual, slightly chaotic tone of the Discord chat while remaining analytical.</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-08 22:58 ~ 2026-04-09 00:54</span> Chunk 22</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-08 22:58 to 2026-04-09 00:54.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (mostly), with some Russian, Spanish, and Portuguese.</li>
 <li>Key Topics: Testing a new Meta AI model, vision capabilities, coding performance, comparisons with other models (Claude, Gemini, GPT), AI industry rumors (Dario Amodei, Sam Altman, Elon Musk), and general AI banter.</li>
@@ -1465,24 +964,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>23:20 - 23:30: Discussion on &quot;META-IMAGE&quot; and A/B testing.</li>
 </ul>        <ul><li>23:30 - 23:45: Realization that Dario Amodei and Sam Altman are present; discussion on &quot;Mythos&quot; and safeguards.</li>
 </ul>        <ul><li>23:45 - 00:10: General chat, language exchanges, and Google/Gemini benchmark talk.</li>
-</ul>        <ul><li>00:10 - 00:54: Complaints about Claude&#x27;s performance, Meta&#x27;s &quot;Muse&quot; model, and final banter.</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-09 00:56 ~ 2026-04-09 01:51</span> Chunk 23 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-09 00:56 ~ 01:51.</li>
+</ul>        <ul><li>00:10 - 00:54: Complaints about Claude&#x27;s performance, Meta&#x27;s &quot;Muse&quot; model, and final banter.</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-09 00:56 ~ 2026-04-09 01:51</span> Chunk 23</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-09 00:56 ~ 01:51.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (to be analyzed in Korean).</li>
 <li>Main Topic: Release of Meta&#x27;s new AI model &quot;Muse Spark,&quot; discussions on LLM benchmarks, comparisons with other models (GPT-5.4, Claude Opus 4.6, Gemini 3.1 Pro, GLM 5.1), and general AI industry gossip.</li>
@@ -1495,24 +981,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
     <em>   </em>Comparison &amp; Tier List (01:36 - 01:48):* <code>yashjit</code> proposes a tier list (Anthropic &gt; OpenAI &gt; Google &gt; Moonshot/Zai/Qwen &gt; Deepseek &gt; Meta). Others disagree or tweak it.
     <em>   </em>Final thoughts (01:48 - 01:51):* Discussion on coding abilities (Muse is perceived as weaker in coding), and some community chatter about a user named &quot;Mari&quot; leaving.</p><p>    <em>   </em>Summary:* Focus on the main event (Muse Spark release) and the technical debate. Mention specific users like <code>meetpateltech</code> (who shared the news), <code>schxma_</code> (technical skepticism), <code>yashjit</code> (tier lists), and <code>videnrunt</code> (philosophical critique of LLMs).
     <em>   </em>Quotes:* Pick a few that represent the core sentiment: the &quot;benchmaxxed&quot; concern, the &quot;Meta is back&quot; hype, and the critique of LLM nature.
-    <em>   </em>Timeline:* Chronological flow from the initial link to the detailed benchmark analysis and final comparisons.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-09 01:51 ~ 2026-04-09 02:41</span> Chunk 24 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-09 01:51 ~ 02:41.</li>
+    <em>   </em>Timeline:* Chronological flow from the initial link to the detailed benchmark analysis and final comparisons.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-09 01:51 ~ 2026-04-09 02:41</span> Chunk 24</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-09 01:51 ~ 02:41.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (to be analyzed in Korean).</li>
 <li>Key Topics: AI models (Meta&#x27;s Muse Spark, Anthropic&#x27;s Claude Mythos/Managed Agents, OpenAI&#x27;s rumored &quot;Spud&quot;), AI benchmarks, community roles (&quot;trusted&quot;), career/income in the AI/X (Twitter) space.</li>
@@ -1546,24 +1019,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>02:30 - Discussion on X monetization.</li>
 </ul>
     <ul><li>Ensure technical terms are used correctly (e.g., CoT -&gt; 생각의 사슬/Chain of Thought, VLM -&gt; 시각-언어 모델).</li>
-</ul>    <ul><li>Maintain the informal yet technical tone of the Discord chat.</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-09 02:42 ~ 2026-04-09 04:29</span> Chunk 25 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'>Discord chat log.
+</ul>    <ul><li>Maintain the informal yet technical tone of the Discord chat.</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-09 02:42 ~ 2026-04-09 04:29</span> Chunk 25</summary>
+          <div class="chunk-body"><div class='rendered-content'>Discord chat log.
 2026-04-09 02:42 to 2026-04-09 04:29.
 Korean.</p><p>        <ul><li>[SUMMARY]: Specific summary of who said what, including usernames and technical details.</li>
 </ul>        <ul><li>[QUOTES]: 3-5 most important quotes (original text) with explanations of why they are important.</li>
@@ -1586,24 +1046,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Specific summary of who said what, incl
     <em>   </em>Quotes:* Select quotes about the &quot;Spud&quot; release, the Google bureaucracy, and the benchmark failure.
     <em>   </em>Timeline:* Map the flow from Muse Spark $\rightarrow$ GPT/Mythos rumors $\rightarrow$ Google meeting $\rightarrow$ Benchmark testing $\rightarrow$ Video analysis.</p><p>    <em>   </em>Correction:* Ensure &quot;Spud&quot; is identified as a rumored OpenAI model.
     <em>   </em>Correction:* Clarify that &quot;Leo&quot; is a Twitter user/tester, not necessarily a member of the chat, though they discuss his posts.
-    <em>   </em>Nuance:* The &quot;gooning&quot; part is a bit crude; I&#x27;ll summarize it as &quot;NSFW-related AI capabilities&quot; or &quot;adult content&quot; to keep the analysis professional but accurate.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-09 04:29 ~ 2026-04-09 05:37</span> Chunk 26 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-09 04:29 ~ 05:37.</li>
+    <em>   </em>Nuance:* The &quot;gooning&quot; part is a bit crude; I&#x27;ll summarize it as &quot;NSFW-related AI capabilities&quot; or &quot;adult content&quot; to keep the analysis professional but accurate.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-09 04:29 ~ 2026-04-09 05:37</span> Chunk 26</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-09 04:29 ~ 05:37.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (Analysis requested in Korean).</li>
 <li>Participants: yashjit, pozitiv3ik, kstargamer, aianoscranel, propro9613, textfile, mirageblaze, 22swl, underestimatedd, fluxxrider, tuskedfriend, zey9, hiptodude, jordan8926u, dexisimoveis, lightvelox, chetaslua, legitdev, vicesinc, mr.fandu, bazirani_covjek, blazing_terror, wave0563, videnrunt, m1astra, antelucanus, kostikz, chasebrower, bingeritos, lbdawg555, okbut, sufyanansarii, devguyrash.</li>
@@ -1642,24 +1089,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Specific summary of who said what, incl
 </ul>
     <em>   </em>Summary:* Focus on the main threads: API credits, Mythos/Cybersecurity, AGI/Consciousness, and Geopolitics/Hardware.
     <em>   </em>Quotes:* Select the most impactful ones (e.g., about Mythos, continuous learning, or the death of PCs).
-    <em>   </em>Timeline:* Map out the flow from credits $\rightarrow$ logos $\rightarrow$ consciousness $\rightarrow$ Mythos $\rightarrow$ geopolitics.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-09 05:37 ~ 2026-04-09 07:40</span> Chunk 27 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'><ul><li>Timeframe: 2026-04-09 05:37 to 07:40.</li>
+    <em>   </em>Timeline:* Map out the flow from credits $\rightarrow$ logos $\rightarrow$ consciousness $\rightarrow$ Mythos $\rightarrow$ geopolitics.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-09 05:37 ~ 2026-04-09 07:40</span> Chunk 27</summary>
+          <div class="chunk-body"><div class='rendered-content'><ul><li>Timeframe: 2026-04-09 05:37 to 07:40.</li>
 <li>Platform: Discord.</li>
 <li>Language: English (needs to be analyzed in Korean).</li>
 <li>Key themes: AI models (Claude, GPT, Gemini, Meta&#x27;s Muse Spark), AI architecture, AGI/ASI, human cognition/AI reliance, and server-specific drama (trusted roles).</li>
@@ -1691,48 +1125,22 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Specific summary of who said what, incl
 </ul>        <ul><li>07:31-07:40: Analysis of Meta&#x27;s Muse Spark and comparison with other models.</li>
 </ul>
     <ul><li>Ensure technical terms (KV cache, TTT, $O(\log n \log n)$, embeddings, MLP, etc.) are handled correctly.</li>
-</ul>    <ul><li>Maintain the tone of the conversation (informal, skeptical, technical).</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-09 07:41 ~ 2026-04-09 11:51</span> Chunk 28 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'>Discord chat logs from 2026-04-09 07:41 to 11:51.
+</ul>    <ul><li>Maintain the tone of the conversation (informal, skeptical, technical).</li></ul></div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-09 07:41 ~ 2026-04-09 11:51</span> Chunk 28</summary>
+          <div class="chunk-body"><div class='rendered-content'>Discord chat logs from 2026-04-09 07:41 to 11:51.
 Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, including usernames and technical details.</li>
 </ul>        <ul><li>[QUOTES]: 3-5 most important quotes in original English with explanations of why they are important.</li>
 </ul>        <ul><li>[TIMELINE]: Chronological list of major events.</li>
 </ul>
     <em>   </em>07:41 - 08:04:* Discussion about new models. <code>kostikz</code> mentions world knowledge. <code>marmaduke091</code> mentions &quot;Recraft V4 Vector&quot; (SVG model). <code>textfile</code> asks about &quot;3.1 pro&quot; trending. <code>asura07389</code> discusses Meta&#x27;s model performance (multimodality) and context window (262k tokens vs 131k). <code>lightvelox</code> mentions &quot;Muse Spark&quot; parameter count/context and Grok 4.20 (500b parameters). <code>textfile</code> shares a &quot;3d voxel pelican riding a bicycle&quot; generated by Muse Spark. <code>kieradev</code> shares a tweet about Muse Spark&#x27;s frontend capabilities.</p><p>    <em>   </em>08:05 - 08:37:* <code>videnrunt</code> complains about GitHub Copilot quota (Gemini Pro) and Claude Sonnet getting &quot;dumber.&quot; Random chatter about &quot;purple names&quot; (Discord roles/status) and server boosting. <code>jordan8926u</code> mentions Claude sign-ups are banned.</p><p>    <em>   </em>08:48 - 09:10:* <code>yashjit</code> created a Claude Code Discord bot tunnel. <code>jordan8926u</code> points out an official Claude Code Discord implementation exists via MCP server. Discussion about OpenAI&#x27;s &quot;GPT 5&quot; (Death Star) and &quot;GPT 5.5&quot; hype. <code>bingeritos</code> speculates on 10T parameter models. <code>lightvelox</code> expresses disappointment with OpenAI&#x27;s hype cycles (mentioning GPT 5.4 and Opus 4.5).</p><p>    <em>   </em>09:11 - 10:00:* <code>ridgewater</code> asks about Mythos&#x27; pelican SVG. <code>lsdmark3</code> asks about &quot;Mythos Claude.&quot; Jokes about &quot;Dario&quot; (likely Dario Amodei, CEO of Anthropic) murdering people who leak info.</p><p>    <em>   </em>10:01 - 10:24:* <code>awesomesaucidk</code> suggests a &quot;military benchmark&quot; for AI (launching nukes, aiming guns). <code>kami6963</code> argues models won&#x27;t do this due to safety/jailbreaks. Discussion on Palantir and Chinese open-source models. <code>dsdsdsd_32176</code> shares a video of a giant robot arm. <code>kieradev</code> talks about ASI (Artificial Super Intelligence). <code>yashjit</code> mentions &quot;claudussy&quot; working for 5 hours.</p><p>    <em>   </em>10:26 - 11:51:* <code>chasebrower</code> shares a tweet about an Anthropic employee&#x27;s breakdown regarding &quot;Mythos.&quot; <code>slikc.</code> asks about a new OAI model dropping tomorrow. <code>kami6963</code> expresses strong preference for Claude over OpenAI and Gemini (calling Gemini 3.1 pro &quot;piece of shit&quot;). <code>textfile</code> mentions &quot;GLM 5.1&quot; and &quot;Forgecode&quot; (claiming it&#x27;s #1 on TerminalBench). <code>kami6963</code> critiques &quot;benchmaxing&quot; (optimizing for benchmarks rather than real performance) and mentions &quot;Pilot by quantflow.&quot; Discussion on subscription plans (Novita.ai vs first-party). <code>hiptodude</code> asks if the $20 Opus plan is bad; <code>darling_84675</code> recommends the Codex $20 plan instead. Final debate on Gemini&#x27;s coding ability (generally seen as poor).</p><p>    <em>   </em>Summary:* Group the conversations into themes: New Model Releases (Muse Spark, Mythos), Tooling/Bots (Claude Code, Forgecode), and Pricing/Plans (Anthropic vs OpenAI vs Codex).
     <em>   </em>Quotes:* Select a few that represent the core technical debates (context windows, benchmaxing, and the &quot;hype&quot; cycle).
-    <em>   </em>Timeline:* Map the flow from model discussion $\rightarrow$ botting $\rightarrow$ military AI $\rightarrow$ pricing/subscriptions.</div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
-            <details class="chunk-detail">
-              <summary><span class="chunk-time">2026-04-09 11:51 ~ 2026-04-09 12:25</span> Chunk 29 Detail</summary>
-              <div class="chunk-body">
-                <div class="chunk-section">
-                  <h4>Summary</h4>
-                  <div class='rendered-content'>Discord chat log.
+    <em>   </em>Timeline:* Map the flow from model discussion $\rightarrow$ botting $\rightarrow$ military AI $\rightarrow$ pricing/subscriptions.</div></div>
+        </details>
+        <details class="chunk-detail">
+          <summary><span class="chunk-time">2026-04-09 11:51 ~ 2026-04-09 12:25</span> Chunk 29</summary>
+          <div class="chunk-body"><div class='rendered-content'>Discord chat log.
 2026-04-09 11:51 to 12:25.
 Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, including usernames and technical details.</li>
 </ul>        <ul><li>[QUOTES]: 3-5 most important quotes (original text) with explanations of why they are important.</li>
@@ -1761,28 +1169,11 @@ Korean.</p><p>        <ul><li>[SUMMARY]: Detailed summary of who said what, incl
 </ul>        <ul><li>12:24: Comparison between <code>muse spark-large</code> and <code>mythos</code>.</li>
 </ul>
     <ul><li>Ensure technical terms like &quot;Codex subscription,&quot; &quot;Claude Code,&quot; &quot;API,&quot; and &quot;OpenCode&quot; are preserved or clearly explained.</li>
-</ul>    <ul><li>Maintain the tone of the analysis (professional yet descriptive).</li></ul></div>
-                </div>
-                <div class="chunk-section">
-                  <h4>Key Evidence</h4>
-                  
-                </div>
-                <div class="chunk-section">
-                  <h4>Time Anchors</h4>
-                  
-                </div>
-              </div>
-            </details>
+</ul>    <ul><li>Maintain the tone of the analysis (professional yet descriptive).</li></ul></div></div>
+        </details>
   </div>
-
 </main>
-
-<footer class="site-footer">
-  <div class="container">
-    Signal Daily &mdash; Auto-generated Discord digest powered by Gemma 4<br/>
-    2026-04-06 00:00 ~ 2026-04-09 12:25
-  </div>
-</footer>
-
-</body>
-</html>
+<footer class="site-footer"><div class="container">
+  Signal Daily &mdash; Auto-generated Discord digest powered by Gemma 4
+</div></footer>
+</body></html>

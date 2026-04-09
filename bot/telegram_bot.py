@@ -28,9 +28,33 @@ def _send_message(text: str, disable_preview: bool = False) -> dict:
     return resp.json()
 
 
+def _send_photo(image_path: str, caption: str = "") -> dict:
+    """텔레그램 Bot API로 이미지 발송 (로컬 파일)"""
+    with open(image_path, "rb") as photo:
+        resp = requests.post(
+            f"{API_BASE}/sendPhoto",
+            data={
+                "chat_id": CHANNEL_ID,
+                "caption": caption[:1024],
+                "parse_mode": "HTML",
+            },
+            files={"photo": photo},
+        )
+    resp.raise_for_status()
+    return resp.json()
+
+
 def send_article(article: dict) -> dict:
-    """단일 기사를 텔레그램 채널에 발행"""
+    """단일 기사를 텔레그램 채널에 발행 (이미지 포함)"""
     message = format_article(article)
+    media = article.get("media", [])
+
+    # 이미지가 있으면 첫 번째 이미지와 함께 발송
+    if media:
+        image_path = media[0].get("path", "")
+        if image_path and os.path.exists(image_path):
+            return _send_photo(image_path, caption=message)
+
     return _send_message(message, disable_preview=False)
 
 

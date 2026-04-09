@@ -8,18 +8,30 @@ from bot.x_poster import post_daily_summary
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 
-def run_daily_publish():
-    """data/ 폴더에서 오늘의 기사를 읽어서 텔레그램 + X에 발행"""
-    articles = []
+def _load_articles() -> list[dict]:
+    """data/ 폴더에서 기사 로드. latest.json 우선, 없으면 *.json 전체"""
+    latest = os.path.join(DATA_DIR, "latest.json")
 
-    json_files = glob_module.glob(os.path.join(DATA_DIR, "*.json"))
-    for filepath in json_files:
+    if os.path.exists(latest):
+        with open(latest, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else [data]
+
+    # latest.json 없으면 전체 JSON 파일 로드
+    articles = []
+    for filepath in glob_module.glob(os.path.join(DATA_DIR, "*.json")):
         with open(filepath, "r", encoding="utf-8") as f:
             data = json.load(f)
             if isinstance(data, list):
                 articles.extend(data)
             else:
                 articles.append(data)
+    return articles
+
+
+def run_daily_publish():
+    """data/ 폴더에서 오늘의 기사를 읽어서 텔레그램 + X에 발행"""
+    articles = _load_articles()
 
     if not articles:
         print("발행할 기사가 없습니다.")

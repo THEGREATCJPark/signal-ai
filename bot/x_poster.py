@@ -21,23 +21,51 @@ def _get_client() -> tweepy.Client:
     )
 
 
-def post_tweet(text: str) -> dict:
-    """트윗 게시 (280자 제한)"""
+def _get_api_v1() -> tweepy.API:
+    """X API v1.1 (이미지 업로드용)"""
+    auth = tweepy.OAuth1UserHandler(
+        API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_TOKEN_SECRET
+    )
+    return tweepy.API(auth)
+
+
+def _upload_media(image_path: str) -> int | None:
+    """이미지를 X에 업로드하고 media_id 반환"""
+    if not image_path or not os.path.exists(image_path):
+        return None
+    api = _get_api_v1()
+    media = api.media_upload(filename=image_path)
+    return media.media_id
+
+
+def post_tweet(text: str, media_path: str = None) -> dict:
+    """트윗 게시 (280자 제한, 이미지 선택)"""
     client = _get_client()
-    response = client.create_tweet(text=text[:280])
+    media_ids = None
+
+    if media_path:
+        media_id = _upload_media(media_path)
+        if media_id:
+            media_ids = [media_id]
+
+    response = client.create_tweet(text=text[:280], media_ids=media_ids)
     return response.data
 
 
 def post_article(article: dict) -> dict:
-    """단일 기사를 X에 포스팅"""
+    """단일 기사를 X에 포스팅 (이미지 포함)"""
     title = article.get("title", "")
     url = article.get("url", "")
     source = article.get("source", "")
     score = article.get("score", 0)
 
-    # 280자 제한에 맞춰 포맷
     text = f"📡 {title}\n\n📌 {source} | 📊 {score}점\n🔗 {url}\n\n#AI #SignalAI"
-    return post_tweet(text)
+
+    # 첫 번째 이미지 첨부
+    media = article.get("media", [])
+    media_path = media[0].get("path") if media else None
+
+    return post_tweet(text, media_path=media_path)
 
 
 def post_daily_summary(articles: list[dict]) -> dict:
@@ -49,7 +77,6 @@ def post_daily_summary(articles: list[dict]) -> dict:
 
     for i, article in enumerate(articles[:5], 1):
         title = article.get("title", "")
-        # 트윗 길이 제한을 위해 제목 축약
         if len(title) > 40:
             title = title[:37] + "..."
         lines.append(f"{i}. {title}")

@@ -59,6 +59,12 @@ def format_article(article: dict) -> str:
         lines.append("")
         lines.append(f"📝 {summary}")
 
+    # 이미지가 있으면 표시
+    media = article.get("media", [])
+    if media:
+        lines.append("")
+        lines.append(f"🖼 이미지 {len(media)}장 첨부")
+
     lines.append("")
     lines.append(f'🔗 <a href="{url}">원문 보기</a>')
 

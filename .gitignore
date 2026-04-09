@@ -1,0 +1,20 @@
+# Sensitive
+discord_export_config.env
+*.env
+!.env.example
+
+# Large exports
+discord_3day_export.txt
+*.raw.txt
+
+# State files
+digest_state.json
+
+# System
+.DS_Store
+__pycache__/
+*.pyc
+
+# Python
+venv/
+.venv/

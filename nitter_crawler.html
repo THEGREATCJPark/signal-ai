@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Nitter Tweets & Replies Crawler (UTC+9 window, AllOrigins proxy)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #151925;
+      --accent: #66d9ef;
+      --muted: #8a93a3;
+      --text: #e9ecf1;
+      --ok: #4ad295;
+      --warn: #ffb86c;
+      --err: #ff6b6b;
+      --border: #262c3c;
+    }
+    html, body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji";
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1100px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 22px; margin: 0 0 12px; }
+    .panel {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px; margin-bottom: 16px;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+    .field {
+      display: flex; flex-direction: column; gap: 6px;
+      min-width: 180px; flex: 1 1 220px;
+    }
+    .field-half { flex: 1 1 160px; min-width: 160px; }
+    .field label { color: var(--muted); font-size: 12px; }
+    input[type="text"], input[type="number"], input[type="datetime-local"], select {
+      background: #0d1018; color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; outline: none;
+    }
+    input[type="radio"], input[type="checkbox"] {
+      transform: scale(1.05);
+    }
+    .help {
+      color: var(--muted); font-size: 12px; margin-top: -4px;
+    }
+    .btns { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      background: #1d2233; color: var(--text);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 14px; cursor: pointer; font-weight: 600;
+    }
+    button.primary { background: #24304a; border-color: #304064; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px; white-space: pre-wrap; background: #0b0e15;
+      border: 1px dashed var(--border); border-radius: 8px; padding: 12px; color: var(--muted);
+      max-height: 200px; overflow: auto;
+    }
+    .results-summary {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+      color: var(--muted); font-size: 13px;
+    }
+    .result {
+      border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin-bottom: 8px; background: #121723;
+    }
+    .tweet-head { display: flex; justify-content: space-between; gap: 10px; }
+    .ts { color: var(--muted); font-size: 12px; }
+    .tweet-url { font-size: 12px; }
+    .replying { color: var(--muted); font-size: 12px; margin: 6px 0; }
+    .content { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+    .badge { font-size: 11px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted); }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .err { color: var(--err); }
+    .footer {
+      color: var(--muted); font-size: 12px; text-align: center; margin-top: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🕸️ Nitter Tweets & Replies Crawler (via AllOrigins)</h1>
+
+    <div class="panel">
+      <div class="row">
+        <div class="field">
+          <label for="user">User ID (handle, no @)</label>
+          <input id="user" type="text" placeholder="e.g. OfficialLoganK" value="OfficialLoganK" />
+          <div class="help">Will crawl https://nitter.net/{user}/with_replies</div>
+        </div>
+
+        <div class="field">
+          <label for="startDT">Start (UTC+9)</label>
+          <input id="startDT" type="datetime-local" />
+          <div class="help">Interpreted as UTC+9 (JST/KST). Hour-level precision.</div>
+        </div>
+
+        <div class="field">
+          <label>End (UTC+9)</label>
+          <div>
+            <label><input type="radio" name="endMode" value="now" checked /> Now</label>
+            &nbsp;&nbsp;
+            <label><input type="radio" name="endMode" value="at" /> Specific:</label>
+          </div>
+          <input id="endDT" type="datetime-local" disabled />
+          <div class="help">Choose “Specific” to enable the picker. Also interpreted as UTC+9.</div>
+        </div>
+
+        <div class="field field-half">
+          <label for="delay">Delay between pages (ms)</label>
+          <input id="delay" type="number" min="0" step="50" value="1200" />
+          <div class="help">Helps avoid overloading the proxy.</div>
+        </div>
+
+        <div class="field field-half">
+          <label for="maxPages">Max pages</label>
+          <input id="maxPages" type="number" min="1" step="1" value="50" />
+          <div class="help">Safety guard to avoid extremely long crawls.</div>
+        </div>
+
+        <div class="field field-half">
+          <label for="sortOrder">Output order</label>
+          <select id="sortOrder">
+            <option value="asc" selected>Oldest → Newest (chronological)</option>
+            <option value="desc">Newest → Oldest</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="btns" style="margin-top:14px;">
+        <button id="startBtn" class="primary">Start crawling</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <button id="exportBtn" disabled>Export JSON</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div style="margin-bottom:8px; display:flex; gap:8px; align-items:center;">
+        <span class="badge">Log</span>
+        <span class="help">Times on Nitter pages are UTC; your inputs are UTC+9. This tool converts automatically.</span>
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+
+    <div class="panel">
+      <div class="results-summary">
+        <div>
+          <span class="badge">Results</span>
+          <span id="summary">0 tweets</span>
+        </div>
+        <div id="windowInfo"></div>
+      </div>
+      <div id="results"></div>
+    </div>
+
+    <div class="footer">
+      Uses https://api.allorigins.win/get (CORS proxy). Be considerate with delays. Not affiliated with Nitter or Twitter/X.
+    </div>
+  </div>
+
+  <script>
+    // Utilities
+    const $ = (sel, root=document) => root.querySelector(sel);
+    const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+    function log(msg, cls) {
+      const el = $('#status');
+      const line = document.createElement('div');
+      if (cls) line.classList.add(cls);
+      line.textContent = msg;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function setSummary(count) {
+      $('#summary').textContent = `${count} tweets`;
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // Parse date from Nitter "title" attribute, ex: "Oct 21, 2025 · 4:34 PM UTC"
+    function parseNitterUTC(titleStr) {
+      if (!titleStr) return null;
+      const cleaned = titleStr.replace(/\s*·\s*/g, ' ').trim(); // "Oct 21, 2025 4:34 PM UTC"
+      const d = new Date(cleaned);
+      if (isNaN(d.getTime())) {
+        // Fallback try removing 'UTC' and append 'Z'
+        const fallback = new Date(cleaned.replace(' UTC', 'Z'));
+        if (!isNaN(fallback.getTime())) return fallback;
+        return null;
+      }
+      return d;
+    }
+
+    // Build UTC Date from a "YYYY-MM-DDTHH:mm" string interpreted as UTC+9
+    function dateFromUTC9LocalString(s) {
+      // s like "2025-10-21T13:00"
+      if (!s) return null;
+      const iso = `${s}:00+09:00`;
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return null;
+      return d; // This Date is the instant in UTC corresponding to the UTC+9 local time
+    }
+
+    function fmtUTC(d) {
+      return d.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, ' UTC');
+    }
+    function fmtUTC9(d) {
+      // Add +9h for display
+      const d2 = new Date(d.getTime() + 9 * 3600 * 1000);
+      const y = d2.getUTCFullYear();
+      const m = String(d2.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(d2.getUTCDate()).padStart(2, '0');
+      const hh = String(d2.getUTCHours()).padStart(2, '0');
+      const mi = String(d2.getUTCMinutes()).padStart(2, '0');
+      return `${y}-${m}-${dd} ${hh}:${mi} UTC+9`;
+    }
+
+    function buildNitterUrl(user, cursor=null) {
+      const base = `https://nitter.net/${encodeURIComponent(user)}/with_replies`;
+      if (cursor) return `${base}?cursor=${encodeURIComponent(cursor)}`;
+      return base;
+    }
+
+    async function fetchViaAllOrigins(url) {
+      const proxied = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const res = await fetch(proxied);
+      if (!res.ok) throw new Error(`Proxy response not ok (${res.status})`);
+      const json = await res.json();
+      if (!json || typeof json.contents !== 'string') throw new Error('Proxy did not return contents');
+      return json.contents;
+    }
+
+    function parseHTML(html) {
+      const parser = new DOMParser();
+      return parser.parseFromString(html, 'text/html');
+    }
+
+    function extractTweets(doc, user) {
+      // Each tweet body lives under .timeline .timeline-item .tweet-body
+      const items = [];
+      const nodes = $$('.timeline .timeline-item .tweet-body', doc);
+      for (const body of nodes) {
+        try {
+          const dateAnchor = body.querySelector('.tweet-date a');
+          const title = dateAnchor ? dateAnchor.getAttribute('title') : null;
+          const timeUTC = parseNitterUTC(title);
+          if (!timeUTC) continue;
+
+          const tweetLink = body.parentElement.querySelector('a.tweet-link');
+          const path = tweetLink ? tweetLink.getAttribute('href') : null;
+          const url = path ? `https://nitter.net${path}` : null;
+          const idMatch = path ? path.match(/status\/(\d+)/) : null;
+          const id = idMatch ? idMatch[1] : null;
+
+          const replyingEl = body.querySelector('.replying-to');
+          const replyingTo = replyingEl ? replyingEl.textContent.trim().replace(/^Replying to\s*/i, '') : '';
+
+          // Tweet content
+          const contentEl = body.querySelector('.tweet-content');
+          const content = contentEl ? contentEl.textContent.trim() : '';
+
+          // Stats (optional, not required)
+          const stats = {};
+          const statNodes = $$('.tweet-stats .tweet-stat', body);
+          for (const s of statNodes) {
+            const icon = s.querySelector('.icon-container > span');
+            const txt = s.textContent.trim();
+            if (!icon) continue;
+            if (icon.classList.contains('icon-comment')) stats.replies = txt ? Number(txt) || 0 : 0;
+            if (icon.classList.contains('icon-retweet')) stats.retweets = txt ? Number(txt) || 0 : 0;
+            if (icon.classList.contains('icon-quote')) stats.quotes = txt ? Number(txt) || 0 : 0;
+            if (icon.classList.contains('icon-heart')) stats.likes = txt ? Number(txt.replace(/,/g, '')) || 0 : 0;
+            if (icon.classList.contains('icon-play')) stats.plays = txt ? Number(txt.replace(/,/g, '')) || 0 : 0;
+          }
+
+          items.push({
+            id, url, user, timeUTC: timeUTC.toISOString(),
+            timeUnix: timeUTC.getTime(),
+            timeUTC9: fmtUTC9(timeUTC),
+            timeUTCStr: fmtUTC(timeUTC),
+            replyingTo, content, stats
+          });
+        } catch (e) {
+          // Skip malformed
+        }
+      }
+      return items;
+    }
+
+    function getPageTimeBounds(tweets) {
+      if (!tweets.length) return { earliest: null, latest: null };
+      let min = tweets[0].timeUnix, max = tweets[0].timeUnix;
+      for (const t of tweets) {
+        if (t.timeUnix < min) min = t.timeUnix;
+        if (t.timeUnix > max) max = t.timeUnix;
+      }
+      return { earliest: new Date(min), latest: new Date(max) };
+    }
+
+    function extractNextCursor(doc) {
+      // Find bottom "Load more" link that contains ?cursor=
+      const anchors = $$('a[href*="cursor="]', doc);
+      // Heuristic: choose the last anchor with cursor param (bottom)
+      let chosen = null;
+      for (const a of anchors) chosen = a;
+      if (!chosen) return null;
+
+      try {
+        const tmp = new URL(chosen.getAttribute('href'), 'https://nitter.net');
+        return tmp.searchParams.get('cursor');
+      } catch {
+        // fallback: raw parse
+        const href = chosen.getAttribute('href');
+        const m = href.match(/cursor=([^&]+)/);
+        return m ? decodeURIComponent(m[1]) : null;
+      }
+    }
+
+    function renderResults(tweets, order = 'asc') {
+      const out = $('#results');
+      out.innerHTML = '';
+      const sorted = tweets.slice().sort((a, b) => order === 'asc' ? a.timeUnix - b.timeUnix : b.timeUnix - a.timeUnix);
+      for (const t of sorted) {
+        const wrap = document.createElement('div');
+        wrap.className = 'result';
+        wrap.innerHTML = `
+          <div class="tweet-head">
+            <div class="ts">
+              <div>${t.timeUTCStr}</div>
+              <div>${t.timeUTC9}</div>
+            </div>
+            <div class="tweet-url"><a href="${t.url}" target="_blank" rel="noopener">Open tweet ↗</a></div>
+          </div>
+          ${t.replyingTo ? `<div class="replying">Replying to: ${escapeHtml(t.replyingTo)}</div>` : ``}
+          <div class="content">${escapeHtml(t.content)}</div>
+        `;
+        out.appendChild(wrap);
+      }
+      setSummary(sorted.length);
+    }
+
+    function escapeHtml(s) {
+      return (s ?? '').replace(/[&<>"']/g, (ch) =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])
+      );
+    }
+
+    // Main crawl controller
+    let STOP = false;
+    let LAST_JSON = null;
+
+    async function crawl() {
+      STOP = false;
+      $('#startBtn').disabled = true;
+      $('#stopBtn').disabled = false;
+      $('#exportBtn').disabled = true;
+      $('#status').innerHTML = '';
+      $('#results').innerHTML = '';
+      setSummary(0);
+
+      const user = $('#user').value.trim();
+      if (!user) { log('Please enter a user handle', 'err'); resetButtons(); return; }
+
+      const startStr = $('#startDT').value;
+      const endMode = document.querySelector('input[name="endMode"]:checked').value;
+      const endStr = $('#endDT').value;
+      const delay = Math.max(0, Number($('#delay').value) || 0);
+      const maxPages = Math.max(1, Number($('#maxPages').value) || 1);
+      const order = $('#sortOrder').value;
+
+      const startUTC = dateFromUTC9LocalString(startStr);
+      if (!startUTC) { log('Invalid start date/time (UTC+9).', 'err'); resetButtons(); return; }
+
+      let endUTC = null;
+      if (endMode === 'now') endUTC = new Date(); // now (UTC)
+      else {
+        endUTC = dateFromUTC9LocalString(endStr);
+        if (!endUTC) { log('Invalid end date/time (UTC+9).', 'err'); resetButtons(); return; }
+      }
+
+      if (startUTC.getTime() > endUTC.getTime()) {
+        log('Start must be <= End.', 'err'); resetButtons(); return;
+      }
+
+      // Show window
+      $('#windowInfo').innerHTML = `
+        <span class="help">Window UTC:</span>
+        <span class="badge">${fmtUTC(startUTC)} → ${fmtUTC(endUTC)}</span>
+        <span class="help">| UTC+9:</span>
+        <span class="badge">${fmtUTC9(startUTC)} → ${fmtUTC9(endUTC)}</span>
+      `;
+
+      log(`User: ${user}`);
+      log(`Window: ${fmtUTC(startUTC)} → ${fmtUTC(endUTC)} (input interpreted as UTC+9)`);
+      log(`Delay between pages: ${delay} ms; Max pages: ${maxPages}`);
+
+      let cursor = null;
+      let url = buildNitterUrl(user, cursor);
+      let page = 0;
+      const collected = [];
+
+      try {
+        while (!STOP && page < maxPages) {
+          page++;
+          log(`Fetching page ${page} ${cursor ? `(cursor=${cursor.substring(0, 12)}...)` : '(initial)'} ...`);
+          const html = await fetchViaAllOrigins(url);
+          const doc = parseHTML(html);
+
+          const pageTweets = extractTweets(doc, user);
+          if (!pageTweets.length) {
+            log('No tweets found on this page. Stopping.', 'warn');
+            break;
+          }
+
+          // Compute page bounds (UTC)
+          const { earliest, latest } = getPageTimeBounds(pageTweets);
+          const earliestStr = earliest ? fmtUTC(earliest) : 'n/a';
+          const latestStr = latest ? fmtUTC(latest) : 'n/a';
+          log(`Page bounds (UTC): latest=${latestStr} · earliest=${earliestStr}`);
+
+          // Filter by [startUTC, endUTC]
+          const filtered = pageTweets.filter(t => {
+            const ts = t.timeUnix;
+            return ts >= startUTC.getTime() && ts <= endUTC.getTime();
+          });
+
+          // Merge unique by id/url
+          for (const t of filtered) {
+            if (!collected.some(x => (x.id && t.id && x.id === t.id) || (x.url && t.url && x.url === t.url))) {
+              collected.push(t);
+            }
+          }
+
+          renderResults(collected, order);
+
+          // Determine stop condition:
+          // - If even the earliest tweet on this page is older than startUTC, the next page will be even older → stop.
+          if (earliest && earliest.getTime() < startUTC.getTime()) {
+            log('Reached tweets older than the start bound. Done.', 'ok');
+            break;
+          }
+
+          // Conversely, if the newest on this page is older than start, no point to continue either.
+          if (latest && latest.getTime() < startUTC.getTime()) {
+            log('All tweets on this page are older than start bound. Done.', 'ok');
+            break;
+          }
+
+          // If no "Load more" cursor is present, stop.
+          const nextCursor = extractNextCursor(doc);
+          if (!nextCursor) {
+            log('No further cursor found. Done.', 'ok');
+            break;
+          }
+          cursor = nextCursor;
+          url = buildNitterUrl(user, cursor);
+
+          if (STOP) break;
+          if (delay > 0) await sleep(delay);
+        }
+      } catch (e) {
+        log(`Error: ${e.message}`, 'err');
+      } finally {
+        LAST_JSON = collected.slice().sort((a, b) => a.timeUnix - b.timeUnix);
+        $('#exportBtn').disabled = LAST_JSON.length === 0;
+        resetButtons();
+        if (STOP) log('Stopped by user.', 'warn');
+        else log('Crawl complete.', 'ok');
+      }
+    }
+
+    function resetButtons() {
+      $('#startBtn').disabled = false;
+      $('#stopBtn').disabled = true;
+    }
+
+    // Export JSON
+    function exportJSON() {
+      if (!LAST_JSON || !LAST_JSON.length) return;
+      const blob = new Blob([JSON.stringify(LAST_JSON, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const user = $('#user').value.trim() || 'user';
+      a.href = url;
+      a.download = `nitter_${user}_tweets_replies.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    // Event wiring
+    $('#startBtn').addEventListener('click', crawl);
+    $('#stopBtn').addEventListener('click', () => { STOP = true; $('#stopBtn').disabled = true; });
+    $('#exportBtn').addEventListener('click', exportJSON);
+    // End mode toggle
+    $$('input[name="endMode"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        const at = $('#endDT');
+        at.disabled = document.querySelector('input[name="endMode"]:checked').value !== 'at';
+      });
+    });
+
+    // Initialize defaults: set start to "24 hours ago" in UTC+9, end=now
+    (function initDefaults() {
+      const now = new Date();
+      // Convert now UTC to UTC+9 wall time for the picker default
+      const nowUTC9 = new Date(now.getTime() + 9 * 3600 * 1000);
+      const pad = n => String(n).padStart(2, '0');
+      const toLocalStr = d => `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+
+      const startUTC9 = new Date(nowUTC9.getTime() - 24 * 3600 * 1000);
+      $('#startDT').value = toLocalStr(startUTC9);
+      // end is "now" by default; keep endDT disabled but prefill with now for convenience
+      $('#endDT').value = toLocalStr(nowUTC9);
+      log('Ready. Set your window (UTC+9), then press “Start crawling”.', 'ok');
+    })();
+  </script>
+</body>
+</html>

@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 import glob as glob_module
@@ -8,7 +7,7 @@ from bot.telegram_bot import send_daily_digest
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 
-async def run_daily_publish():
+def run_daily_publish():
     """data/ 폴더에서 오늘의 기사를 읽어서 텔레그램에 발행"""
     articles = []
 
@@ -31,9 +30,9 @@ async def run_daily_publish():
     # 상위 10개만 발행
     top_articles = articles[:10]
 
-    await send_daily_digest(top_articles)
+    send_daily_digest(top_articles)
     print(f"{len(top_articles)}개 기사 발행 완료")
 
 
 if __name__ == "__main__":
-    asyncio.run(run_daily_publish())
+    run_daily_publish()

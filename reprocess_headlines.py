@@ -70,46 +70,39 @@ def call_validated(prompt, sched):
 
 TOPICS = [
     {
-        "headline": "GPT Image 2 vs Nano Banana Pro: AI 이미지 생성 모델 대전",
-        "keywords": ["image 2", "image generation", "nano banana", "nbp", "nb2", "nbpro",
-                      "gpt image", "image 1.5", "dall-e", "imagen", "grok image",
-                      "watermark", "artifact", "prompt test"],
-        "time_hint": "04/06",
-    },
-    {
-        "headline": "Claude Mythos 공개: Project Glasswing과 자율 해킹 AI의 충격",
+        "headline": "Claude Mythos 후폭풍: AI 커뮤니티를 뒤흔든 자율 해킹 모델 논쟁",
         "keywords": ["mythos", "glasswing", "zero-day", "hacking", "swe-bench",
-                      "cybersecurity", "autonomous", "exploit"],
-        "time_hint": "04/07~08",
+                      "cybersecurity", "autonomous", "exploit", "anthropic"],
     },
     {
-        "headline": "Meta Muse Spark 출시: 추론은 강하지만 코딩은 약한 새 도전자",
-        "keywords": ["muse spark", "meta", "taxeval", "reasoning", "muse"],
-        "time_hint": "04/09",
+        "headline": "Claude Opus vs GPT-5.5 Spud: 코딩 AI 왕좌의 게임",
+        "keywords": ["spud", "gpt-5.5", "gpt-5.4", "opus 4.6", "opus", "claude",
+                      "coding", "sonnet", "benchmark", "deepseek"],
     },
     {
-        "headline": "GPT-5.5 '스퍼드' 루머와 코딩 모델 경쟁 격화",
-        "keywords": ["spud", "gpt-5.5", "gpt-5.4", "coding model", "claude opus",
-                      "opus 4.6", "deepseek v4", "codex", "retiring"],
-        "time_hint": "04/07~08",
+        "headline": "GPT Image 2 실전 테스트: 이미지 생성 AI의 새로운 기준?",
+        "keywords": ["image 2", "image generation", "nano banana", "nbp", "nb2",
+                      "gpt image", "image 1.5", "grok image", "watermark"],
     },
     {
-        "headline": "xAI 콜로서스 2 발표: 일론 머스크의 1조 파라미터 AI 야망",
-        "keywords": ["xai", "colossus", "elon", "musk", "1t", "10t", "trillion",
-                      "parameter"],
-        "time_hint": "04/08",
+        "headline": "Gemini vs Claude vs GPT: 삼파전 벤치마크 비교 분석",
+        "keywords": ["gemini", "benchmark", "comparison", "google", "gemini 3",
+                      "flash", "pro", "eval"],
     },
     {
-        "headline": "AI 슈링크플레이션 논쟁: 모델이 점점 멍청해지고 있나?",
-        "keywords": ["shrinkflation", "dumber", "nerfed", "cognitive", "thinking",
-                      "outsourcing", "decline", "멍청"],
-        "time_hint": "04/08~09",
+        "headline": "Meta Muse Spark·Qwen·Grok: 도전자들의 반격",
+        "keywords": ["muse spark", "meta", "qwen", "grok", "llama", "open source",
+                      "open-source", "challenger"],
     },
     {
-        "headline": "Sora 3부터 Recraft V4까지: 비디오·벡터 AI 모델 근황",
-        "keywords": ["sora", "recraft", "v4 vector", "svg", "video model",
-                      "happyhorse"],
-        "time_hint": "04/06~09",
+        "headline": "AI 에이전트 시대: MCP, 코딩 도구, 자동화의 최전선",
+        "keywords": ["agent", "mcp", "cursor", "windsurf", "tool", "automation",
+                      "coding tool", "dispatch", "computer use"],
+    },
+    {
+        "headline": "OpenAI 내부 소식: 모델 은퇴와 차세대 로드맵",
+        "keywords": ["openai", "retiring", "codex", "roadmap", "o3", "o4",
+                      "sora", "gpt-6"],
     },
 ]
 

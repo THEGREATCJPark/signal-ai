@@ -1,0 +1,128 @@
+{
+  "batch_size": 2048,
+  "aspect_heap_k": 300,
+  "bounded_run_reason": "Round 22 removes broad parquet/JSON/text record caps so negative-search reports are not presented as corpus-wide after scanning only a slice. Targeted probes remain indexed high-signal adapters that add recall without replacing the broad streaming scan.",
+  "candidate_heap_k": 800,
+  "chunk_chars": 7000,
+  "chunk_overlap_chars": 700,
+  "data_root": "./data",
+  "heartbeat_every_records": 2000,
+  "json_source_dirs": [
+    "json_records_a",
+    "json_records_b"
+  ],
+  "json_raw_prefilter": true,
+  "json_raw_prefilter_aspects": [
+    "token_messenger_access",
+    "phone_password_repeated_attempt",
+    "phone_model_password_conditions",
+    "device_passcode_unlock_validity"
+  ],
+  "json_raw_prefilter_use_query_surface": false,
+  "max_json_files": 0,
+  "max_json_records": 0,
+  "max_parquet_files": 0,
+  "max_parquet_records": 0,
+  "max_records": 0,
+  "max_skipped_sources_reported": 200,
+  "max_text_files": 0,
+  "max_text_records": 0,
+  "min_chunk_score": 5.0,
+  "min_per_aspect_candidates": 20,
+  "min_record_score": 5.0,
+  "print_heartbeat": true,
+  "query_adapters": {
+    "aspects": {
+      "phone_model_password_conditions": [
+        [
+          "구형",
+          "오래된",
+          "최신",
+          "4자리",
+          "네 자리",
+          "짧은",
+          "비밀번호",
+          "패턴",
+          "잠금"
+        ],
+        [
+          "장치",
+          "장치",
+          "스마트폰",
+          "장치"
+        ]
+      ]
+    }
+  },
+  "record_score_prefix_chars": 200000,
+  "scan_json": true,
+  "scan_parquet": true,
+  "scan_text": true,
+  "selection_aspects": [
+    "token_messenger_access",
+    "phone_password_repeated_attempt",
+    "device_passcode_unlock_validity",
+    "validity_conditions",
+    "phone_model_password_conditions"
+  ],
+  "snippet_radius": 500,
+  "targeted_probes": [
+    {
+      "aspect": "phone_password_repeated_attempt",
+      "candidate_boost": 35.0,
+      "json_source_dirs": [
+        "json_records_a",
+        "json_records_b"
+      ],
+      "max_json_files": 40000,
+      "max_records": 80,
+      "name": "strict_phone_passcode_method_json_probe",
+      "regexes": [
+        "(장치|장치|장치|스마트폰|전화기|iPhone|아이폰).{0,160}(비밀번호|패스워드|암호|잠금|패턴|PIN|비번).{0,160}(브루트|brute|무차별|반복|여러\\s*차례|수십\\s*회|대입|추측|0000|1234|MFC|UFED|Cellebrite)",
+        "(브루트|brute|무차별|반복|여러\\s*차례|수십\\s*회|대입|추측|0000|1234|MFC|UFED|Cellebrite).{0,160}(비밀번호|패스워드|암호|잠금|패턴|PIN|비번).{0,160}(장치|장치|장치|스마트폰|전화기|iPhone|아이폰)"
+      ],
+      "source_types": [
+        "json"
+      ],
+      "term_groups": [
+        [
+          "장치",
+          "장치",
+          "장치",
+          "스마트폰",
+          "전화기",
+          "iPhone",
+          "아이폰"
+        ],
+        [
+          "비밀번호",
+          "패스워드",
+          "암호",
+          "잠금",
+          "패턴",
+          "PIN",
+          "비번"
+        ],
+        [
+          "브루트",
+          "brute",
+          "무차별",
+          "반복",
+          "여러 차례",
+          "수십 회",
+          "대입",
+          "추측",
+          "0000",
+          "1234",
+          "MFC",
+          "UFED",
+          "Cellebrite"
+        ]
+      ]
+    }
+  ],
+  "text_file_max_bytes": 3000000,
+  "text_source_dir": "text_records",
+  "top_k": 160,
+  "use_threads": false
+}

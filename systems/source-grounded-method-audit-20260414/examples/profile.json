@@ -1,0 +1,36 @@
+{
+  "aspects": [
+    {
+      "name": "method_alpha",
+      "event_roles": [
+        {"name": "actor", "terms": ["operator", "reviewer"]},
+        {"name": "method", "terms": ["adapter", "credential swap"]},
+        {"name": "target", "terms": ["account", "source feed"]}
+      ],
+      "conclusion_roles": [
+        {"name": "method", "terms": ["adapter", "credential swap"]},
+        {"name": "target", "terms": ["account", "source feed"]}
+      ],
+      "direct_conclusion_terms": ["valid", "invalid", "permitted", "prohibited"],
+      "allegation_markers": ["alleged", "claimed", "argued"],
+      "procedural_markers": ["dismissed", "procedural", "not reached"],
+      "window_chars": 360
+    },
+    {
+      "name": "method_beta",
+      "event_roles": [
+        {"name": "actor", "terms": ["operator", "reviewer"]},
+        {"name": "method", "terms": ["brute attempt", "forced unlock"]},
+        {"name": "target", "terms": ["device", "container"]}
+      ],
+      "conclusion_roles": [
+        {"name": "method", "terms": ["brute attempt", "forced unlock"]},
+        {"name": "target", "terms": ["device", "container"]}
+      ],
+      "direct_conclusion_terms": ["valid", "invalid", "permitted", "prohibited"],
+      "allegation_markers": ["alleged", "claimed", "argued"],
+      "procedural_markers": ["dismissed", "procedural", "not reached"],
+      "window_chars": 360
+    }
+  ]
+}

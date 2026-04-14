@@ -1,0 +1,117 @@
+{
+  "final_goal": "Build and iteratively improve a generic, source-grounded memory/search system for large corpora; validate it on the Korean domain corpus query about TOKEN/Messenger login and phone-password/brute-force technical_audit unlocking while satisfying the six generic failure modes.",
+  "workspace_seed": {
+    "carry_forward_mode": "best_checkpoint",
+    "surface_levels": [
+      {
+        "name": "full_project_edit",
+        "solver_editable": [
+          {
+            "source": "/path/to/generic_memory_domain_search_loop/seed_project",
+            "target": "project"
+          }
+        ]
+      }
+    ]
+  },
+  "solver_memory": {
+    "root": "solver_memory",
+    "carry_forward": true,
+    "required_files": [
+      "solver_memory/MEMORY.md",
+      "solver_memory/turn_log.md",
+      "solver_memory/best_code.json",
+      "solver_memory/verification.json"
+    ]
+  },
+  "mechanical_feedback": {
+    "enabled": true,
+    "no_progress_reset_after": 10,
+    "reset_policy": "keep_best_checkpoint_code_clear_solver_memory"
+  },
+  "issue_ledger": {
+    "enabled": true
+  },
+  "manager": {
+    "heartbeat_seconds": 28800
+  },
+  "evaluation_flow": {
+    "mode": "all"
+  },
+  "solver": {
+    "command": [
+      "/bin/bash",
+      "/path/to/generic_memory_domain_search_loop/bin/solver_codex.sh",
+      "{workspace}",
+      "{round}",
+      "{run_root}"
+    ],
+    "stall_watchdog_seconds": 28800,
+    "progress_probe_interval_seconds": 30,
+    "verification_max_runtime_seconds": null
+  },
+  "evaluators": [
+    {
+      "name": "critic_codex",
+      "command": [
+        "/bin/bash",
+        "/path/to/generic_memory_domain_search_loop/bin/critic_codex.sh",
+        "{workspace}",
+        "{round}",
+        "{run_root}"
+      ],
+      "fallback": {
+        "name": "critic_local_fallback",
+        "command": [
+          "/bin/bash",
+          "/path/to/generic_memory_domain_search_loop/bin/critic_local_fallback.sh",
+          "{workspace}"
+        ]
+      }
+    },
+    {
+      "name": "critic_claude",
+      "command": [
+        "/bin/bash",
+        "/path/to/generic_memory_domain_search_loop/bin/critic_claude.sh",
+        "{workspace}",
+        "{round}",
+        "{run_root}"
+      ],
+      "fallback": {
+        "name": "critic_codex_fallback",
+        "command": [
+          "/bin/bash",
+          "/path/to/generic_memory_domain_search_loop/bin/critic_codex.sh",
+          "{workspace}",
+          "{round}",
+          "{run_root}"
+        ]
+      }
+    }
+  ],
+  "converger": {
+    "name": "converger_codex",
+    "command": [
+      "/bin/bash",
+      "/path/to/generic_memory_domain_search_loop/bin/converger_codex.sh",
+      "{workspace}",
+      "{round}",
+      "{run_root}"
+    ]
+  },
+  "evidence_gate": {
+    "enabled": true,
+    "require_nonempty_evidence_for_pass": true
+  },
+  "references": {
+    "solver_visible": [
+      "/path/to/generic_memory_domain_search_loop/visible/goal.md",
+      "/path/to/generic_memory_domain_search_loop/visible/query.md",
+      "/path/to/generic_memory_domain_search_loop/visible/repo_notes.md"
+    ],
+    "evaluator_only": [
+      "/path/to/generic_memory_domain_search_loop/hidden/evaluation_contract.md"
+    ]
+  }
+}

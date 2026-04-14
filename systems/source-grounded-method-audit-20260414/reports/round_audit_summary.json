@@ -1,0 +1,107 @@
+{
+  "run_status": "reviewed_after_round_0013",
+  "success_claim": false,
+  "best_usable_checkpoint": "round_0007 / round_0012 family",
+  "summary": "The run produced reusable source-grounded event and negative-audit components, but did not solve the full generic memory-system goal.",
+  "rounds": [
+    {
+      "round": 1,
+      "records_seen": 151832,
+      "verdict": "progress",
+      "useful": "keyword-only false-positive baseline",
+      "failure": "loose keyword matching did not answer the target method question"
+    },
+    {
+      "round": 2,
+      "records_seen": 151832,
+      "verdict": "progress",
+      "useful": "event validation layer introduced",
+      "failure": "same noisy frontier retained"
+    },
+    {
+      "round": 3,
+      "records_seen": 978592,
+      "verdict": "progress",
+      "useful": "broad scan expanded",
+      "failure": "related method allegation was conflated with the requested method"
+    },
+    {
+      "round": 4,
+      "records_seen": 978592,
+      "verdict": "progress",
+      "useful": "target factual method span found",
+      "failure": "generic procedural/conclusion terms bound to the wrong source issue"
+    },
+    {
+      "round": 5,
+      "records_seen": 978592,
+      "verdict": "progress",
+      "useful": "structured event/direct/procedural status added",
+      "failure": "self-evaluation falsely passed unresolved direct-conclusion absence"
+    },
+    {
+      "round": 6,
+      "records_seen": 73653,
+      "verdict": "progress",
+      "useful": "narrow-scope regression exposed",
+      "failure": "negative audit was no longer broad enough"
+    },
+    {
+      "round": 7,
+      "records_seen": 977824,
+      "verdict": "progress",
+      "useful": "best evidence checkpoint: factual method span plus broad negative search for the second method",
+      "failure": "direct method conclusion still absent; hard-coded aspect rules remain"
+    },
+    {
+      "round": 8,
+      "records_seen": 977824,
+      "verdict": "no_progress",
+      "useful": "stagnation signal",
+      "failure": "same selected frontier repeated"
+    },
+    {
+      "round": 9,
+      "records_seen": 977824,
+      "verdict": "no_progress",
+      "useful": "selected-frontier identity confirmed",
+      "failure": "no substantive movement"
+    },
+    {
+      "round": 10,
+      "records_seen": 977824,
+      "verdict": "no_progress",
+      "useful": "self-evaluation false-pass partially corrected",
+      "failure": "evidence frontier unchanged"
+    },
+    {
+      "round": 11,
+      "records_seen": 977824,
+      "verdict": "no_progress",
+      "useful": "frontier expansion counterexample",
+      "failure": "more candidates did not add grounded evidence; self-evaluation regressed"
+    },
+    {
+      "round": 12,
+      "records_seen": 977824,
+      "verdict": "no_progress",
+      "useful": "best strict gate snapshot: unresolved direct conclusion correctly fails",
+      "failure": "core findings still identical to the repeated frontier"
+    },
+    {
+      "round": 13,
+      "records_seen": 977824,
+      "verdict": "no_progress",
+      "useful": "final round audit",
+      "failure": "self-evaluation overclaim returned; direct conclusion and genericity remained unresolved"
+    }
+  ],
+  "grade": {
+    "fact_retrieval": "6/10",
+    "direct_conclusion_grounding": "2/10",
+    "genericity": "2/10",
+    "loop_evaluation": "4/10",
+    "overall": "D+ to C- as a full memory system; useful as a source-grounded audit component"
+  },
+  "takeaway": "Do not compress first and do not trust a single keyword filter. Preserve raw source spans, use role-bound event/conclusion checks, and keep audited absence separate from positive answer grounding."
+}

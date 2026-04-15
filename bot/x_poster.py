@@ -40,6 +40,12 @@ def _upload_media(image_path: str) -> int | None:
 
 def post_tweet(text: str, media_path: str = None) -> dict:
     """트윗 게시 (280자 제한, 이미지 선택)"""
+    # 디버그: 키 로드 확인 (앞 4자리만)
+    print(f"[x-debug] API_KEY: {API_KEY[:4] if API_KEY else 'EMPTY'}..., "
+          f"API_SECRET: {'SET' if API_SECRET else 'EMPTY'}, "
+          f"ACCESS_TOKEN: {ACCESS_TOKEN[:4] if ACCESS_TOKEN else 'EMPTY'}..., "
+          f"ACCESS_TOKEN_SECRET: {'SET' if ACCESS_TOKEN_SECRET else 'EMPTY'}")
+
     client = _get_client()
     media_ids = None
 

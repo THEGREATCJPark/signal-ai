@@ -21,3 +21,5 @@ venv/
 
 # Crawled data (regenerated each run)
 data/crawled/
+data/signal.db
+data/signal.db-*

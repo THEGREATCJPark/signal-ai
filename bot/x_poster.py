@@ -12,7 +12,7 @@ API_SECRET = os.getenv("X_API_SECRET")
 ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
-TWEET_URL = "https://api.twitter.com/2/tweets"
+TWEET_URL = "https://api.x.com/2/tweets"
 
 
 def _get_auth() -> OAuth1:

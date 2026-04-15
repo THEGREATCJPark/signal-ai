@@ -54,8 +54,13 @@ def post_tweet(text: str, media_path: str = None) -> dict:
         if media_id:
             media_ids = [media_id]
 
-    response = client.create_tweet(text=text[:280], media_ids=media_ids)
-    return response.data
+    try:
+        response = client.create_tweet(text=text[:280], media_ids=media_ids)
+        return response.data
+    except tweepy.errors.Forbidden as e:
+        print(f"[x-debug] 403 상세: {e.response.text if e.response else 'no response'}")
+        print(f"[x-debug] API errors: {e.api_errors if hasattr(e, 'api_errors') else 'N/A'}")
+        raise
 
 
 def post_article(article: dict) -> dict:

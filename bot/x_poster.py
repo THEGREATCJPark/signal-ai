@@ -1,7 +1,9 @@
+import json
 import os
 
-import tweepy
+import requests
 from dotenv import load_dotenv
+from requests_oauthlib import OAuth1
 
 load_dotenv()
 
@@ -10,73 +12,40 @@ API_SECRET = os.getenv("X_API_SECRET")
 ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
-
-def _get_client() -> tweepy.Client:
-    """X API v2 클라이언트 생성"""
-    return tweepy.Client(
-        consumer_key=API_KEY,
-        consumer_secret=API_SECRET,
-        access_token=ACCESS_TOKEN,
-        access_token_secret=ACCESS_TOKEN_SECRET,
-    )
+TWEET_URL = "https://api.twitter.com/2/tweets"
 
 
-def _get_api_v1() -> tweepy.API:
-    """X API v1.1 (이미지 업로드용)"""
-    auth = tweepy.OAuth1UserHandler(
-        API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_TOKEN_SECRET
-    )
-    return tweepy.API(auth)
+def _get_auth() -> OAuth1:
+    """OAuth 1.0a 인증 객체 생성"""
+    return OAuth1(API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
 
 
-def _upload_media(image_path: str) -> int | None:
-    """이미지를 X에 업로드하고 media_id 반환"""
-    if not image_path or not os.path.exists(image_path):
-        return None
-    api = _get_api_v1()
-    media = api.media_upload(filename=image_path)
-    return media.media_id
-
-
-def post_tweet(text: str, media_path: str = None) -> dict:
-    """트윗 게시 (280자 제한, 이미지 선택)"""
-    # 디버그: 키 로드 확인 (앞 4자리만)
+def post_tweet(text: str) -> dict:
+    """트윗 게시 (280자 제한)"""
     print(f"[x-debug] API_KEY: {API_KEY[:4] if API_KEY else 'EMPTY'}..., "
           f"API_SECRET: {'SET' if API_SECRET else 'EMPTY'}, "
           f"ACCESS_TOKEN: {ACCESS_TOKEN[:4] if ACCESS_TOKEN else 'EMPTY'}..., "
           f"ACCESS_TOKEN_SECRET: {'SET' if ACCESS_TOKEN_SECRET else 'EMPTY'}")
 
-    client = _get_client()
-    media_ids = None
+    auth = _get_auth()
+    payload = {"text": text[:280]}
 
-    if media_path:
-        media_id = _upload_media(media_path)
-        if media_id:
-            media_ids = [media_id]
+    resp = requests.post(TWEET_URL, auth=auth, json=payload)
+    print(f"[x-debug] Status: {resp.status_code}, Response: {resp.text[:500]}")
 
-    try:
-        response = client.create_tweet(text=text[:280], media_ids=media_ids)
-        return response.data
-    except tweepy.errors.Forbidden as e:
-        print(f"[x-debug] 403 상세: {e.response.text if e.response else 'no response'}")
-        print(f"[x-debug] API errors: {e.api_errors if hasattr(e, 'api_errors') else 'N/A'}")
-        raise
+    resp.raise_for_status()
+    return resp.json().get("data", {})
 
 
 def post_article(article: dict) -> dict:
-    """단일 기사를 X에 포스팅 (이미지 포함)"""
+    """단일 기사를 X에 포스팅"""
     title = article.get("title", "")
     url = article.get("url", "")
     source = article.get("source", "")
     score = article.get("score", 0)
 
     text = f"📡 {title}\n\n📌 {source} | 📊 {score}점\n🔗 {url}\n\n#AI #SignalAI"
-
-    # 첫 번째 이미지 첨부
-    media = article.get("media", [])
-    media_path = media[0].get("path") if media else None
-
-    return post_tweet(text, media_path=media_path)
+    return post_tweet(text)
 
 
 def post_daily_summary(articles: list[dict]) -> dict:

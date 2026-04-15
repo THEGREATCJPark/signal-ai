@@ -31,6 +31,10 @@ on:
         options:
           - 'false'
           - 'true'
+      limit:
+        description: '발행 기사 수 제한 (0=무제한)'
+        required: false
+        default: '0'
 
 permissions:
   contents: write
@@ -66,6 +70,8 @@ jobs:
           ARGS="--platform ${{ github.event.inputs.platform || 'both' }}"
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
           if [ "${{ github.event.inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          LIMIT="${{ github.event.inputs.limit || '0' }}"
+          if [ "$LIMIT" != "0" ]; then ARGS="$ARGS --limit $LIMIT"; fi
           python scripts/run_publish.py $ARGS
 
       - name: Commit published state

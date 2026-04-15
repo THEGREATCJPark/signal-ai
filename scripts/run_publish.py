@@ -76,6 +76,8 @@ def main():
                         default="both", help="발행 플랫폼 (기본: both)")
     parser.add_argument("--force", action="store_true",
                         help="이미 발행된 기사도 재발행")
+    parser.add_argument("--limit", type=int, default=0,
+                        help="발행할 최대 기사 수 (0=무제한)")
     args = parser.parse_args()
 
     # 입력 파일 확인
@@ -97,7 +99,8 @@ def main():
 
     # 발행
     from bot.scheduler import publish
-    publish(articles, dry_run=args.dry_run, platform=args.platform, force=args.force)
+    publish(articles, dry_run=args.dry_run, platform=args.platform,
+           force=args.force, limit=args.limit)
 
 
 if __name__ == "__main__":

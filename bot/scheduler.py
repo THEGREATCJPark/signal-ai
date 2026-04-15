@@ -60,7 +60,7 @@ def run_daily_publish():
 
 
 def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
-           force: bool = False):
+           force: bool = False, limit: int = 0):
     """JSON 기사 목록을 Telegram/X에 발행.
 
     Args:
@@ -89,6 +89,9 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
         if not to_publish:
             print(f"[{plat}] 새로 발행할 기사가 없습니다 (이미 발행됨)")
             continue
+
+        if limit > 0:
+            to_publish = to_publish[:limit]
 
         if dry_run:
             print(f"\n[DRY-RUN] [{plat}] {len(to_publish)}개 기사 발행 예정:")

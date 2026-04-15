@@ -29,8 +29,13 @@ def post_tweet(text: str) -> dict:
 
     auth = _get_auth()
     payload = {"text": text[:280]}
+    headers = {"Content-Type": "application/json"}
 
-    resp = requests.post(TWEET_URL, auth=auth, json=payload)
+    # 먼저 인증 확인 (GET /2/users/me)
+    me_resp = requests.get("https://api.x.com/2/users/me", auth=auth)
+    print(f"[x-debug] Auth check: {me_resp.status_code}, {me_resp.text[:200]}")
+
+    resp = requests.post(TWEET_URL, auth=auth, json=payload, headers=headers)
     print(f"[x-debug] Status: {resp.status_code}, Response: {resp.text[:500]}")
 
     resp.raise_for_status()

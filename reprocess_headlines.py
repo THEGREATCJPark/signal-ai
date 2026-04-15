@@ -249,25 +249,71 @@ def main():
         futs = {pool.submit(gen_article, td, i): i for i, td in enumerate(topics_data)}
         for f in as_completed(futs):
             idx = futs[f]
-            try: topics_data[idx]["article"] = f.result()
-            except Exception as e: print(f"  [{idx+1}] FAILED: {e}"); topics_data[idx]["article"] = ""
+            try: topics_data[idx]["article_raw"] = f.result()
+            except Exception as e: print(f"  [{idx+1}] FAILED: {e}"); topics_data[idx]["article_raw"] = ""
 
-    # Generate HTML
+    # ── Post-process: extract Korean body from Gemma's messy output ──
+    for td in topics_data:
+        raw = td.get("article_raw", "")
+        korean_lines = []
+        for line in raw.split("\n"):
+            kr = len(re.findall(r'[\uac00-\ud7af\u3130-\u318f]', line))
+            total = len(line.strip())
+            if total > 20 and kr / max(total, 1) > 0.15:
+                clean = re.sub(r'^\s*[\*\-]\s*', '', line).strip()
+                low = clean.lower()
+                # Drop meta-commentary lines
+                if any(x in low for x in ['constraint', 'check:', 'user name', 'draft', 'headline:', 'korean?', 'length?']):
+                    continue
+                if clean.startswith(('*', '-', '#', '```')):
+                    continue
+                korean_lines.append(clean)
+        td["article"] = "\n".join(korean_lines) if korean_lines else raw
+
+    # ── Build structured JSON output ──
     fl = chunks[0]["time_label"] if chunks else ""
     ll = chunks[-1]["time_label"] if chunks else ""
+    period_start = fl.split("~")[0].strip() if fl else ""
+    period_end = ll.split("~")[-1].strip() if ll else ""
+
+    structured = {
+        "source": "discord",
+        "guild": "Dev Mode",
+        "channel": "general",
+        "period": {"start": period_start, "end": period_end},
+        "generated_at": datetime.now().isoformat() + "+09:00",
+        "model": MODEL,
+        "articles": [
+            {
+                "id": f"signal-{i+1:03d}",
+                "headline": td["headline"],
+                "body": td["article"],
+                "body_length": len(td["article"]),
+                "evidence_count": len(td.get("evidence", [])),
+                "tags": [],
+            }
+            for i, td in enumerate(topics_data)
+        ],
+    }
+
+    out_json = Path("docs/articles.json")
+    out_json.parent.mkdir(exist_ok=True)
+    out_json.write_text(json.dumps(structured, ensure_ascii=False, indent=2))
+    print(f"\nStructured JSON: {out_json} ({len(structured['articles'])} articles)")
+
+    # ── Generate HTML (rule-based, from structured JSON) ──
     meta = {
-        "period": fl.split("~")[0].strip() + " ~ " + ll.split("~")[-1].strip() if fl else "",
+        "period": f"{period_start} ~ {period_end}",
         "generated": datetime.now().strftime("%Y-%m-%d %H:%M KST"),
     }
     html = generate_html(topics_data, meta)
-    out = Path("docs/index.html")
-    out.parent.mkdir(exist_ok=True)
-    out.write_text(html, encoding="utf-8")
-    print(f"\nOutput: {out} ({len(html)} bytes)")
+    out_html = Path("docs/index.html")
+    out_html.write_text(html, encoding="utf-8")
+    print(f"HTML: {out_html} ({len(html)} bytes)")
 
-    # Save
+    # Keep legacy state for debugging
     Path("headline_state.json").write_text(json.dumps(
-        [{"headline": t["headline"], "article": t.get("article","")} for t in topics_data],
+        [{"headline": t["headline"], "article": t.get("article",""), "article_raw": t.get("article_raw","")} for t in topics_data],
         ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":

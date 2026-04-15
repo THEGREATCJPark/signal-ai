@@ -10,6 +10,8 @@ SOURCE_EMOJI = {
     "openai": "💚",
     "google_ai": "🔵",
     "geeknews": "🇰🇷",
+    "discord": "💬",
+    "unknown": "📰",
 }
 
 SOURCE_LABEL = {
@@ -22,6 +24,8 @@ SOURCE_LABEL = {
     "openai": "OpenAI",
     "google_ai": "Google AI",
     "geeknews": "GeekNews",
+    "discord": "Discord",
+    "unknown": "기타",
 }
 
 

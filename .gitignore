@@ -23,6 +23,7 @@ Thumbs.db
 
 # 데이터/로그
 data/*.json
+!data/published.json
 data/*.csv
 logs/
 *.log

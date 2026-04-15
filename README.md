@@ -377,6 +377,62 @@ build/
 
 ---
 
+## 발행 MVP (현재 상태)
+
+### 범위
+
+기존 JSON 결과물(`docs/articles.json`)을 읽어서 Telegram/X 채널에 발행하는 MVP.
+수집/요약 파이프라인은 별도 관리되며, 이 MVP는 **"JSON → 발행" 연결만** 담당합니다.
+
+### 입력
+
+- `docs/articles.json` — Discord 다이제스트 또는 크롤러 출력 JSON
+
+### 실행 방법
+
+```bash
+# 검증만
+python scripts/validate_articles.py
+
+# Dry-run (미리보기, API 호출 없음)
+python scripts/run_publish.py --dry-run
+
+# 텔레그램만 발행
+python scripts/run_publish.py --platform telegram
+
+# 전체 발행 (Telegram + X)
+python scripts/run_publish.py --platform both
+
+# 강제 재발행 (이미 발행된 기사 포함)
+python scripts/run_publish.py --force
+
+# 커스텀 입력 파일
+python scripts/run_publish.py --input data/latest.json --dry-run
+```
+
+### GitHub Actions 수동 실행
+
+Actions → "Daily Signal AI Publish" → Run workflow에서 dry_run, platform, force 옵션을 선택할 수 있습니다.
+
+### 필요한 Secrets
+
+| Secret | 용도 |
+|--------|------|
+| `TELEGRAM_BOT_TOKEN` | 텔레그램 봇 토큰 |
+| `TELEGRAM_CHANNEL_ID` | 텔레그램 채널 ID |
+| `X_API_KEY` | X API 키 |
+| `X_API_SECRET` | X API 시크릿 |
+| `X_ACCESS_TOKEN` | X 액세스 토큰 |
+| `X_ACCESS_TOKEN_SECRET` | X 액세스 토큰 시크릿 |
+
+### 협업 원칙
+
+- **수집/요약/소스 확장:** HB (박형빈) 담당 영역
+- **발행/포맷/채널 운영:** CJ (박찬준) 담당 영역
+- 크롤러, 파이프라인 코드는 이 MVP에서 건드리지 않음
+
+---
+
 ## 라이선스
 
 Private repo. 추후 논의.

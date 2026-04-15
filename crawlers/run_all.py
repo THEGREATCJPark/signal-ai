@@ -4,7 +4,7 @@ import subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-CRAWLERS = ["hn.py", "reddit.py", "arxiv.py", "hf_trending.py", "geeknews.py", "lesswrong.py"]
+CRAWLERS = ["hn.py", "reddit.py", "arxiv.py", "hf_trending.py", "geeknews.py", "lesswrong.py", "discord.py"]
 HERE = Path(__file__).parent
 
 def run(script):

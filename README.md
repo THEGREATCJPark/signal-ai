@@ -22,7 +22,7 @@
 
 - **크롤링:** Python (requests, BeautifulSoup, feedparser)
 - **LLM:** GPT-4.1 mini 또는 Gemini Flash (비용 최적화)
-- **봇:** python-telegram-bot
+- **봇:** Telegram Bot API (requests 직접 호출)
 - **스케줄링:** GitHub Actions cron 또는 Railway
 - **DB:** Supabase (무료 티어) 또는 SQLite
 - **언어:** Python 기본, 필요시 논의
@@ -347,6 +347,23 @@ build/
 | DB | $0 | Supabase 무료 티어 |
 | 텔레그램 봇 | $0 | 무료 |
 | **합계** | **~$3/월** | X API 추가 시 +$100 |
+
+---
+
+## 진행 현황
+
+### Day 2 (2026-04-09) - CJ
+
+- [x] 텔레그램 채널 개설 완료 (구구 브리핑: https://t.me/gugubrief)
+- [x] 텔레그램 봇 생성 및 채널 관리자 등록 완료
+- [x] X (트위터) 계정 개설 예정
+- [x] 프로젝트 초기 설정 파일 추가 (`.gitignore`, `.env.example`, `requirements.txt`)
+- [x] `bot/` 기본 구조 세팅 (`telegram_bot.py`, `formatter.py`, `scheduler.py`)
+- [ ] 로컬에서 봇 테스트 메시지 발송 확인 (`python -m bot.telegram_bot`)
+
+### Day 2 - HB
+
+- [ ] 크롤러 뼈대 (HN, Reddit)
 
 ---
 

@@ -315,7 +315,7 @@ def main():
     parser = argparse.ArgumentParser(description="Discord Digest Pipeline")
     parser.add_argument("input", help="Discord text export file")
     parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--chunk-tokens", type=int, default=10000)
+    parser.add_argument("--chunk-tokens", type=int, default=50000)
     parser.add_argument("--output", default="docs/index.html")
     parser.add_argument("--state", default="digest_state.json")
     args = parser.parse_args()

@@ -365,6 +365,8 @@
   </div>
 </main>
 
+<script id="articles-data" type="application/json">__ARTICLES_JSON__</script>
+
 <div class="reader" id="reader" role="dialog" aria-modal="true">
   <div class="reader-panel">
     <button class="reader-close" id="reader-close" aria-label="Close">×</button>
@@ -417,13 +419,23 @@
   }
 
   let data;
-  try {
-    const res = await fetch('articles.json?t=' + Date.now());
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    data = await res.json();
-  } catch (e) {
-    content.innerHTML = `<div class="error">기사를 불러오지 못했습니다 · ${esc(e.message)}</div>`;
-    return;
+  const inlineEl = document.getElementById('articles-data');
+  const inlineRaw = inlineEl ? inlineEl.textContent.trim() : '';
+  if (inlineRaw && !inlineRaw.startsWith('__')) {
+    try { data = JSON.parse(inlineRaw); }
+    catch (e) {
+      content.innerHTML = `<div class="error">인라인 데이터 파싱 실패 · ${esc(e.message)}</div>`;
+      return;
+    }
+  } else {
+    try {
+      const res = await fetch('articles.json?t=' + Date.now());
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      data = await res.json();
+    } catch (e) {
+      content.innerHTML = `<div class="error">기사를 불러오지 못했습니다 · ${esc(e.message)}</div>`;
+      return;
+    }
   }
 
   const articles = data.articles || [];

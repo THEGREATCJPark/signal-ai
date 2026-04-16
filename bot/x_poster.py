@@ -54,7 +54,7 @@ def post_article(article: dict) -> dict:
     source = article.get("source", "")
     score = article.get("score", 0)
 
-    text = f"📡 {title}\n\n📌 {source} | 📊 {score}점\n🔗 {url}\n\n#AI #SignalAI"
+    text = f"📡 {title}\n\n📌 {source} | 📊 {score}점\n🔗 {url}\n\n#AI #FirstLightAI"
     return post_tweet(text)
 
 
@@ -63,7 +63,7 @@ def post_daily_summary(articles: list[dict]) -> dict:
     from datetime import datetime
 
     today = datetime.now().strftime("%m/%d")
-    lines = [f"📡 Signal AI {today} 브리핑\n"]
+    lines = [f"📡 First Light AI {today} 브리핑\n"]
 
     for i, article in enumerate(articles[:5], 1):
         title = article.get("title", "")
@@ -71,5 +71,5 @@ def post_daily_summary(articles: list[dict]) -> dict:
             title = title[:37] + "..."
         lines.append(f"{i}. {title}")
 
-    lines.append("\n#AI #SignalAI #구구브리핑")
+    lines.append("\n#AI #FirstLightAI")
     return post_tweet("\n".join(lines))

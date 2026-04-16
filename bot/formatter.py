@@ -78,7 +78,7 @@ def format_article(article: dict) -> str:
 def format_daily_digest(articles: list[dict]) -> str:
     """일일 다이제스트 포맷"""
     today = datetime.now().strftime("%Y년 %m월 %d일")
-    header = f"📡 <b>Signal AI - {today} 브리핑</b>\n"
+    header = f"📡 <b>First Light AI - {today} 브리핑</b>\n"
     header += "━" * 20 + "\n"
 
     body_parts = []
@@ -97,6 +97,6 @@ def format_daily_digest(articles: list[dict]) -> str:
         body_parts.append(entry)
 
     footer = "\n" + "━" * 20
-    footer += "\n🤖 Signal AI | AI 최전방 소식을 매일 아침"
+    footer += "\n🤖 First Light AI | AI 최전방 소식을 가장 먼저"
 
     return header + "\n\n".join(body_parts) + footer

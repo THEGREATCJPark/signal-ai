@@ -66,7 +66,7 @@ def send_daily_digest(articles: list[dict]) -> dict:
 
 def send_test_message() -> dict:
     """봇 연결 테스트용 메시지 발송"""
-    return _send_message("Signal AI 봇 연결 테스트 완료!")
+    return _send_message("First Light AI 봇 연결 테스트 완료!")
 
 
 if __name__ == "__main__":

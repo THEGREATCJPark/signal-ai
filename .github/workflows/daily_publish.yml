@@ -1,4 +1,4 @@
-name: Daily Signal AI Publish
+name: Daily First Light AI Publish
 
 on:
   schedule:

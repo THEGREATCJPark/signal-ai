@@ -8,7 +8,7 @@ from bot.x_poster import post_tweet
 
 SAMPLE_ARTICLE = {
     "source": "hackernews",
-    "title": "Signal AI 테스트 메시지입니다",
+    "title": "First Light AI 테스트 메시지입니다",
     "url": "https://github.com/THEGREATCJPark/signal-ai",
     "score": 999,
     "comments": 42,
@@ -38,14 +38,14 @@ def test_x():
     """X 포스팅 테스트"""
     print("X 테스트 포스팅 중...")
     try:
-        post_tweet("📡 Signal AI 봇 연결 테스트 완료! #SignalAI #AI")
+        post_tweet("📡 First Light AI 봇 연결 테스트 완료! #FirstLightAI #AI")
         print("X 테스트 성공!")
     except Exception as e:
         print(f"X 실패: {e}")
 
 
 if __name__ == "__main__":
-    print("=== Signal AI 발행 테스트 ===\n")
+    print("=== First Light AI 발행 테스트 ===\n")
     test_telegram()
     print()
     test_x()

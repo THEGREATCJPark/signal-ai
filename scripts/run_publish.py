@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Signal AI 발행 스크립트.
+First Light AI 발행 스크립트.
 기존 JSON 결과물(docs/articles.json)을 읽어서 Telegram/X에 발행합니다.
 
 Usage:
@@ -67,7 +67,7 @@ def normalize_articles(raw) -> list[dict]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Signal AI 발행")
+    parser = argparse.ArgumentParser(description="First Light AI 발행")
     parser.add_argument("--input", default=DEFAULT_INPUT,
                         help="입력 JSON 파일 경로 (기본: docs/articles.json)")
     parser.add_argument("--dry-run", action="store_true",

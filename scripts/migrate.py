@@ -42,7 +42,7 @@ def main():
         sys.exit(1)
 
     print("=" * 60)
-    print("Signal AI — DB 마이그레이션")
+    print("First Light AI — DB 마이그레이션")
     print("아래 SQL을 Supabase SQL Editor에서 실행하세요.")
     print("=" * 60)
 

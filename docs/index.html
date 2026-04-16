@@ -119,11 +119,15 @@
   }
   @media (max-width: 1120px) {
     .layout {
+      display: flex;
+      flex-direction: column;
       grid-template-columns: 1fr;
       padding: 32px 18px 0;
       gap: 0;
     }
-    .side-left, .side-right { margin-top: 40px; }
+    .center { order: 1; }
+    .side-left { order: 2; margin-top: 40px; }
+    .side-right { order: 3; margin-top: 0; }
   }
 
   /* ── Side columns ── */
@@ -241,7 +245,6 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 0;
-    border-top: 1px solid var(--rule-soft);
   }
   @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
   .card {

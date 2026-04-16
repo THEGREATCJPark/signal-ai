@@ -1,6 +1,9 @@
 name: Daily Signal AI Publish
 
 on:
+  schedule:
+    # 매일 08:00 KST (= 23:00 UTC 전날)
+    - cron: '0 23 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -28,6 +31,10 @@ on:
         options:
           - 'false'
           - 'true'
+      limit:
+        description: '발행 기사 수 제한 (0=무제한)'
+        required: false
+        default: '0'
 
 permissions:
   contents: write
@@ -55,14 +62,15 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
-          X_API_KEY: ${{ secrets.X_API_KEY }}
-          X_API_SECRET: ${{ secrets.X_API_SECRET }}
-          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
-          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
+          X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+          X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
         run: |
           ARGS="--platform ${{ github.event.inputs.platform || 'both' }}"
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
           if [ "${{ github.event.inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          LIMIT="${{ github.event.inputs.limit || '0' }}"
+          if [ "$LIMIT" != "0" ]; then ARGS="$ARGS --limit $LIMIT"; fi
           python scripts/run_publish.py $ARGS
 
       - name: Commit published state

@@ -57,6 +57,19 @@
     background: var(--accent); margin-right: 6px; vertical-align: middle;
     animation: pulse 2s infinite;
   }
+  .topbar-right {
+    display: inline-flex; align-items: center; gap: 14px;
+  }
+  .topbar-link {
+    color: var(--accent); text-decoration: none;
+    font-weight: 600; letter-spacing: 0.12em;
+    padding: 3px 8px; border: 1px solid var(--accent);
+    border-radius: 2px;
+    transition: all .15s;
+  }
+  .topbar-link:hover {
+    background: var(--accent); color: var(--paper);
+  }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
   /* ── Masthead ── */
@@ -404,7 +417,10 @@
 <div class="topbar">
   <div class="topbar-inner">
     <span><span class="pulse"></span>LIVE · SIGNAL</span>
-    <span id="topbar-date">—</span>
+    <span class="topbar-right">
+      <span id="topbar-date">—</span>
+      <a href="archive.html" class="topbar-link">ARCHIVE →</a>
+    </span>
   </div>
 </div>
 

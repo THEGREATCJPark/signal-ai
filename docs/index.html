@@ -3,101 +3,501 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Signal Daily</title>
+<meta name="description" content="AI 커뮤니티의 시그널을 추적합니다."/>
+<title>SIGNAL — AI 데일리 브리핑</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600;700;900&family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Inter:wght@400;500;600;700&display=swap');
-:root{--bg:#f8f9fa;--surface:#fff;--text:#1a1a2e;--text-2:#4a4a68;--text-3:#8888a0;--accent:#1d4ed8;--accent-bg:#eff6ff;--border:#e5e7eb;--shadow:0 1px 3px rgba(0,0,0,.08);--radius:10px}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Noto Sans KR','Inter',sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
-.wrap{max-width:720px;margin:0 auto;padding:20px}
-.masthead{text-align:center;padding:40px 0 32px;border-bottom:2px solid var(--text)}
-.masthead h1{font-size:2.2rem;font-weight:900;letter-spacing:-.04em;margin-bottom:4px}
-.masthead .sub{font-size:.8rem;color:var(--text-3);margin-top:8px}
-.masthead .period{display:inline-block;font-size:.75rem;font-weight:600;color:var(--accent);background:var(--accent-bg);padding:4px 12px;border-radius:20px;margin-top:10px}
-.masthead .sources{font-size:.7rem;color:var(--text-3);margin-top:8px;font-family:'Inter',monospace}
-.news-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;box-shadow:var(--shadow);overflow:hidden;cursor:pointer;transition:box-shadow .2s}
-.news-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.1)}
-.card-header{display:flex;align-items:center;gap:12px;padding:16px 20px}
-.card-num{font-family:'Inter';font-size:.7rem;font-weight:700;color:var(--accent);background:var(--accent-bg);padding:3px 8px;border-radius:4px;flex-shrink:0}
-.card-headline{font-size:1rem;font-weight:600;line-height:1.4;flex:1}
-.chevron{width:20px;height:20px;flex-shrink:0;fill:none;stroke:var(--text-3);stroke-width:2;transition:transform .2s}
-.news-card.open .chevron{transform:rotate(180deg)}
-.card-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
-.news-card.open .card-body{max-height:3000px}
-.article{padding:0 20px 20px;color:var(--text-2);font-size:.92rem;line-height:1.8;border-top:1px solid var(--border);padding-top:16px;margin:0 20px}
-.article p{margin-bottom:10px}
-.footer{text-align:center;padding:24px 0;font-size:.7rem;color:var(--text-3);border-top:1px solid var(--border);margin-top:32px}
+  :root {
+    --paper: #faf8f3;
+    --paper-alt: #f3f0e7;
+    --ink: #141414;
+    --ink-2: #2b2b2b;
+    --ink-3: #5a5a5a;
+    --ink-4: #8a8a8a;
+    --rule: #1a1a1a;
+    --rule-soft: #d9d5c7;
+    --accent: #b91c1c;
+    --accent-soft: #fef2f2;
+    --serif: 'Noto Serif KR', 'Times New Roman', serif;
+    --sans: 'Noto Sans KR', -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--sans);
+    background: var(--paper);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+  }
+  .container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  @media (max-width: 600px) { .container { padding: 0 18px; } }
+
+  /* Top bar */
+  .topbar {
+    border-bottom: 1px solid var(--rule-soft);
+    background: var(--paper);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+  }
+  .topbar-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 24px;
+    max-width: 1120px;
+    margin: 0 auto;
+    text-transform: uppercase;
+  }
+  .topbar .pulse {
+    display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); margin-right: 6px; vertical-align: middle;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Masthead */
+  .masthead {
+    text-align: center;
+    padding: 48px 24px 28px;
+    border-bottom: 3px double var(--rule);
+  }
+  .masthead h1 {
+    font-family: var(--serif);
+    font-weight: 900;
+    font-size: clamp(3.2rem, 10vw, 6rem);
+    letter-spacing: -0.04em;
+    line-height: 0.9;
+    color: var(--ink);
+  }
+  .masthead .tagline {
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 1.05rem;
+    color: var(--ink-3);
+    margin-top: 14px;
+    font-weight: 400;
+  }
+  .masthead .meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-4);
+    margin-top: 18px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .masthead .meta .dot { margin: 0 10px; opacity: 0.5; }
+
+  /* Section heading */
+  .section-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 56px 0 24px;
+  }
+  .section-label::before, .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--rule-soft);
+  }
+
+  /* Hero article */
+  .hero {
+    padding: 28px 0 48px;
+    border-bottom: 1px solid var(--rule-soft);
+    cursor: pointer;
+    transition: opacity .2s;
+  }
+  .hero:hover { opacity: 0.85; }
+  .hero .kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .hero h2 {
+    font-family: var(--serif);
+    font-size: clamp(1.8rem, 4.5vw, 3rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+  .hero .lede {
+    font-family: var(--serif);
+    font-size: 1.15rem;
+    line-height: 1.7;
+    color: var(--ink-2);
+    max-width: 780px;
+  }
+  .hero .read-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .hero .read-more::after {
+    content: '→';
+    transition: transform .2s;
+  }
+  .hero:hover .read-more::after { transform: translateX(4px); }
+
+  /* Grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+  @media (max-width: 720px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+  .card {
+    padding: 32px 28px;
+    border-right: 1px solid var(--rule-soft);
+    border-bottom: 1px solid var(--rule-soft);
+    cursor: pointer;
+    background: var(--paper);
+    transition: background .2s;
+  }
+  .card:hover { background: var(--paper-alt); }
+  .card:nth-child(2n) { border-right: none; }
+  @media (max-width: 720px) {
+    .card { border-right: none; padding: 28px 4px; }
+  }
+  .card .num {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-4);
+    letter-spacing: 0.15em;
+    margin-bottom: 12px;
+  }
+  .card h3 {
+    font-family: var(--serif);
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+  .card p {
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: var(--ink-3);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Modal reader */
+  .reader {
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 20, 20, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 100;
+    padding: 40px 20px;
+    overflow-y: auto;
+  }
+  .reader.open {
+    display: flex;
+    animation: fadein .25s ease;
+  }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+  .reader-panel {
+    background: var(--paper);
+    max-width: 760px;
+    width: 100%;
+    padding: 56px 56px 64px;
+    border: 1px solid var(--rule-soft);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.25);
+    position: relative;
+  }
+  @media (max-width: 600px) {
+    .reader-panel { padding: 40px 24px 48px; }
+  }
+  .reader-close {
+    position: absolute;
+    top: 18px;
+    right: 22px;
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: var(--ink-3);
+    cursor: pointer;
+    line-height: 1;
+    padding: 6px 10px;
+    font-family: var(--serif);
+  }
+  .reader-close:hover { color: var(--ink); }
+  .reader .kicker {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 18px;
+  }
+  .reader h2 {
+    font-family: var(--serif);
+    font-size: clamp(1.7rem, 4vw, 2.4rem);
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+  .reader .byline {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-4);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--rule-soft);
+    margin-bottom: 28px;
+  }
+  .reader .body {
+    font-family: var(--serif);
+    font-size: 1.08rem;
+    line-height: 1.85;
+    color: var(--ink-2);
+  }
+  .reader .body p {
+    margin-bottom: 18px;
+  }
+  .reader .body p:first-letter {
+    font-size: 3.6rem;
+    font-weight: 700;
+    float: left;
+    line-height: 0.9;
+    margin: 6px 10px 0 0;
+    color: var(--accent);
+    font-family: var(--serif);
+  }
+
+  /* Footer */
+  .footer {
+    border-top: 3px double var(--rule);
+    margin-top: 80px;
+    padding: 40px 24px 60px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-4);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    line-height: 2;
+  }
+  .footer strong {
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+
+  .loading, .error {
+    text-align: center;
+    padding: 80px 20px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink-4);
+    letter-spacing: 0.1em;
+  }
+  .error { color: var(--accent); }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="masthead">
-    <h1>SIGNAL DAILY</h1>
-    <div class="sub">AI Multi-Source Digest</div>
-    <div class="period">최근 3일 · 2026-04-15</div>
-    <div class="sources">geeknews(15) · discord(15) · huggingface(15) · reddit(15) · lesswrong(15) · hackernews(15) · arxiv(15)</div>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <span><span class="pulse"></span>LIVE · DISCORD SIGNAL</span>
+    <span id="topbar-date">—</span>
   </div>
-  <div style="margin-top:24px">
-        <div class="news-card" onclick="this.classList.toggle('open')">
-          <div class="card-header">
-            <span class="card-num">01</span>
-            <h2 class="card-headline">앤스로픽, Claude Code 데스크탑 앱 및 자동화 루틴 공개</h2>
-            <svg class="chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
-          </div>
-          <div class="card-body">
-            <div class="article"><p>앤스로픽이 완전히 재작성된 Claude Code 데스크탑 앱을 공개했다. 이 앱은 하나의 창에서 멀티 세션을 실행할 수 있으며 통합 터미널, 내장 파일 편집, HTML/PDF 프리뷰, SSH 연결 기능을 제공한다. 또한, 일정이나 API 호출, GitHub 이벤트에 따라 자동 실행되는 클라우드 기반 코드 자동화 기능인 &#x27;Claude Code Routines&#x27;도 함께 선보였다. 한편, 최근 Claude의 토큰 소모가 빨라짐에 따라 스킬 사용량을 추적하고 관리할 수 있는 &#x27;skills-cleaner&#x27; 플러그인이 등장해 사용자들의 관심을 끌고 있다.</p></div>
-          </div>
-        </div>
-        <div class="news-card" onclick="this.classList.toggle('open')">
-          <div class="card-header">
-            <span class="card-num">02</span>
-            <h2 class="card-headline">구글 Gemma 4 모델 공개 및 로컬 실행 사례 확산</h2>
-            <svg class="chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
-          </div>
-          <div class="card-body">
-            <div class="article"><p>구글의 최신 모델인 Gemma 4 시리즈가 허깅페이스를 통해 공개되었다. 31B-it, 26B-A4B-it, 그리고 any-to-any 기능을 갖춘 E4B-it 모델 등이 포함되었으며, 이미지-텍스트-텍스트 파이프라인을 지원한다. 특히 Gemma 4를 클라우드가 아닌 로컬 Codex CLI 환경에서 실행하여 도구 호출 성능과 안정성을 검증한 사례가 보고되었다. M4 Pro 칩을 탑재한 Mac이나 NVIDIA GB10 환경에서 실행한 결과, 기존 GPT-5.4 대비 비용 절감과 프라이버시 보호 측면에서 이점이 있는 것으로 확인되었다.</p></div>
-          </div>
-        </div>
-        <div class="news-card" onclick="this.classList.toggle('open')">
-          <div class="card-header">
-            <span class="card-num">03</span>
-            <h2 class="card-headline">AI 에이전트 인프라 확장과 &#x27;바이브 코딩&#x27;의 보안 경고</h2>
-            <svg class="chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
-          </div>
-          <div class="card-body">
-            <div class="article"><p>AI 에이전트의 안전한 네트워크 접근을 위해 Cloudflare Mesh가 출시되었다. 이는 기존 VPN의 한계를 넘어 개인 디바이스와 원격 서버, 에이전트를 연결하는 경량 커넥터를 제공한다. 또한, LLM을 실제 에이전트로 만드는 오픈소스 인프라인 OpenHarness가 공개되어 도구 사용과 메모리 조율을 통합 제공한다. 하지만 AI 코딩 에이전트를 이용한 &#x27;바이브 코딩&#x27;의 위험성도 드러났다. 최근 한 의료기관 직원이 AI로 제작한 환자 관리 앱에서 데이터가 암호화 없이 노출되고 진료 녹음이 외부 서비스로 전송되는 보안 참사가 발생했다.</p></div>
-          </div>
-        </div>
-        <div class="news-card" onclick="this.classList.toggle('open')">
-          <div class="card-header">
-            <span class="card-num">04</span>
-            <h2 class="card-headline">허깅페이스, Qwen3.5 및 차세대 멀티모달 모델 잇따라 등장</h2>
-            <svg class="chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
-          </div>
-          <div class="card-body">
-            <div class="article"><p>허깅페이스에 다양한 고성능 AI 모델들이 업데이트되었다. Qwen3.5-27B 모델을 기반으로 Claude 4.6 Opus의 추론 능력을 증류(Distilled)한 모델과 검열을 제거한(Uncensored) 버전들이 공개되어 주목받고 있다. 영상 생성 분야에서는 Lightricks의 LTX-2.3이 이미지-비디오 및 텍스트-비디오 변환 기능을 제공하며, 넷플릭스의 void-model은 비디오 인페인팅과 객체 제거 등 고도화된 비디오-비디오 편집 기능을 선보였다. 이 외에도 다국어 음성 합성 모델인 VoxCPM2 등이 추가되어 멀티모달 생태계가 확장되고 있다.</p></div>
-          </div>
-        </div>
-        <div class="news-card" onclick="this.classList.toggle('open')">
-          <div class="card-header">
-            <span class="card-num">05</span>
-            <h2 class="card-headline">AI 감시 체계의 위험성과 안전성 평가 논의 가속화</h2>
-            <svg class="chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
-          </div>
-          <div class="card-body">
-            <div class="article"><p>AI를 이용한 대규모 감시 가능성에 대한 우려가 커지고 있다. 최근 유출된 검색 기록을 Claude로 분석한 결과, LLM의 뛰어난 독해 능력이 대중 감시의 강력한 도구가 될 수 있음이 시사되었다. 이와 관련해 AI 제어 평가(Control Evals)에서 공격자가 전략적으로 공격 방법을 선택할 경우 안전성이 저하될 수 있다는 연구 결과가 LessWrong을 통해 공유되었다. 또한, 앤스로픽의 Claude Mythos 프리뷰에 대한 분석에서는 사이버 보안 역량의 도약이 확인되었으며, 이에 따른 책임감 있는 확장 정책(RSP)의 변화가 논의되고 있다.</p></div>
-          </div>
-        </div>
-        <div class="news-card" onclick="this.classList.toggle('open')">
-          <div class="card-header">
-            <span class="card-num">06</span>
-            <h2 class="card-headline">AMD ROCm, 엔비디아 CUDA 생태계 추격 가속화</h2>
-            <svg class="chevron" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
-          </div>
-          <div class="card-body">
-            <div class="article"><p>AMD가 엔비디아의 CUDA 생태계에 대응하기 위해 AI 소프트웨어 스택인 ROCm을 중심으로 데이터센터 GPU 전략을 강화하고 있다. ROCm은 초기 단순한 펌웨어 묶음 수준에서 벗어나 이제는 완전한 소프트웨어 플랫폼으로 발전했으며, 6주 주기의 빠른 릴리스 체계를 도입해 업데이트 속도를 높이고 있다. 이는 AI 하드웨어 시장에서 엔비디아의 독점적 지위에 도전하고, 개발자들에게 더 넓은 소프트웨어 선택지를 제공하려는 전략의 일환으로 풀이된다.</p></div>
-          </div>
-        </div></div>
-  <div class="footer">Signal Daily · Gemma 4 · 2026-04-15 09:38 UTC</div>
 </div>
-</body></html>
+
+<header class="masthead">
+  <h1>SIGNAL</h1>
+  <div class="tagline">The frontier in your feed.</div>
+  <div class="meta">
+    <span id="masthead-date">—</span>
+    <span class="dot">·</span>
+    <span id="masthead-source">—</span>
+    <span class="dot">·</span>
+    <span>VOL. 001</span>
+  </div>
+</header>
+
+<main class="container">
+  <div id="content">
+    <div class="loading">Loading signal…</div>
+  </div>
+</main>
+
+<div class="reader" id="reader" role="dialog" aria-modal="true">
+  <div class="reader-panel">
+    <button class="reader-close" id="reader-close" aria-label="Close">×</button>
+    <div class="kicker">SIGNAL · FEATURE</div>
+    <h2 id="reader-title"></h2>
+    <div class="byline" id="reader-byline"></div>
+    <div class="body" id="reader-body"></div>
+  </div>
+</div>
+
+<footer class="footer">
+  <div><strong>SIGNAL</strong> · AI community intelligence</div>
+  <div id="footer-meta">—</div>
+</footer>
+
+<script>
+(async function() {
+  const $ = (id) => document.getElementById(id);
+  const content = $('content');
+
+  function fmtDate(iso, opts = {}) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleDateString('ko-KR', {
+        year: 'numeric', month: 'long', day: 'numeric',
+        weekday: opts.weekday ? 'long' : undefined
+      });
+    } catch { return iso; }
+  }
+  function fmtTime(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString('ko-KR', {
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+      });
+    } catch { return iso; }
+  }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+  function excerpt(s, n = 160) {
+    const clean = s.replace(/^\*+\s*/, '').replace(/\*\*/g, '').split('\n')[0];
+    return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
+  }
+  function paragraphs(body) {
+    return body.replace(/\*\*/g, '').split(/\n{2,}|\n/).map(p => p.trim()).filter(Boolean);
+  }
+
+  let data;
+  try {
+    const res = await fetch('articles.json?t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    data = await res.json();
+  } catch (e) {
+    content.innerHTML = `<div class="error">기사를 불러오지 못했습니다 · ${esc(e.message)}</div>`;
+    return;
+  }
+
+  const articles = data.articles || [];
+  const src = (data.source || 'discord').toUpperCase();
+  const ch = data.channel ? `${data.guild || ''} #${data.channel}`.trim() : '';
+  const gen = data.generated_at;
+  const periodEnd = data.period && data.period.end;
+
+  $('topbar-date').textContent = fmtTime(gen || periodEnd);
+  $('masthead-date').textContent = fmtDate(gen || periodEnd, { weekday: true });
+  $('masthead-source').textContent = `SOURCE: ${src}${ch ? ' · ' + ch.toUpperCase() : ''}`;
+  $('footer-meta').textContent = `MODEL: ${(data.model || 'UNKNOWN').toUpperCase()} · GENERATED ${fmtTime(gen)} · ${articles.length} STORIES`;
+
+  if (!articles.length) {
+    content.innerHTML = `<div class="error">표시할 기사가 없습니다.</div>`;
+    return;
+  }
+
+  const [featured, ...rest] = articles;
+
+  let html = `
+    <div class="section-label"><span>TOP STORY</span></div>
+    <article class="hero" data-idx="0">
+      <div class="kicker">LEAD · ${src}</div>
+      <h2>${esc(featured.headline)}</h2>
+      <p class="lede">${esc(excerpt(featured.body, 220))}</p>
+      <div class="read-more">Read the full story</div>
+    </article>
+  `;
+
+  if (rest.length) {
+    html += `<div class="section-label"><span>MORE SIGNAL</span></div><div class="grid">`;
+    rest.forEach((a, i) => {
+      html += `
+        <article class="card" data-idx="${i + 1}">
+          <div class="num">No. ${String(i + 2).padStart(2, '0')}</div>
+          <h3>${esc(a.headline)}</h3>
+          <p>${esc(excerpt(a.body, 180))}</p>
+        </article>
+      `;
+    });
+    html += `</div>`;
+  }
+
+  content.innerHTML = html;
+
+  // Reader modal
+  const reader = $('reader');
+  const readerTitle = $('reader-title');
+  const readerBody = $('reader-body');
+  const readerByline = $('reader-byline');
+
+  function openReader(idx) {
+    const a = articles[idx];
+    if (!a) return;
+    readerTitle.textContent = a.headline;
+    readerByline.textContent = `${src}${ch ? ' · ' + ch : ''} · ${fmtDate(gen)}`;
+    readerBody.innerHTML = paragraphs(a.body).map(p => `<p>${esc(p)}</p>`).join('');
+    reader.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeReader() {
+    reader.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+  $('reader-close').addEventListener('click', closeReader);
+  reader.addEventListener('click', (e) => { if (e.target === reader) closeReader(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeReader(); });
+
+  document.querySelectorAll('[data-idx]').forEach(el => {
+    el.addEventListener('click', () => openReader(Number(el.dataset.idx)));
+  });
+})();
+</script>
+
+</body>
+</html>

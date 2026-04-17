@@ -108,16 +108,16 @@
 
   /* ── Layout: sides + center ── */
   .layout {
-    max-width: 1320px;
+    max-width: 1560px;
     margin: 0 auto;
     padding: 32px 24px 0;
     display: grid;
-    grid-template-columns: 220px minmax(0, 720px) 220px;
-    gap: 36px;
+    grid-template-columns: 300px minmax(0, 820px) 300px;
+    gap: 44px;
     justify-content: center;
     align-items: start;
   }
-  @media (max-width: 1120px) {
+  @media (max-width: 1280px) {
     .layout {
       display: flex;
       flex-direction: column;
@@ -130,46 +130,44 @@
     .side-right { order: 3; margin-top: 0; }
   }
 
-  /* ── Side columns ── */
-  .side {
-    position: sticky;
-    top: 20px;
-  }
-  @media (max-width: 1120px) {
+  /* ── Side columns (larger, no labels) ── */
+  .side { }
+  @media (max-width: 1280px) {
     .side { position: static; }
   }
-  .side-label {
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--ink-4);
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--rule-soft);
-    margin-bottom: 14px;
-  }
   .side-item {
-    padding: 14px 0;
+    padding: 18px 0;
     border-bottom: 1px solid var(--rule-soft);
     cursor: pointer;
     transition: opacity .15s;
   }
+  .side-item:first-child { padding-top: 4px; }
   .side-item:hover { opacity: 0.65; }
   .side-item:last-child { border-bottom: none; }
   .side-item .num {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 11px;
     color: var(--ink-4);
-    letter-spacing: 0.1em;
-    margin-bottom: 4px;
+    letter-spacing: 0.12em;
+    margin-bottom: 6px;
   }
   .side-item .t {
     font-family: var(--serif);
-    font-size: 0.92rem;
-    font-weight: 600;
+    font-size: 1.05rem;
+    font-weight: 700;
     line-height: 1.35;
     color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .side-item .snip {
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--ink-3);
+    margin-top: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   /* ── Section heading (center) ── */
@@ -196,7 +194,6 @@
   /* ── Hero (TOP) ── */
   .hero {
     padding: 4px 0 40px;
-    border-bottom: 1px solid var(--rule-soft);
     cursor: pointer;
     transition: opacity .2s;
   }
@@ -570,23 +567,37 @@
   }
   $('center').innerHTML = html;
 
-  // ── Sides render (split alternating) ──
-  function sideCard(a, n) {
+  // ── Sides render (split 3-way: left, center-extra, right) ──
+  function sideCard(a, n, withSnip) {
+    const snip = withSnip ? `<div class="snip">${esc(excerpt(a.body, 120))}</div>` : '';
     return `
       <div class="side-item" data-id="${esc(a.id)}">
         <div class="num">No. ${String(n).padStart(2, '0')}</div>
         <div class="t">${esc(a.headline)}</div>
+        ${snip}
       </div>
     `;
   }
-  const left = side.filter((_, i) => i % 2 === 0);
-  const right = side.filter((_, i) => i % 2 === 1);
-  $('side-left').innerHTML = (left.length
-    ? `<div class="side-label">SIDE · A</div>${left.map((a, i) => sideCard(a, i * 2 + 1)).join('')}`
-    : '');
-  $('side-right').innerHTML = (right.length
-    ? `<div class="side-label">SIDE · B</div>${right.map((a, i) => sideCard(a, i * 2 + 2)).join('')}`
-    : '');
+  // 3-way split: i%3 — 0→left, 1→center-extra, 2→right
+  const leftItems = side.filter((_, i) => i % 3 === 0);
+  const centerExtraItems = side.filter((_, i) => i % 3 === 1);
+  const rightItems = side.filter((_, i) => i % 3 === 2);
+
+  $('side-left').innerHTML = leftItems
+    .map((a, i) => sideCard(a, i * 3 + 1, true)).join('');
+  $('side-right').innerHTML = rightItems
+    .map((a, i) => sideCard(a, i * 3 + 3, true)).join('');
+
+  // Center extra: append to main content as a second grid of side items
+  if (centerExtraItems.length) {
+    const extraHtml = `
+      <div class="section-label"><span>MORE</span></div>
+      <div class="more-list">
+        ${centerExtraItems.map((a, i) => sideCard(a, i * 3 + 2, true)).join('')}
+      </div>
+    `;
+    $('center').insertAdjacentHTML('beforeend', extraHtml);
+  }
 
   // ── Reader modal ──
   const byId = Object.fromEntries(all.map(a => [a.id, a]));

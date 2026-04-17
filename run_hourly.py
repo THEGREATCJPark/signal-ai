@@ -34,6 +34,7 @@ EXPIRY_HOURS = 72
 DECISION_LOG_HOURS = 3
 TITLES_FOR_DEDUP = 20
 KEY_MIN_GAP_S = 3.0
+MERGE_ROUNDS = 3
 
 LOG = lambda m: print(f"[{datetime.now().strftime('%H:%M:%S')}] {m}", flush=True)
 
@@ -383,6 +384,198 @@ def dedup_articles(articles: list, threshold: float = 0.4) -> list:
         out.append(a)
     return out
 
+
+# ── Merge loop (consolidation + coverage-patch) ─────────────────
+
+MERGE_ROUND1_PROMPT = """당신은 AI 뉴스 편집장입니다. 아래 candidate 기사들을 검토해 '퍼블릭에 나갈 최종 기사 목록'을 작성하세요.
+
+## 지시
+- 중복·유사 내용은 병합: 하나의 최종 기사로 합치고 merged_from에 사용한 candidate id들 모두 기록
+- 모순되는 내용은 더 최신·구체적인 쪽으로 정리 (예: '출시 예정'보다 '출시 완료'가 맞다면 후자 기준)
+- 명백히 가치 없거나 사실성 의심되는 건 discard 배열에 id만
+- 각 최종 기사는 400~700자 본문 (한국어). 제목 간결·구체.
+- candidate 원문에 없는 사실 지어내지 말 것. 병합은 사실의 합집합.
+- merged_from에는 candidate id를 문자열로 (예: "98", "114"). 숫자 앞 0 붙이지 말 것.
+
+## 입력 candidate 기사 (id | 제목 | 본문)
+{candidates}
+
+## 출력 (JSON만, 다른 텍스트 금지)
+{{"final": [{{"headline": "...", "body": "...", "merged_from": ["id",...]}}], "discard": ["id",...]}}
+"""
+
+MERGE_PATCH_PROMPT = """이전 round에서 이미 작성된 최종 기사들이 있습니다. 아래 '언급 안 된' candidate 기사들 중 최종 퍼블릭에 추가할 가치가 있는 것만 가려 새 기사로 쓰세요.
+
+## 이미 확정된 최종 기사 (참고용, 수정 금지)
+{existing_finals}
+
+## 언급 안 된 candidate 기사들
+{unreferenced}
+
+## 지시
+- 이미 확정된 기사와 실질적 중복이면 추가 금지 → discard에 id만
+- 완전 새 소식·독립 가치 있는 것만 새 final 기사로 (400~700자)
+- 새 기사에는 사용한 candidate id들을 merged_from에 기록
+- 추가할 게 없으면 final=[] 로 반환
+- merged_from은 문자열 id 배열. 숫자 앞 0 금지.
+
+## 출력 (JSON만)
+{{"final": [{{"headline": "...", "body": "...", "merged_from": ["id",...]}}], "discard": ["id",...]}}
+"""
+
+def _merge_cand_block(arts):
+    lines = []
+    for a in arts:
+        s = a["id"].split("-")[-1]
+        body = (a["body"] or "").replace('\n', ' ')
+        lines.append(f"{s} | {a['headline']} | {body}")
+    return "\n".join(lines)
+
+def _merge_finals_block(finals):
+    lines = []
+    for i, f in enumerate(finals, 1):
+        lines.append(f"[F{i}] {f['headline']}\n    {f['body'][:300]}")
+    return "\n".join(lines) or "(없음)"
+
+def _merge_tolerant_extract(text):
+    """수동 JSON 추출. 긴 body의 일부 이스케이프 오류에 관대."""
+    finals = []
+    i = 0
+    while i < len(text):
+        m = re.search(r'"headline"\s*:\s*"', text[i:])
+        if not m: break
+        headline_pos = i + m.start()
+        obj_start = text.rfind('{', 0, headline_pos)
+        if obj_start == -1:
+            i = headline_pos + 1; continue
+        depth = 0; in_str = False; esc = False; end_pos = -1
+        for j in range(obj_start, len(text)):
+            ch = text[j]
+            if esc: esc = False; continue
+            if ch == '\\' and in_str: esc = True; continue
+            if ch == '"': in_str = not in_str; continue
+            if in_str: continue
+            if ch == '{': depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0: end_pos = j; break
+        if end_pos == -1:
+            i = headline_pos + 1; continue
+        chunk = text[obj_start:end_pos+1]
+        hl_m = re.search(r'"headline"\s*:\s*"((?:[^"\\]|\\.)*)"', chunk)
+        bd_m = re.search(r'"body"\s*:\s*"((?:[^"\\]|\\.)*)"', chunk, re.S)
+        mf_m = re.search(r'"merged_from"\s*:\s*\[([^\]]*)\]', chunk, re.S)
+        if hl_m and bd_m:
+            try:
+                hl = json.loads('"' + hl_m.group(1) + '"')
+                bd = json.loads('"' + bd_m.group(1) + '"')
+            except Exception:
+                hl = hl_m.group(1); bd = bd_m.group(1)
+            mf = []
+            if mf_m:
+                mf = [x.strip().strip('"\'') for x in mf_m.group(1).split(',') if x.strip()]
+            finals.append({"headline": hl, "body": bd, "merged_from": mf})
+        i = end_pos + 1
+    discards = []
+    dm = re.search(r'"discard"\s*:\s*\[([^\]]*)\]', text, re.S)
+    if dm:
+        discards = [x.strip().strip('"\'') for x in dm.group(1).split(',') if x.strip()]
+    return {"final": finals, "discard": discards}
+
+def _normalize_merge_ids(id_list, short_to_full):
+    """관대한 id 매핑: 0-padding, 공백 허용, 이미 full id면 그대로."""
+    lookup = {}
+    for k, v in short_to_full.items():
+        lookup[k] = v
+        lookup[k.lstrip('0') or '0'] = v
+    out = []
+    seen = set()
+    for x in id_list or []:
+        x = str(x).strip().strip('"\'')
+        if not x: continue
+        stripped = x.lstrip('0') or '0'
+        v = lookup.get(x) or lookup.get(stripped)
+        if v and v not in seen: out.append(v); seen.add(v)
+        elif x in short_to_full.values() and x not in seen: out.append(x); seen.add(x)
+    return out
+
+def _run_merge_round(candidates, existing_finals, sched, round_num, short_to_full):
+    if round_num == 1:
+        prompt = MERGE_ROUND1_PROMPT.format(candidates=_merge_cand_block(candidates))
+    else:
+        prompt = MERGE_PATCH_PROMPT.format(
+            existing_finals=_merge_finals_block(existing_finals),
+            unreferenced=_merge_cand_block(candidates),
+        )
+    LOG(f"  merge R{round_num}: {len(candidates)} cands, {len(existing_finals)} exist-finals, prompt={len(prompt):,} chars")
+    raw = call_gemma(prompt, sched, max_tok=32768, temp=0.3, json_mode=True)
+    s = raw.strip()
+    s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
+    start = s.find('{'); end = s.rfind('}')
+    obj = None
+    if start != -1 and end > start:
+        try:
+            obj = json.loads(s[start:end+1])
+        except Exception as e:
+            LOG(f"    strict parse fail ({e}); trying tolerant")
+    if obj is None:
+        obj = _merge_tolerant_extract(raw)
+    finals = obj.get("final", []) or []
+    discards = obj.get("discard", []) or []
+    for f in finals:
+        f["merged_from"] = _normalize_merge_ids(f.get("merged_from", []), short_to_full)
+    discards = _normalize_merge_ids(discards, short_to_full)
+    LOG(f"    → {len(finals)} finals, {len(discards)} discards")
+    return {"final": finals, "discard": discards}
+
+def merge_candidates(candidates, sched, rounds=MERGE_ROUNDS):
+    """Merge+coverage-patch 루프. candidates → final article objects (placement=None)."""
+    if not candidates:
+        return []
+    short_to_full = {c["id"].split("-")[-1]: c["id"] for c in candidates}
+    by_id = {c["id"]: c for c in candidates}
+    now = datetime.now(KST)
+    LOG(f"merge_candidates: {len(candidates)} inputs, up to {rounds} rounds")
+
+    finals_raw = []
+    discards = set()
+    mentioned = set()
+
+    r = _run_merge_round(candidates, [], sched, 1, short_to_full)
+    finals_raw.extend(r["final"])
+    discards |= set(r["discard"])
+    for f in r["final"]:
+        mentioned |= set(f["merged_from"])
+
+    for rn in range(2, rounds + 1):
+        unref = [c for c in candidates if c["id"] not in mentioned and c["id"] not in discards]
+        if not unref:
+            LOG(f"  all candidates covered by round {rn-1}")
+            break
+        r = _run_merge_round(unref, finals_raw, sched, rn, short_to_full)
+        finals_raw.extend(r["final"])
+        discards |= set(r["discard"])
+        for f in r["final"]:
+            mentioned |= set(f["merged_from"])
+
+    # Convert to article dicts with new ids + created_at from sources
+    result = []
+    for i, f in enumerate(finals_raw):
+        src_dates = [by_id[mid]["created_at"] for mid in f.get("merged_from", []) if mid in by_id and by_id[mid].get("created_at")]
+        created = max(src_dates) if src_dates else now.isoformat()
+        result.append({
+            "id": f"art-{now.strftime('%Y%m%d%H%M')}-m{i+1:02d}",
+            "headline": f["headline"],
+            "body": f["body"],
+            "created_at": created,
+            "placement": None,
+            "placed_at": now.isoformat(),
+            "merged_from": f.get("merged_from", []),
+        })
+    still_unref = [c["id"] for c in candidates if c["id"] not in mentioned and c["id"] not in discards]
+    LOG(f"  final: {len(result)} articles, {len(discards)} discards, {len(still_unref)} default-dropped")
+    return result
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--since", help="override since ISO")
@@ -457,11 +650,18 @@ def main():
     new_articles = dedup_articles(deduped_exact, threshold=0.4)
     LOG(f"new articles: {len(deduped_exact)} exact-dedup → {len(new_articles)} jaccard-dedup")
 
-    # cache so classify-only rerun is possible if this run crashes
+    # cache raw deduped (pre-merge) for debug
     cache_path = ROOT / "data" / "new_articles_cache.json"
     cache_path.parent.mkdir(exist_ok=True)
     cache_path.write_text(json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
-    LOG(f"cached {len(new_articles)} new articles → {cache_path}")
+    LOG(f"cached {len(new_articles)} (pre-merge) → {cache_path}")
+
+    # Merge loop: consolidation + coverage-patch (3 rounds)
+    if new_articles:
+        new_articles = merge_candidates(new_articles, sched, rounds=MERGE_ROUNDS)
+        # cache post-merge too
+        (ROOT / "data" / "merged_articles_cache.json").write_text(
+            json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
 
     _classify_and_save(state, new_articles, now, sched)
 

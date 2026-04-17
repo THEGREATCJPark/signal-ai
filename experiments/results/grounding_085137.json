@@ -1,0 +1,162 @@
+[
+  {
+    "verdict": "unsupported",
+    "confidence": 0.9,
+    "evidence_quote": "Opus 4.7 when? / Opus 4.7 tomorrow trust / OPUS 4.7 RELEASE DATE / opus 4.7 this week it seems",
+    "reason": "기사는 클로드 오푸스 4.7이 출시되었다고 단정하지만, 채팅은 출시 시기에 대한 질문과 추측만 있을 뿐 실제 출시나 그에 대한 사용자 반응을 언급하지 않으며, 기사의 세부 주장(토크나이저, 특정 성능 저하/향상, 사용 제한 정책, iOS 앱 기능, 아레나 철회 등)은 채팅에서 전혀 찾아볼 수 없습니다.",
+    "id": "art-202604170339-114",
+    "headline": "클로드 오푸스 4.7 출시, 성능 논란 및 제한적 사용 정책으로 사용자 불만 증폭",
+    "placement": "side",
+    "keywords": [
+      "있습니다",
+      "보였다는",
+      "클로드",
+      "오푸스",
+      "4.7",
+      "사용자",
+      "새로운",
+      "4.6"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "speculation",
+    "confidence": 0.9,
+    "evidence_quote": "Apparently: Claude Opus 4.7 has been registered on internal API",
+    "reason": "채팅은 Claude Opus 4.7이 '내부 API에 등록되었다'는 루머를 언급할 뿐, 기사처럼 공식 출시되었거나 구체적인 기능들이 추가되었다는 명확한 근거를 제시하지 않습니다.",
+    "id": "art-202604170339-111",
+    "headline": "Anthropic, Claude Opus 4.7 출시: 향상된 성능과 새로운 기능",
+    "placement": "side",
+    "keywords": [
+      "Claude",
+      "Opus",
+      "4.7",
+      "향상된",
+      "새로운",
+      "기능",
+      "최신",
+      "Anthropic이"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "unsupported",
+    "confidence": 0.9,
+    "evidence_quote": "claude 4.7",
+    "reason": "기사의 핵심 주장인 'Claude Opus 4.7이 Google Cloud Vertex AI에서 포착되었다'는 내용이 채팅 스니펫에 전혀 언급되지 않으며, 4.7 버전의 출시 임박이나 성능 향상에 대한 구체적인 근거도 없습니다.",
+    "id": "art-202604170339-103",
+    "headline": "Claude Opus 4.7, Google Cloud Vertex AI에서 포착되며 출시 임박 기대감 증폭",
+    "placement": "side",
+    "keywords": [
+      "4.7",
+      "Claude",
+      "Vertex",
+      "Opus",
+      "AI",
+      "Google",
+      "Cloud",
+      "있다"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "speculation",
+    "confidence": 0.9,
+    "evidence_quote": "claude 4.7",
+    "reason": "기사는 채팅에서 단 한 번 언급된 'claude 4.7'을 차세대 모델로 단정하고 구체적인 기능까지 추측했으며, 'AI 디자인 도구'는 채팅에 전혀 언급되지 않은 내용입니다. 채팅은 미래 모델에 대한 추측과 농담이 섞인 대화이며, 심지어 내부자도 모른다는 언급이 있습니다.",
+    "id": "art-202604170339-83",
+    "headline": "Anthropic, 차세대 'Opus 4.7' 모델과 AI 디자인 도구 개발 박차",
+    "placement": "side",
+    "keywords": [
+      "AI",
+      "디자인",
+      "Opus",
+      "4.7",
+      "것으로",
+      "차세대",
+      "개발",
+      "함께"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "unsupported",
+    "confidence": 1.0,
+    "evidence_quote": "Opus 4.7 when ?",
+    "reason": "기사는 클로드 오푸스 4.7의 100만 토큰 컨텍스트 윈도우, 향상된 성능, 특정 벤치마크 결과, 구글 클라우드 버텍스 AI 포착, 앤트로픽의 발표 등 구체적인 기능과 성능을 단정적으로 언급하지만, 원본 채팅 스니펫에는 이러한 내용이 전혀 없으며, 오직 모델의 이름과 출시 시기에 대한 사용자들의 질문과 추측만 존재합니다.",
+    "id": "art-202604170339-98",
+    "headline": "클로드 오푸스 4.7, 100만 토큰 컨텍스트 윈도우와 향상된 성능으로 출시 임박",
+    "placement": "main",
+    "keywords": [
+      "클로드",
+      "오푸스",
+      "컨텍스트",
+      "4.7",
+      "토큰",
+      "작업",
+      "GPT-5.4",
+      "GDPval"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "speculation",
+    "confidence": 0.9,
+    "evidence_quote": "claude 4.7\nwhy is 4.7 the next model?",
+    "reason": "채팅에서 'claude 4.7'이 언급되기는 하지만, 출시 여부, Droid 플랫폼, 50% 할인, 출시일 등 기사의 핵심 주장에 대한 구체적인 근거는 전혀 없으며, 단지 다음 모델에 대한 질문과 추측만 있습니다.",
+    "id": "art-202604170339-117",
+    "headline": "Claude Opus 4.7, Droid 플랫폼에 출시 및 50% 할인 제공",
+    "placement": "side",
+    "keywords": [
+      "Droid",
+      "Claude",
+      "Opus",
+      "4.7",
+      "플랫폼에",
+      "최신",
+      "AI",
+      "더욱"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "unsupported",
+    "confidence": 1.0,
+    "evidence_quote": "Apparently: Claude Opus 4.7 has been registered on internal API",
+    "reason": "Discord 채팅은 Claude Opus 4.7의 내부 API 등록 가능성만 언급할 뿐, 새로운 토크나이저 도입, 토큰 소비량 50% 증가, Gemini 모델 대비 토큰 사용량 두 배, 또는 이로 인한 비용 증가에 대한 어떠한 정보도 포함하고 있지 않습니다.",
+    "id": "art-202604170339-119",
+    "headline": "Claude Opus 4.7, 새로운 토크나이저 도입으로 토큰 소비량 50% 증가",
+    "placement": "side",
+    "keywords": [
+      "Claude",
+      "Opus",
+      "4.7",
+      "것으로",
+      "새로운",
+      "토큰",
+      "사용",
+      "Anthropic의"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "unsupported",
+    "confidence": 1.0,
+    "evidence_quote": "",
+    "reason": "원본 Discord 채팅 스니펫에는 'Deepseek 6.7'이라는 AI 모델에 대한 언급이 전혀 없으며, 기사의 핵심 주장을 뒷받침할 만한 어떠한 내용도 포함되어 있지 않습니다.",
+    "id": "art-202604170339-62",
+    "headline": "새로운 AI 모델 'Deepseek 6.7' 공개, AI 커뮤니티 관심 집중",
+    "placement": "side",
+    "keywords": [
+      "AI",
+      "새로운",
+      "Deepseek",
+      "6.7",
+      "있다",
+      "대한",
+      "Discord",
+      "커뮤니티의"
+    ],
+    "snippets_len": 6016
+  }
+]

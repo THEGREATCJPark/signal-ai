@@ -210,13 +210,20 @@ def save_state(state):
 # ── Discord ─────────────────────────────────────────────────────
 
 def discord_export(since_iso: str) -> Path:
+    """WSL면 기존 discord_export_text_only.py (PowerShell 의존), Linux면 discord_export_linux.py (dotnet DCE)."""
     since = datetime.fromisoformat(since_iso).astimezone(KST)
     after_kst = since.strftime("%Y-%m-%d %H:%M:%S")
     LOG(f"[discord] --after-kst '{after_kst}'")
-    r = subprocess.run([
-        "python3", str(ROOT / "discord_export_text_only.py"),
-        "--channel", CHANNEL_ID, "--after-kst", after_kst, "--no-upload",
-    ], capture_output=True, timeout=1800)
+    # powershell.exe 있으면 WSL 스크립트, 아니면 linux 스크립트
+    use_linux = subprocess.run(["which", "powershell.exe"], capture_output=True).returncode != 0
+    if use_linux:
+        script = ROOT / "discord_export_linux.py"
+        cmd = ["python3", str(script), "--channel", CHANNEL_ID, "--after-kst", after_kst]
+    else:
+        script = ROOT / "discord_export_text_only.py"
+        cmd = ["python3", str(script), "--channel", CHANNEL_ID, "--after-kst", after_kst, "--no-upload"]
+    LOG(f"  using: {script.name}")
+    r = subprocess.run(cmd, capture_output=True, timeout=1800)
     stdout = r.stdout.decode("utf-8", errors="replace") if r.stdout else ""
     stderr = r.stderr.decode("utf-8", errors="replace") if r.stderr else ""
     if r.returncode != 0:

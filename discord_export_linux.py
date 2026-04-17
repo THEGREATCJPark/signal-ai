@@ -157,18 +157,20 @@ def main():
     now_kst = datetime.now(KST)
     out_path = Path(args.out) if args.out else Path(f"/tmp/signal_chat_{now_kst.strftime('%Y%m%d_%H%M%S')}.txt")
 
-    # DCE 직접 덤프 → 임시 파일
+    # DCE 직접 덤프 → 포맷 그대로 사용 (SEP===header===SEP===body)
     tmp_raw = out_path.with_suffix(".dce.txt")
     run_dce_export(args.channel, after_kst, token, tmp_raw)
     raw = tmp_raw.read_text(encoding="utf-8")
     print(f"[linux] raw size: {len(raw)} chars", file=sys.stderr)
-    body, meta = clean_text(raw)
-    print(f"[linux] cleaned body size: {len(body)} chars, header_lines={len(meta['header'])}", file=sys.stderr)
-    if len(body) < 200 and raw:
-        print(f"[linux] WARN body truncated — showing raw head:\n{raw[:1500]}", file=sys.stderr)
-    full = assemble_output(args.channel, after_kst, now_kst, body, meta["header"])
-    out_path.write_text(full, encoding="utf-8")
-    # DCE 원본 보존 (디버그용으로)
+    # marker + CDN URL만 제거
+    cleaned = raw
+    for m in MARKERS:
+        cleaned = cleaned.replace(m, "")
+    cleaned = INLINE_URL_RE.sub("", cleaned)
+    out_path.write_text(cleaned, encoding="utf-8")
+    # SEP 기준 split 검증
+    parts = cleaned.split("=" * 62)
+    print(f"[linux] SEP sections: {len(parts)}, body(parts[2]) size: {len(parts[2]) if len(parts)>=3 else -1}", file=sys.stderr)
     print(f"final_file={out_path}")
 
 

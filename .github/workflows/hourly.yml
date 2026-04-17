@@ -1,0 +1,70 @@
+name: Signal — Hourly Discord Digest
+
+on:
+  schedule:
+    - cron: '5 * * * *'   # 매시 5분 UTC
+  workflow_dispatch:       # 수동 실행도 허용
+
+permissions:
+  contents: write          # docs/articles.json 등 commit back
+
+concurrency:
+  group: signal-hourly
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/discord-digest-demo
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Python deps
+        run: pip install requests
+
+      - name: Install DiscordChatExporter.Cli
+        run: |
+          dotnet tool install --global DiscordChatExporter.Cli
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Setup Gemini keys
+        run: |
+          mkdir -p "$HOME/.config/legal_evidence_rag"
+          echo "GEMINI_API_KEYS=${{ secrets.GEMINI_API_KEYS }}" > "$HOME/.config/legal_evidence_rag/keys.env"
+
+      - name: Configure git
+        run: |
+          git config user.name "signal-bot"
+          git config user.email "signal-bot@users.noreply.github.com"
+
+      - name: Run pipeline
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GIST_PAT: ${{ secrets.GIST_PAT }}
+        run: |
+          # build_gist.py는 gh CLI 사용. PAT로 인증
+          echo "$GIST_PAT" | gh auth login --with-token
+          python3 -u run_hourly.py
+
+      - name: Commit state changes back to branch
+        run: |
+          git add docs/articles.json docs/index.html docs/archive.html data/ || true
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "auto: hourly digest update ($(date -u +%Y-%m-%d\ %H:%M) UTC)"
+            git push origin feat/discord-digest-demo
+          fi

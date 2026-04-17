@@ -76,6 +76,7 @@ def run_dce_export(channel: str, after_utc: datetime, token: str, out_txt: Path)
         "-c", channel,
         "--after", after_str,
         "--format", "PlainText",
+        "--locale", "ko-KR",
         "-o", str(out_txt),
         "--utc",
     ]

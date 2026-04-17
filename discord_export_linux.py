@@ -81,8 +81,17 @@ def run_dce_export(channel: str, after_utc: datetime, token: str, out_txt: Path)
     ]
     print(f"[dce] running: {' '.join(c if c != token else 'TOKEN' for c in cmd)}", file=sys.stderr)
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+    print(f"[dce] rc={r.returncode} stdout_len={len(r.stdout)} stderr_len={len(r.stderr)}", file=sys.stderr)
+    if r.stdout: print(f"[dce] stdout:\n{r.stdout[:2000]}", file=sys.stderr)
+    if r.stderr: print(f"[dce] stderr:\n{r.stderr[:2000]}", file=sys.stderr)
     if r.returncode != 0:
-        raise RuntimeError(f"DCE failed rc={r.returncode}\nstdout: {r.stdout[-500:]}\nstderr: {r.stderr[-500:]}")
+        raise RuntimeError(f"DCE failed rc={r.returncode}")
+    if not out_txt.exists():
+        raise RuntimeError(f"DCE produced no output file at {out_txt}")
+    sz = out_txt.stat().st_size
+    print(f"[dce] output file: {out_txt} ({sz} bytes)", file=sys.stderr)
+    if sz > 0:
+        print(f"[dce] head:\n{out_txt.read_text(encoding='utf-8', errors='replace')[:800]}", file=sys.stderr)
 
 
 def clean_text(raw: str) -> tuple[str, dict]:
@@ -152,12 +161,14 @@ def main():
     tmp_raw = out_path.with_suffix(".dce.txt")
     run_dce_export(args.channel, after_kst, token, tmp_raw)
     raw = tmp_raw.read_text(encoding="utf-8")
+    print(f"[linux] raw size: {len(raw)} chars", file=sys.stderr)
     body, meta = clean_text(raw)
+    print(f"[linux] cleaned body size: {len(body)} chars, header_lines={len(meta['header'])}", file=sys.stderr)
+    if len(body) < 200 and raw:
+        print(f"[linux] WARN body truncated — showing raw head:\n{raw[:1500]}", file=sys.stderr)
     full = assemble_output(args.channel, after_kst, now_kst, body, meta["header"])
     out_path.write_text(full, encoding="utf-8")
-    # DCE 원본 삭제
-    try: tmp_raw.unlink()
-    except Exception: pass
+    # DCE 원본 보존 (디버그용으로)
     print(f"final_file={out_path}")
 
 

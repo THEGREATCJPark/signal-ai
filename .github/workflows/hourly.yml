@@ -28,17 +28,19 @@ jobs:
         with:
           python-version: '3.12'
 
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
       - name: Install Python deps
         run: pip install requests
 
-      - name: Install DiscordChatExporter.Cli
+      - name: Install DiscordChatExporter.Cli (from GitHub release)
         run: |
-          dotnet tool install --global DiscordChatExporter.Cli
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+          mkdir -p $HOME/dce
+          cd $HOME/dce
+          curl -sL https://github.com/Tyrrrz/DiscordChatExporter/releases/latest/download/DiscordChatExporter.Cli.linux-x64.zip -o dce.zip
+          unzip -q dce.zip
+          chmod +x DiscordChatExporter.Cli
+          echo "DCE_BIN=$HOME/dce/DiscordChatExporter.Cli" >> $GITHUB_ENV
+          echo "$HOME/dce" >> $GITHUB_PATH
+          ls -la $HOME/dce/ | head -10
 
       - name: Setup Gemini keys
         run: |

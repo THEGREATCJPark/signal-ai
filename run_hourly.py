@@ -35,6 +35,7 @@ DECISION_LOG_HOURS = 3
 TITLES_FOR_DEDUP = 20
 KEY_MIN_GAP_S = 3.0
 MERGE_ROUNDS = 3
+ACTIVE_POOL_LIMIT = 200  # 이 이하면 existing+new 전체 merge, 이상이면 retrieval mode
 
 LOG = lambda m: print(f"[{datetime.now().strftime('%H:%M:%S')}] {m}", flush=True)
 
@@ -391,7 +392,10 @@ MERGE_ROUND1_PROMPT = """당신은 AI 뉴스 편집장입니다. 아래 candidat
 
 ## 지시
 - 중복·유사 내용은 병합: 하나의 최종 기사로 합치고 merged_from에 사용한 candidate id들 모두 기록
-- 모순되는 내용은 더 최신·구체적인 쪽으로 정리 (예: '출시 예정'보다 '출시 완료'가 맞다면 후자 기준)
+- 모순되는 내용은 더 최신·구체적인 쪽으로 정리
+- **출시 상태 표현은 보수적으로**: candidate들이 '출시됨/출시 임박/루머/추측'이 엇갈리면 더 약한 표현 사용.
+  '공식 출시' 또는 '출시됐다'는 **다수의 구체적 근거**(공식 발표, 모델 카드, 가격 명시, 출시일 명시, 여러 출처 일관된 증언)가 있을 때만.
+  애매하면 '출시 임박', '출시 정황 포착', '내부 테스트 중', '루머'로 표현. 본문에서도 "~로 알려졌다", "~라는 소식이 전해졌다" 같은 전언 형태 사용.
 - 명백히 가치 없거나 사실성 의심되는 건 discard 배열에 id만
 - 각 최종 기사는 400~700자 본문 (한국어). 제목 간결·구체.
 - candidate 원문에 없는 사실 지어내지 말 것. 병합은 사실의 합집합.
@@ -418,6 +422,7 @@ MERGE_PATCH_PROMPT = """이전 round에서 이미 작성된 최종 기사들이 
 - 새 기사에는 사용한 candidate id들을 merged_from에 기록
 - 추가할 게 없으면 final=[] 로 반환
 - merged_from은 문자열 id 배열. 숫자 앞 0 금지.
+- **출시 상태 표현은 보수적으로**: 근거 약하면 '출시 임박/루머/추측' 사용. '공식 출시'는 다수의 구체적 근거가 있을 때만.
 
 ## 출력 (JSON만)
 {{"final": [{{"headline": "...", "body": "...", "merged_from": ["id",...]}}], "discard": ["id",...]}}
@@ -656,10 +661,21 @@ def main():
     cache_path.write_text(json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
     LOG(f"cached {len(new_articles)} (pre-merge) → {cache_path}")
 
-    # Merge loop: consolidation + coverage-patch (3 rounds)
+    # Merge loop: existing active pool + new candidates 합쳐서 merge (크면 retrieval 모드로 fallback)
     if new_articles:
-        new_articles = merge_candidates(new_articles, sched, rounds=MERGE_ROUNDS)
-        # cache post-merge too
+        active = state["articles"]
+        combined = active + new_articles
+        if len(combined) <= ACTIVE_POOL_LIMIT:
+            LOG(f"merge: existing({len(active)}) + new({len(new_articles)}) = {len(combined)}")
+            merged = merge_candidates(combined, sched, rounds=MERGE_ROUNDS)
+            # existing pool consumed by merge — reset state; merged articles are now authoritative
+            state["articles"] = []
+        else:
+            # TODO: retrieval 모드 — 각 new마다 키워드/임베딩으로 기존 top-K 찾아서 그것만 merge
+            LOG(f"pool too large ({len(combined)} > {ACTIVE_POOL_LIMIT}), merging new-only (retrieval TODO)")
+            merged = merge_candidates(new_articles, sched, rounds=MERGE_ROUNDS)
+            # existing 그대로 둠. new merged articles은 추가됨.
+        new_articles = merged
         (ROOT / "data" / "merged_articles_cache.json").write_text(
             json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
 

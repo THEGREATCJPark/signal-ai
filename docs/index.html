@@ -419,7 +419,7 @@
     <span><span class="pulse"></span>LIVE · SIGNAL</span>
     <span class="topbar-right">
       <span id="topbar-date">—</span>
-      <a href="archive.html" class="topbar-link">ARCHIVE →</a>
+      <a href="archive.html" id="archive-link-top" class="topbar-link">ARCHIVE →</a>
     </span>
   </div>
 </div>
@@ -445,7 +445,7 @@
 </div>
 
 <div class="more-wrap">
-  <a href="archive.html" class="more-btn">더보기 →</a>
+  <a href="archive.html" id="archive-link-bottom" class="more-btn">더보기 →</a>
 </div>
 
 <div class="reader" id="reader" role="dialog" aria-modal="true">
@@ -467,6 +467,24 @@
 <script>
 (async function() {
   const $ = (id) => document.getElementById(id);
+
+  // htmlpreview wraps the page — relative links break out of the wrapper.
+  // Detect and rewrite archive link to go through htmlpreview too.
+  (function fixArchiveLinks() {
+    const here = window.location.href;
+    const isPreview = here.includes('htmlpreview.github.io');
+    if (!isPreview) return;
+    // figure out the base gist raw URL from query string
+    const q = window.location.search.slice(1) + window.location.hash.slice(1);
+    const raw = q.startsWith('http') ? q : '';
+    if (!raw) return;
+    const archiveRaw = raw.replace(/index\.html(\?.*)?$/, 'archive.html');
+    const wrapped = 'https://htmlpreview.github.io/?' + archiveRaw;
+    const top = document.getElementById('archive-link-top');
+    const bot = document.getElementById('archive-link-bottom');
+    if (top) top.href = wrapped;
+    if (bot) bot.href = wrapped;
+  })();
 
   function fmtDate(iso, opts = {}) {
     try {

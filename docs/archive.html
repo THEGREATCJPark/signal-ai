@@ -197,7 +197,7 @@
 
 <div class="topbar">
   <div class="topbar-inner">
-    <a href="index.html" class="back-link">← BACK TO FRONT</a>
+    <a href="index.html" id="back-link" class="back-link">← BACK TO FRONT</a>
     <span id="topbar-date">—</span>
   </div>
 </div>
@@ -233,6 +233,19 @@
 <script>
 (async function() {
   const $ = (id) => document.getElementById(id);
+
+  // htmlpreview wrapper fix
+  (function fixBackLink() {
+    const here = window.location.href;
+    if (!here.includes('htmlpreview.github.io')) return;
+    const q = window.location.search.slice(1) + window.location.hash.slice(1);
+    const raw = q.startsWith('http') ? q : '';
+    if (!raw) return;
+    const indexRaw = raw.replace(/archive\.html(\?.*)?$/, 'index.html');
+    const wrapped = 'https://htmlpreview.github.io/?' + indexRaw;
+    const el = document.getElementById('back-link');
+    if (el) el.href = wrapped;
+  })();
   function esc(s) { return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function fmtDT(iso) {
     try {

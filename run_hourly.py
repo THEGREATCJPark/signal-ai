@@ -226,6 +226,9 @@ def discord_export(since_iso: str) -> Path:
     r = subprocess.run(cmd, capture_output=True, timeout=1800)
     stdout = r.stdout.decode("utf-8", errors="replace") if r.stdout else ""
     stderr = r.stderr.decode("utf-8", errors="replace") if r.stderr else ""
+    if stderr:
+        for line in stderr.splitlines():
+            LOG(f"  [export-stderr] {line}")
     if r.returncode != 0:
         raise RuntimeError(f"Discord export failed: {stderr[-800:]}")
     for line in stdout.split("\n"):

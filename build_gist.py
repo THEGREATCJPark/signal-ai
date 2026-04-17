@@ -39,9 +39,10 @@ r = subprocess.run(
 )
 sha = r.stdout.strip() if r.returncode == 0 else None
 
-print("\nURLs (latest, cache-busted):")
+print("\nURLs (htmlpreview — gist 최신 raw 자동 렌더):")
 for fn in ("index.html", "archive.html"):
-    if sha:
+    print(f"  https://htmlpreview.github.io/?https://gist.githubusercontent.com/pineapplesour/{GIST_ID}/raw/{fn}")
+if sha:
+    print("\n(백업) statically cache-busted:")
+    for fn in ("index.html", "archive.html"):
         print(f"  https://cdn.statically.io/gist/pineapplesour/{GIST_ID}/raw/{sha}/{fn}")
-    else:
-        print(f"  https://cdn.statically.io/gist/pineapplesour/{GIST_ID}/raw/{fn}")

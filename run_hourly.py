@@ -468,25 +468,31 @@ def dedup_cluster(candidates, sched):
     prompt = DEDUP_CLUSTER_PROMPT.format(articles="\n".join(lines))
     LOG(f"dedup_cluster: {len(candidates)} candidates, prompt {len(prompt):,} chars")
 
-    raw = call_gemma(prompt, sched, max_tok=8192, temp=0.2, json_mode=True)
-    s = raw.strip()
-    s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
-    start = s.find('{'); end = s.rfind('}')
+    # 재시도: 파싱 실패면 최대 3회 재시도. 여전히 실패면 candidates 전부 유지 (포기 없음)
     dropped = set()
-    try:
-        if start != -1 and end > start:
-            obj = json.loads(s[start:end+1])
-            for cluster in obj.get("clusters", []) or []:
-                for did in cluster.get("drop", []) or []:
-                    did = str(did).strip().strip('"\'')
-                    if not did: continue
-                    stripped = did.lstrip('0') or '0'
-                    resolved = short_to_full.get(did) or short_to_full.get(stripped)
-                    if resolved:
-                        dropped.add(resolved)
-    except Exception as e:
-        LOG(f"  dedup parse fail: {e}; skipping dedup")
-        return list(candidates), []
+    parsed_ok = False
+    for attempt in range(1, 4):
+        raw = call_gemma(prompt, sched, max_tok=8192, temp=0.2, json_mode=True)
+        s = raw.strip()
+        s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
+        start = s.find('{'); end = s.rfind('}')
+        try:
+            if start != -1 and end > start:
+                obj = json.loads(s[start:end+1])
+                for cluster in obj.get("clusters", []) or []:
+                    for did in cluster.get("drop", []) or []:
+                        did = str(did).strip().strip('"\'')
+                        if not did: continue
+                        stripped = did.lstrip('0') or '0'
+                        resolved = short_to_full.get(did) or short_to_full.get(stripped)
+                        if resolved:
+                            dropped.add(resolved)
+                parsed_ok = True
+                break
+        except Exception as e:
+            LOG(f"  dedup parse fail (attempt {attempt}): {e}")
+    if not parsed_ok:
+        LOG(f"  dedup 모든 재시도 실패 — 전체 유지(포기 없음)")
 
     kept = [c for c in candidates if c["id"] not in dropped]
     LOG(f"  → kept {len(kept)}, dropped {len(dropped)}")
@@ -529,25 +535,31 @@ def cross_existing_dedup(new_candidates, existing_articles, sched):
     prompt = CROSS_DEDUP_PROMPT.format(existing="\n".join(ex_lines), new="\n".join(nw_lines))
     LOG(f"cross_existing_dedup: {len(existing_articles)} existing vs {len(new_candidates)} new, prompt {len(prompt):,} chars")
 
-    raw = call_gemma(prompt, sched, max_tok=4096, temp=0.2, json_mode=True)
-    s = raw.strip()
-    s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
-    start = s.find('{'); end = s.rfind('}')
+    # 재시도: 파싱 실패면 최대 3회. 여전히 실패면 new 전부 유지(포기 없음)
     drop_new = set()
-    try:
-        if start != -1 and end > start:
-            obj = json.loads(s[start:end+1])
-            for did in obj.get("drop_new", []) or []:
-                did = str(did).strip().strip('"\'').upper()
-                # N5 → new_candidates[4]
-                m = re.match(r'N0*(\d+)$', did)
-                if m:
-                    idx = int(m.group(1)) - 1
-                    if 0 <= idx < len(new_candidates):
-                        drop_new.add(new_candidates[idx]["id"])
-    except Exception as e:
-        LOG(f"  cross dedup parse fail: {e}")
-        return list(new_candidates), []
+    parsed_ok = False
+    for attempt in range(1, 4):
+        raw = call_gemma(prompt, sched, max_tok=4096, temp=0.2, json_mode=True)
+        s = raw.strip()
+        s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
+        start = s.find('{'); end = s.rfind('}')
+        try:
+            if start != -1 and end > start:
+                obj = json.loads(s[start:end+1])
+                for did in obj.get("drop_new", []) or []:
+                    did = str(did).strip().strip('"\'').upper()
+                    m = re.match(r'N0*(\d+)$', did)
+                    if m:
+                        idx = int(m.group(1)) - 1
+                        if 0 <= idx < len(new_candidates):
+                            drop_new.add(new_candidates[idx]["id"])
+                parsed_ok = True
+                break
+        except Exception as e:
+            LOG(f"  cross dedup parse fail (attempt {attempt}): {e}")
+    if not parsed_ok:
+        LOG(f"  cross dedup 모든 재시도 실패 — new 전부 유지(포기 없음)")
+
     kept = [c for c in new_candidates if c["id"] not in drop_new]
     LOG(f"  → kept {len(kept)} new (dropped {len(drop_new)} as duplicates of existing)")
     return kept, sorted(drop_new)
@@ -822,8 +834,18 @@ def main():
     new_articles = []
     for i, ch in enumerate(chunks):
         LOG(f"[{i+1}/{len(chunks)}] scan chunk ({len(ch):,} chars)")
-        raw = call_gemma(prompt_scan_chunk(ch, titles), sched, temp=0.3, json_mode=True)
-        arts = parse_chunk_articles(raw)
+        arts = []
+        # 재시도: 파싱 결과 0개인데 raw에 'articles' 언급 있으면 garbled 가능성 → 재시도
+        for attempt in range(1, 6):
+            raw = call_gemma(prompt_scan_chunk(ch, titles), sched, temp=0.3, json_mode=True)
+            arts = parse_chunk_articles(raw)
+            if arts:
+                break
+            # 빈 응답이지만 legitimately empty인지 check
+            if re.search(r'"articles"\s*:\s*\[\s*\]', raw):
+                LOG(f"  legitimately empty (attempt {attempt})")
+                break
+            LOG(f"  attempt {attempt} parse fail, retry")
         for a in arts:
             new_articles.append({
                 "id": new_id(now, len(new_articles) + 1),

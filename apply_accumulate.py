@@ -30,37 +30,70 @@ TAG_PROMPT = """아래 기사들을 한 건씩 category·trust 태그 부여.
 
 모든 id에 대해 판정. 누락 금지."""
 
-def tag_articles(articles, sched):
-    if not articles:
-        return {}
+def _tag_batch_once(articles, sched):
+    """한 번 호출. 성공한 id:tag dict 반환."""
     lines = []
     for a in articles:
         body = (a.get("body") or "").replace("\n", " ")[:260]
         lines.append(f"{a['id']} | {a['headline']} | {body}")
     prompt = TAG_PROMPT.format(block="\n".join(lines))
-    LOG(f"tag_articles: {len(articles)}, prompt {len(prompt):,} chars")
     raw = call_gemma(prompt, sched, max_tok=8192, temp=0.1, json_mode=True)
     s = raw.strip()
     s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
-    start = s.find('{'); end = s.rfind('}')
+    # 여러 JSON 객체 가능성 → 첫 {~} 균형찬 추출
     tags = {}
+    start = s.find('{')
+    if start == -1:
+        return tags
+    depth = 0; end = -1; in_str = False; esc = False
+    for j in range(start, len(s)):
+        ch = s[j]
+        if esc: esc = False; continue
+        if ch == '\\' and in_str: esc = True; continue
+        if ch == '"': in_str = not in_str; continue
+        if in_str: continue
+        if ch == '{': depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0: end = j; break
+    if end == -1:
+        return tags
     try:
-        if start != -1 and end > start:
-            obj = json.loads(s[start:end+1])
-            for t in obj.get("tags", []) or []:
-                iid = str(t.get("id", "")).strip().strip('"\'')
-                cat = str(t.get("category", "")).strip().lower()
-                trust = str(t.get("trust", "")).strip().lower()
-                if cat not in ("news", "rumor"): cat = "rumor"
-                if trust not in ("high", "low"): trust = "low"
-                tags[iid] = {"category": cat, "trust": trust}
-    except Exception as e:
-        LOG(f"  tag parse fail: {e}; 기본값(rumor/low)")
-    # missing은 기본 rumor/low
-    for a in articles:
-        if a["id"] not in tags:
-            tags[a["id"]] = {"category": "rumor", "trust": "low"}
+        obj = json.loads(s[start:end+1])
+        for t in obj.get("tags", []) or []:
+            iid = str(t.get("id", "")).strip().strip('"\'')
+            cat = str(t.get("category", "")).strip().lower()
+            trust = str(t.get("trust", "")).strip().lower()
+            if cat not in ("news", "rumor"): cat = "rumor"
+            if trust not in ("high", "low"): trust = "low"
+            if iid: tags[iid] = {"category": cat, "trust": trust}
+    except Exception:
+        pass
     return tags
+
+def tag_articles(articles, sched, max_retries=3):
+    """누락된 id만 모아 재시도. 최종 남으면 rumor/low default."""
+    if not articles:
+        return {}
+    LOG(f"tag_articles: {len(articles)} total")
+    all_tags = {}
+    remaining = list(articles)
+    for attempt in range(1, max_retries + 1):
+        if not remaining: break
+        got = _tag_batch_once(remaining, sched)
+        for iid, t in got.items():
+            all_tags[iid] = t
+        prev = len(remaining)
+        remaining = [a for a in remaining if a["id"] not in all_tags]
+        LOG(f"  attempt {attempt}: got {len(got)} new, {len(remaining)} missing")
+        if len(remaining) == prev and attempt < max_retries:
+            # 진전 없으면 한번 더 시도 (다른 key 쓰이길)
+            continue
+    # 남은 건 default
+    for a in articles:
+        if a["id"] not in all_tags:
+            all_tags[a["id"]] = {"category": "rumor", "trust": "low"}
+    return all_tags
 
 def main():
     # 11 복원 + 21 combine

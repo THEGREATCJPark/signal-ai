@@ -364,19 +364,29 @@ def short2real_get(m, k):
 # ── Validation ──────────────────────────────────────────────────
 
 def validate_placement(p: dict, valid_shorts: set) -> str | None:
+    """관대한 검증 + 자동 정리: top>main>side 우선순위로 중복 제거. missing은 side로 기본 배치."""
+    # 중복 자동 해결: 같은 id가 여러 그룹에 있으면 top > main > side 우선
+    seen = set()
+    for k in ("top", "main", "side"):
+        p[k] = [x for x in p[k] if not (x in seen or seen.add(x))]
+    # top ≤1 강제 (초과분은 main으로)
     if len(p["top"]) > 1:
-        return f"top must be ≤1, got {len(p['top'])}"
+        overflow = p["top"][1:]
+        p["top"] = p["top"][:1]
+        p["main"] = list(dict.fromkeys(p["main"] + overflow))
+    # main ≤MAX_MAIN 강제 (초과분은 side로)
     if len(p["main"]) > MAX_MAIN:
-        return f"main must be ≤{MAX_MAIN}, got {len(p['main'])}"
+        overflow = p["main"][MAX_MAIN:]
+        p["main"] = p["main"][:MAX_MAIN]
+        p["side"] = list(dict.fromkeys(p["side"] + overflow))
     all_ids = p["top"] + p["main"] + p["side"]
-    if len(all_ids) != len(set(all_ids)):
-        return "duplicate ids"
     unknown = [i for i in all_ids if i not in valid_shorts]
     if unknown:
         return f"unknown ids: {unknown[:3]}"
+    # missing 자동 side로 추가
     missing = valid_shorts - set(all_ids)
     if missing:
-        return f"missing ids: {sorted(missing)[:5]}"
+        p["side"] = p["side"] + sorted(missing)
     return None
 
 
@@ -404,6 +414,60 @@ def dedup_articles(articles: list, threshold: float = 0.4) -> list:
             continue
         out.append(a)
     return out
+
+
+# ── LLM-based dedup cluster (body 재작성 없음) ───────────────────
+
+DEDUP_CLUSTER_PROMPT = """아래 기사들 중 **같은 주제·같은 사실**을 전달하는 중복을 찾아 클러스터로 묶으세요.
+각 중복 클러스터에서 가장 구체적·완결된 것 1개만 keep, 나머지는 drop.
+**제목/본문 재작성 절대 금지** — 원본 id만 keep/drop 결정.
+독립적 기사(중복 아닌 것)는 출력에 포함하지 마세요 (자동 유지됨).
+
+## 기사 (id | 제목 | 본문 일부)
+{articles}
+
+## 출력 (JSON만, 다른 텍스트 금지)
+{{"clusters": [{{"keep": "id", "drop": ["id","id"]}}, ...]}}
+
+없으면 {{"clusters": []}}"""
+
+def dedup_cluster(candidates, sched):
+    """LLM으로 중복 클러스터 찾아 drop. body/headline 재작성 없이 원본 보존.
+    Returns: (kept_list, dropped_ids_list)"""
+    if len(candidates) <= 1:
+        return list(candidates), []
+    short_to_full = {c["id"].split("-")[-1]: c["id"] for c in candidates}
+    lines = []
+    for c in candidates:
+        s = c["id"].split("-")[-1]
+        body = (c["body"] or "").replace("\n", " ")[:250]
+        lines.append(f"{s} | {c['headline']} | {body}")
+    prompt = DEDUP_CLUSTER_PROMPT.format(articles="\n".join(lines))
+    LOG(f"dedup_cluster: {len(candidates)} candidates, prompt {len(prompt):,} chars")
+
+    raw = call_gemma(prompt, sched, max_tok=8192, temp=0.2, json_mode=True)
+    s = raw.strip()
+    s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
+    start = s.find('{'); end = s.rfind('}')
+    dropped = set()
+    try:
+        if start != -1 and end > start:
+            obj = json.loads(s[start:end+1])
+            for cluster in obj.get("clusters", []) or []:
+                for did in cluster.get("drop", []) or []:
+                    did = str(did).strip().strip('"\'')
+                    if not did: continue
+                    stripped = did.lstrip('0') or '0'
+                    resolved = short_to_full.get(did) or short_to_full.get(stripped)
+                    if resolved:
+                        dropped.add(resolved)
+    except Exception as e:
+        LOG(f"  dedup parse fail: {e}; skipping dedup")
+        return list(candidates), []
+
+    kept = [c for c in candidates if c["id"] not in dropped]
+    LOG(f"  → kept {len(kept)}, dropped {len(dropped)}")
+    return kept, sorted(dropped)
 
 
 # ── Merge loop (consolidation + coverage-patch) ─────────────────
@@ -705,16 +769,14 @@ def main():
     cache_path.write_text(json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
     LOG(f"cached {len(new_articles)} (pre-merge) → {cache_path}")
 
-    # Merge 3-round: NEW 후보에만 (기존 기사는 절대 건드리지 않음, 쌓기 원칙)
+    # Dedup: 새 후보 중 중복 클러스터만 정리 (body/headline 재작성 금지).
+    # 기존 기사는 그대로 쌓임. 모든 살아남은 new 후보는 classify 거쳐 TOP/MAIN/SIDE 배치됨.
     if new_articles:
-        LOG(f"merge (new-only): {len(new_articles)} candidates")
-        merged = merge_candidates(new_articles, sched, rounds=MERGE_ROUNDS)
-        new_articles = merged
-        (ROOT / "data" / "merged_articles_cache.json").write_text(
+        new_articles, dropped = dedup_cluster(new_articles, sched)
+        (ROOT / "data" / "deduped_cache.json").write_text(
             json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Classify: 기존 active + new finals 함께 고려 → 교체/유지 결정
-    # 기존 기사 headline/body는 절대 수정되지 않음. placement만 바뀔 수 있음.
+    # Classify: 기존 active + new (모두 원본 body/headline 유지) → TOP/MAIN/SIDE 배치
     _classify_and_save(state, new_articles, now, sched)
 
 

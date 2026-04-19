@@ -705,23 +705,16 @@ def main():
     cache_path.write_text(json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
     LOG(f"cached {len(new_articles)} (pre-merge) → {cache_path}")
 
-    # Merge loop: existing active pool + new candidates 합쳐서 merge. 기존 id는 유지 (쌓기).
+    # Merge 3-round: NEW 후보에만 (기존 기사는 절대 건드리지 않음, 쌓기 원칙)
     if new_articles:
-        active = state["articles"]
-        preserve_ids = {a["id"] for a in active}
-        combined = active + new_articles
-        if len(combined) <= ACTIVE_POOL_LIMIT:
-            LOG(f"merge: existing({len(active)}) + new({len(new_articles)}) = {len(combined)}")
-            merged = merge_candidates(combined, sched, rounds=MERGE_ROUNDS, preserve_ids=preserve_ids)
-            # merged에 기존 id 승계된 것 + 신규 — 이걸로 state 교체 (classify에서 재분류)
-            state["articles"] = []
-        else:
-            LOG(f"pool too large ({len(combined)} > {ACTIVE_POOL_LIMIT}), merging new-only (retrieval TODO)")
-            merged = merge_candidates(new_articles, sched, rounds=MERGE_ROUNDS)
+        LOG(f"merge (new-only): {len(new_articles)} candidates")
+        merged = merge_candidates(new_articles, sched, rounds=MERGE_ROUNDS)
         new_articles = merged
         (ROOT / "data" / "merged_articles_cache.json").write_text(
             json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    # Classify: 기존 active + new finals 함께 고려 → 교체/유지 결정
+    # 기존 기사 headline/body는 절대 수정되지 않음. placement만 바뀔 수 있음.
     _classify_and_save(state, new_articles, now, sched)
 
 

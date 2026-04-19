@@ -429,18 +429,30 @@ def dedup_articles(articles: list, threshold: float = 0.4) -> list:
 
 # ── LLM-based dedup cluster (body 재작성 없음) ───────────────────
 
-DEDUP_CLUSTER_PROMPT = """아래 기사들 중 **같은 주제·같은 사실**을 전달하는 중복을 찾아 클러스터로 묶으세요.
-각 중복 클러스터에서 가장 구체적·완결된 것 1개만 keep, 나머지는 drop.
+DEDUP_CLUSTER_PROMPT = """아래 기사들 중 **정확히 같은 사실·같은 이벤트**를 전달하는 경우에만 중복으로 판정.
+
+## 중복 판정 엄격 기준 (모두 일치해야 함)
+- 같은 회사·같은 제품·같은 날짜/버전
+- 같은 사건·같은 발표·같은 행동
+- 본질적으로 같은 뉴스 (표현만 다를 뿐)
+
+## 중복 아님 (drop 하지 말 것)
+- 같은 회사 다른 제품 (예: Kimi K2.6 vs Kimi 인프라)
+- 같은 제품 다른 측면 (예: Opus 4.7 출시 vs Opus 4.7 해커톤)
+- 서로 다른 루머·예측 (예: GPT-5.5 출시설 vs GPT-6 예측)
+- 새로운 디테일 추가
+
+각 중복 클러스터에서 가장 구체적인 것 1개만 keep, 나머지는 drop.
 **제목/본문 재작성 절대 금지** — 원본 id만 keep/drop 결정.
-독립적 기사(중복 아닌 것)는 출력에 포함하지 마세요 (자동 유지됨).
+독립 기사는 출력에 포함하지 마세요.
 
 ## 기사 (id | 제목 | 본문 일부)
 {articles}
 
-## 출력 (JSON만, 다른 텍스트 금지)
+## 출력 (JSON만)
 {{"clusters": [{{"keep": "id", "drop": ["id","id"]}}, ...]}}
 
-없으면 {{"clusters": []}}"""
+확신 있는 중복만. 없으면 {{"clusters": []}}"""
 
 def dedup_cluster(candidates, sched):
     """LLM으로 중복 클러스터 찾아 drop. body/headline 재작성 없이 원본 보존.
@@ -481,8 +493,17 @@ def dedup_cluster(candidates, sched):
     return kept, sorted(dropped)
 
 
-CROSS_DEDUP_PROMPT = """기존 활성 기사와 새 후보 기사를 비교해 **new 중 기존과 '같은 내용'인 것만** drop.
-'비슷해 보이지만 새 디테일이 있는' 기사는 keep (새 사실 추가, 시점 변화, 별도 측면).
+CROSS_DEDUP_PROMPT = """기존 활성 기사와 새 후보 기사를 비교해 **new 중 기존과 정확히 같은 사실·이벤트**만 drop.
+
+## drop 해야 함 (엄격)
+- 같은 회사·제품·버전·날짜의 같은 뉴스
+- 본질적으로 같은 내용 (표현만 다름)
+
+## drop 금지 (keep)
+- 다른 루머·예측 (예: 기존 'Opus 4.7 출시'에 대해 새 'Opus 4.7 벤치마크')
+- 다른 측면·새 디테일
+- 같은 주제지만 다른 이벤트
+
 **제목/본문 재작성 금지** — 원본 id만 drop 결정.
 
 ## 기존 활성 기사 (E prefix)
@@ -494,7 +515,7 @@ CROSS_DEDUP_PROMPT = """기존 활성 기사와 새 후보 기사를 비교해 *
 ## 출력 (JSON만)
 {{"drop_new": ["N-id", ...]}}
 
-같은 내용 없으면 {{"drop_new": []}}"""
+확신 있는 중복만. 없으면 {{"drop_new": []}}"""
 
 def cross_existing_dedup(new_candidates, existing_articles, sched):
     """new 중 기존과 '같은 내용'인 것만 drop. 비슷하지만 새 디테일은 keep."""

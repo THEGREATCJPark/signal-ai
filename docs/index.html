@@ -540,7 +540,7 @@
   $('topbar-date').textContent = fmtTime(gen);
   $('masthead-date').textContent = fmtDate(gen, { weekday: true });
   $('masthead-source').textContent = `${all.length} STORIES · UPDATED ${fmtTime(gen)}`;
-  $('footer-meta').textContent = `MODEL: ${(data.model || 'UNKNOWN').toUpperCase()} · GENERATED ${fmtTime(gen)}`;
+  $('footer-meta').textContent = `GENERATED ${fmtTime(gen)}`;
 
   if (!all.length) {
     $('center').innerHTML = `<div class="empty">표시할 기사가 없습니다.</div>`;

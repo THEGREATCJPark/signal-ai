@@ -543,14 +543,17 @@ def _run_merge_round(candidates, existing_finals, sched, round_num, short_to_ful
     LOG(f"    → {len(finals)} finals, {len(discards)} discards")
     return {"final": finals, "discard": discards}
 
-def merge_candidates(candidates, sched, rounds=MERGE_ROUNDS):
-    """Merge+coverage-patch 루프. candidates → final article objects (placement=None)."""
+def merge_candidates(candidates, sched, rounds=MERGE_ROUNDS, preserve_ids=None):
+    """Merge+coverage-patch 루프. candidates → final article objects.
+
+    preserve_ids: 이 id들이 merged_from에 나오면 id/created_at/placement/placed_at 유지 (쌓기)."""
     if not candidates:
         return []
     short_to_full = {c["id"].split("-")[-1]: c["id"] for c in candidates}
     by_id = {c["id"]: c for c in candidates}
+    preserve = set(preserve_ids or [])
     now = datetime.now(KST)
-    LOG(f"merge_candidates: {len(candidates)} inputs, up to {rounds} rounds")
+    LOG(f"merge_candidates: {len(candidates)} inputs ({len(preserve)} preserve), up to {rounds} rounds")
 
     finals_raw = []
     discards = set()
@@ -573,22 +576,43 @@ def merge_candidates(candidates, sched, rounds=MERGE_ROUNDS):
         for f in r["final"]:
             mentioned |= set(f["merged_from"])
 
-    # Convert to article dicts with new ids + created_at from sources
+    # Convert to article dicts. 기존 id가 merged_from에 있으면 id/created_at/placement/placed_at 유지.
     result = []
+    used_existing_ids = set()
     for i, f in enumerate(finals_raw):
-        src_dates = [by_id[mid]["created_at"] for mid in f.get("merged_from", []) if mid in by_id and by_id[mid].get("created_at")]
-        created = max(src_dates) if src_dates else now.isoformat()
-        result.append({
-            "id": f"art-{now.strftime('%Y%m%d%H%M')}-m{i+1:02d}",
-            "headline": f["headline"],
-            "body": f["body"],
-            "created_at": created,
-            "placement": None,
-            "placed_at": now.isoformat(),
-            "merged_from": f.get("merged_from", []),
-        })
+        mf = f.get("merged_from", [])
+        # 기존 id 중 merged_from에 포함된 것 (아직 다른 final에 쓰이지 않은 것만)
+        existing_refs = [x for x in mf if x in preserve and x not in used_existing_ids]
+        if existing_refs:
+            # 가장 오래된(=원조) 기존 id를 승계
+            anchor = min(existing_refs, key=lambda eid: by_id[eid].get("created_at", now.isoformat()))
+            used_existing_ids.add(anchor)
+            src = by_id[anchor]
+            result.append({
+                "id": anchor,
+                "headline": f["headline"],
+                "body": f["body"],
+                "created_at": src.get("created_at", now.isoformat()),
+                "placement": src.get("placement"),  # 유지 (classify에서 재검토)
+                "placed_at": src.get("placed_at", now.isoformat()),
+                "merged_from": mf,
+            })
+        else:
+            # 신규 기사
+            src_dates = [by_id[mid].get("created_at") for mid in mf if mid in by_id and by_id[mid].get("created_at")]
+            created = max([d for d in src_dates if d]) if src_dates else now.isoformat()
+            result.append({
+                "id": f"art-{now.strftime('%Y%m%d%H%M')}-m{i+1:02d}",
+                "headline": f["headline"],
+                "body": f["body"],
+                "created_at": created,
+                "placement": None,
+                "placed_at": now.isoformat(),
+                "merged_from": mf,
+            })
     still_unref = [c["id"] for c in candidates if c["id"] not in mentioned and c["id"] not in discards]
-    LOG(f"  final: {len(result)} articles, {len(discards)} discards, {len(still_unref)} default-dropped")
+    LOG(f"  final: {len(result)} articles, {len(discards)} discards, {len(still_unref)} default-dropped "
+        f"(preserved {len(used_existing_ids)} existing ids)")
     return result
 
 def main():
@@ -671,20 +695,19 @@ def main():
     cache_path.write_text(json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
     LOG(f"cached {len(new_articles)} (pre-merge) → {cache_path}")
 
-    # Merge loop: existing active pool + new candidates 합쳐서 merge (크면 retrieval 모드로 fallback)
+    # Merge loop: existing active pool + new candidates 합쳐서 merge. 기존 id는 유지 (쌓기).
     if new_articles:
         active = state["articles"]
+        preserve_ids = {a["id"] for a in active}
         combined = active + new_articles
         if len(combined) <= ACTIVE_POOL_LIMIT:
             LOG(f"merge: existing({len(active)}) + new({len(new_articles)}) = {len(combined)}")
-            merged = merge_candidates(combined, sched, rounds=MERGE_ROUNDS)
-            # existing pool consumed by merge — reset state; merged articles are now authoritative
+            merged = merge_candidates(combined, sched, rounds=MERGE_ROUNDS, preserve_ids=preserve_ids)
+            # merged에 기존 id 승계된 것 + 신규 — 이걸로 state 교체 (classify에서 재분류)
             state["articles"] = []
         else:
-            # TODO: retrieval 모드 — 각 new마다 키워드/임베딩으로 기존 top-K 찾아서 그것만 merge
             LOG(f"pool too large ({len(combined)} > {ACTIVE_POOL_LIMIT}), merging new-only (retrieval TODO)")
             merged = merge_candidates(new_articles, sched, rounds=MERGE_ROUNDS)
-            # existing 그대로 둠. new merged articles은 추가됨.
         new_articles = merged
         (ROOT / "data" / "merged_articles_cache.json").write_text(
             json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -702,10 +725,7 @@ def _classify_and_save(state, new_articles, now, sched):
     if before != len(state["articles"]):
         LOG(f"expired {before - len(state['articles'])} old articles")
 
-    # ensure new articles have placement=None and correct ids
-    for i, a in enumerate(new_articles):
-        a["placement"] = None
-
+    # 주의: placement를 강제 None으로 리셋하지 않음 (merge가 기존 id 승계한 경우 placement 유지)
     if not new_articles:
         LOG("no new articles — keeping placements")
     else:

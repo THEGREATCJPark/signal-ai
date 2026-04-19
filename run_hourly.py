@@ -23,7 +23,7 @@ import requests
 
 ROOT = Path(__file__).parent
 ARTICLES_PATH = ROOT / "docs" / "articles.json"
-MODEL = "gemini-2.5-flash"
+MODEL = "gemma-4-26b-a4b-it"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 KST = timezone(timedelta(hours=9))
 CHANNEL_ID = "1365049274068631644"
@@ -74,6 +74,9 @@ def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False):
     gen_cfg = {"temperature": temp, "maxOutputTokens": max_tok}
     if json_mode:
         gen_cfg["responseMimeType"] = "application/json"
+    # Thinking Burn 방지: Gemma는 thinkingLevel=minimal, Gemini는 high
+    is_gemma = "gemma" in MODEL.lower()
+    gen_cfg["thinkingConfig"] = {"thinkingLevel": "minimal" if is_gemma else "high"}
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": gen_cfg,
@@ -91,7 +94,14 @@ def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False):
         if not r.ok:
             LOG(f"  err {r.status_code}: {r.text[:150]}"); time.sleep(10); continue
         try:
-            return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            parts = r.json()["candidates"][0]["content"]["parts"]
+            # Gemma는 thought=True 블록을 먼저 반환 — 실제 답변 part만 골라냄
+            for p in parts:
+                if p.get("thought"): continue
+                t = p.get("text", "")
+                if t: return t
+            # 모든 part가 thought거나 빈 경우
+            time.sleep(3); continue
         except Exception:
             time.sleep(3); continue
     raise RuntimeError("API failed after 20 attempts")

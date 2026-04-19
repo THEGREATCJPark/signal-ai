@@ -114,6 +114,20 @@
   .badge.top { background: var(--accent); color: white; }
   .badge.rumor { background: #f97316; color: white; }
   .badge.trust-low { background: transparent; color: var(--ink-4); border: 1px solid var(--rule-soft); }
+
+  /* 날짜 구분선 */
+  .date-divider {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-2);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 24px 0 10px;
+    border-top: 2px solid var(--ink);
+    margin-top: 18px;
+  }
+  .date-divider:first-child { margin-top: 0; padding-top: 4px; border-top: none; }
   .badge.main { background: var(--ink); color: var(--paper); }
   .badge.side { background: transparent; color: var(--ink-3); border: 1px solid var(--rule-soft); }
   .entry .content h3 {
@@ -290,11 +304,25 @@
       $('list').innerHTML = `<div class="empty">해당하는 기사가 없습니다.</div>`;
       return;
     }
-    $('list').innerHTML = rows.map(a => {
+    // 날짜 구분선 삽입 (created_at 기준, 날짜 바뀔 때마다)
+    function dateKey(iso) {
+      try {
+        const d = new Date(iso);
+        return d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+      } catch { return iso; }
+    }
+    let prevKey = null;
+    const parts = [];
+    rows.forEach(a => {
+      const k = dateKey(a.created_at);
+      if (k !== prevKey) {
+        parts.push(`<div class="date-divider">${esc(k)}</div>`);
+        prevKey = k;
+      }
       const tags = [];
       if (a.category === 'rumor') tags.push('<span class="badge rumor">찌라시</span>');
       if (a.trust === 'low') tags.push('<span class="badge trust-low">낮은 신뢰</span>');
-      return `
+      parts.push(`
       <article class="entry" data-id="${esc(a.id)}">
         <div class="when">${fmtDT(a.created_at)}</div>
         <span class="badge ${esc(a.placement || 'side')}">${esc((a.placement || 'side').toUpperCase())}</span>
@@ -302,8 +330,9 @@
           <h3>${esc(a.headline)} ${tags.join(' ')}</h3>
           <p>${esc(excerpt(a.body))}</p>
         </div>
-      </article>
-    `;}).join('');
+      </article>`);
+    });
+    $('list').innerHTML = parts.join('');
     document.querySelectorAll('[data-id]').forEach(el => {
       el.addEventListener('click', () => openReader(el.dataset.id));
     });

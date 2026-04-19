@@ -191,6 +191,24 @@
     background: var(--rule-soft);
   }
 
+  /* ── Tag badges ── */
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 2px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .tag.rumor { background: #f97316; color: white; }
+  .tag.news { display: none; }  /* news는 기본이라 표시 안 함 */
+  .tag.trust-low { background: transparent; color: var(--ink-4); border: 1px solid var(--rule-soft); }
+  .tag.trust-high { display: none; }  /* high는 기본 표시 안 함 */
+
   /* ── Hero (TOP) ── */
   .hero {
     padding: 4px 0 40px;
@@ -553,6 +571,16 @@
   const main = byPlacement('main');
   const side = byPlacement('side');
 
+  // Tag badge renderer
+  function tagBadges(a) {
+    const cat = a.category || '';
+    const trust = a.trust || '';
+    let out = '';
+    if (cat === 'rumor') out += '<span class="tag rumor">찌라시</span>';
+    if (trust === 'low') out += '<span class="tag trust-low">낮은 신뢰</span>';
+    return out;
+  }
+
   // ── Center render ──
   let html = '';
   if (top[0]) {
@@ -560,7 +588,7 @@
     html += `
       <div class="section-label"><span>TOP STORY</span></div>
       <article class="hero" data-id="${esc(t.id)}">
-        <div class="kicker">LEAD</div>
+        <div class="kicker">LEAD ${tagBadges(t)}</div>
         <h2>${esc(t.headline)}</h2>
         <p class="lede">${esc(excerpt(t.body, 240))}</p>
         <div class="read-more">Read the full story</div>
@@ -572,7 +600,7 @@
     main.forEach((a, i) => {
       html += `
         <article class="card" data-id="${esc(a.id)}">
-          <div class="num">No. ${String(i + 1).padStart(2, '0')}</div>
+          <div class="num">No. ${String(i + 1).padStart(2, '0')} ${tagBadges(a)}</div>
           <h3>${esc(a.headline)}</h3>
           <p>${esc(excerpt(a.body, 180))}</p>
         </article>
@@ -590,7 +618,7 @@
     const snip = withSnip ? `<div class="snip">${esc(excerpt(a.body, 120))}</div>` : '';
     return `
       <div class="side-item" data-id="${esc(a.id)}">
-        <div class="num">No. ${String(n).padStart(2, '0')}</div>
+        <div class="num">No. ${String(n).padStart(2, '0')} ${tagBadges(a)}</div>
         <div class="t">${esc(a.headline)}</div>
         ${snip}
       </div>

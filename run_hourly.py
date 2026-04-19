@@ -152,8 +152,13 @@ def parse_chunk_articles(text):
                 if not isinstance(a, dict): continue
                 hl = str(a.get("headline", "")).strip().strip('"\'')
                 bd = str(a.get("body", "")).strip().strip('"\'')
-                if len(hl) > 4 and len(bd) > 40:
-                    out.append({"headline": hl, "body": bd})
+                if len(hl) <= 4 or len(bd) <= 40: continue
+                # 보수적 default: 태그 누락/잘못된 값이면 rumor/low
+                cat = str(a.get("category", "")).strip().lower()
+                if cat not in ("news", "rumor"): cat = "rumor"
+                trust = str(a.get("trust", "")).strip().lower()
+                if trust not in ("high", "low"): trust = "low"
+                out.append({"headline": hl, "body": bd, "category": cat, "trust": trust})
             return out
     return []
 
@@ -276,21 +281,27 @@ def chunk_by_messages(text: str, max_chars: int = CHUNK_MAX_CHARS) -> list[str]:
 
 def prompt_scan_chunk(chunk: str, titles: list[str]) -> str:
     titles_block = "\n".join(f"- {t}" for t in titles) or "(없음)"
-    return f"""역할: AI 뉴스 에디터.
-과제: 아래 Discord 채팅에서 '이미 다룬 기사'에 없는 새로운 AI 소식을 골라 JSON으로만 출력.
+    return f"""역할: AI 뉴스 에디터. Discord 채팅에서 '새로운' AI 소식을 기사화하고, 각 기사에 category·trust 태그 부여.
 
-## 출력 규칙 (절대 엄수)
-- 오직 JSON 객체 하나만 출력. 다른 텍스트·분석·bullet·드래프트 절대 금지.
-- 응답 첫 문자는 `{{`, 마지막 문자는 `}}`.
-- 마크다운 코드펜스(```) 금지.
+## 출력 규칙
+- JSON 객체 하나만. 마크다운 코드펜스 금지. 첫 문자 `{{`, 마지막 `}}`.
 
 ## 스키마
-{{"articles": [{{"headline": "제목", "body": "본문"}}]}}
+{{"articles":[{{"headline":"제목","body":"본문","category":"news|rumor","trust":"high|low"}}]}}
 
+- **category**:
+  - "news" = 공식 발표/모델 카드/API 공개/블로그 등 공식 소스 근거 있는 소식
+  - "rumor" = 찌라시/루머/미확인 주장/개인 트윗만/스크린샷 유출/"~인 것 같다"
+- **trust**:
+  - "high" = 여러 소스 일관, 구체적 근거, 공식 출처 포함
+  - "low" = 단일 언급, 추측, 농담일 수도 있음, 애매함
+
+## 규칙
 - 새 소식 없으면: {{"articles": []}}
-- 본문: 한국어, 300~600자, 유저이름·닉네임 언급 금지, 채팅에 실제 나온 사실만, 지어내지 말 것.
-- 제목: 한국어, 간결, 구체적.
-- 같은 소식 중복 금지.
+- '이미 다룬 기사 제목'에 있는 소식은 재작성 금지
+- **찌라시도 빠짐없이 출력** (category=rumor 로 태그 붙여서)
+- 본문: 한국어 300~600자. 단정보단 "~라는 소식", "~라고 알려졌다" 같은 전언 형태 선호 (특히 rumor)
+- 유저이름·닉네임 언급 금지. 채팅에 실제 나온 내용만.
 
 ## 이미 다룬 기사 제목 (최근 {TITLES_FOR_DEDUP}개)
 {titles_block}
@@ -298,7 +309,7 @@ def prompt_scan_chunk(chunk: str, titles: list[str]) -> str:
 ## Discord 채팅 (이번 청크)
 {chunk}
 
-이제 JSON만 출력:"""
+JSON만 출력:"""
 
 
 def prompt_classify(active: list, new: list, decision_log: list) -> tuple[str, dict]:
@@ -468,6 +479,57 @@ def dedup_cluster(candidates, sched):
     kept = [c for c in candidates if c["id"] not in dropped]
     LOG(f"  → kept {len(kept)}, dropped {len(dropped)}")
     return kept, sorted(dropped)
+
+
+CROSS_DEDUP_PROMPT = """기존 활성 기사와 새 후보 기사를 비교해 **new 중 기존과 '같은 내용'인 것만** drop.
+'비슷해 보이지만 새 디테일이 있는' 기사는 keep (새 사실 추가, 시점 변화, 별도 측면).
+**제목/본문 재작성 금지** — 원본 id만 drop 결정.
+
+## 기존 활성 기사 (E prefix)
+{existing}
+
+## 새 후보 (N prefix)
+{new}
+
+## 출력 (JSON만)
+{{"drop_new": ["N-id", ...]}}
+
+같은 내용 없으면 {{"drop_new": []}}"""
+
+def cross_existing_dedup(new_candidates, existing_articles, sched):
+    """new 중 기존과 '같은 내용'인 것만 drop. 비슷하지만 새 디테일은 keep."""
+    if not new_candidates or not existing_articles:
+        return list(new_candidates), []
+    def fmt_article(prefix, idx, a):
+        body = (a.get("body") or "").replace("\n", " ")[:220]
+        return f"{prefix}{idx} | {a['headline']} | {body}"
+    ex_lines = [fmt_article("E", i+1, a) for i, a in enumerate(existing_articles)]
+    nw_lines = [fmt_article("N", i+1, a) for i, a in enumerate(new_candidates)]
+    prompt = CROSS_DEDUP_PROMPT.format(existing="\n".join(ex_lines), new="\n".join(nw_lines))
+    LOG(f"cross_existing_dedup: {len(existing_articles)} existing vs {len(new_candidates)} new, prompt {len(prompt):,} chars")
+
+    raw = call_gemma(prompt, sched, max_tok=4096, temp=0.2, json_mode=True)
+    s = raw.strip()
+    s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
+    start = s.find('{'); end = s.rfind('}')
+    drop_new = set()
+    try:
+        if start != -1 and end > start:
+            obj = json.loads(s[start:end+1])
+            for did in obj.get("drop_new", []) or []:
+                did = str(did).strip().strip('"\'').upper()
+                # N5 → new_candidates[4]
+                m = re.match(r'N0*(\d+)$', did)
+                if m:
+                    idx = int(m.group(1)) - 1
+                    if 0 <= idx < len(new_candidates):
+                        drop_new.add(new_candidates[idx]["id"])
+    except Exception as e:
+        LOG(f"  cross dedup parse fail: {e}")
+        return list(new_candidates), []
+    kept = [c for c in new_candidates if c["id"] not in drop_new]
+    LOG(f"  → kept {len(kept)} new (dropped {len(drop_new)} as duplicates of existing)")
+    return kept, sorted(drop_new)
 
 
 # ── Merge loop (consolidation + coverage-patch) ─────────────────
@@ -746,6 +808,8 @@ def main():
                 "id": new_id(now, len(new_articles) + 1),
                 "headline": a["headline"],
                 "body": a["body"],
+                "category": a.get("category", "rumor"),
+                "trust": a.get("trust", "low"),
                 "created_at": now.isoformat(),
                 "placement": None,
                 "placed_at": now.isoformat(),
@@ -769,14 +833,17 @@ def main():
     cache_path.write_text(json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
     LOG(f"cached {len(new_articles)} (pre-merge) → {cache_path}")
 
-    # Dedup: 새 후보 중 중복 클러스터만 정리 (body/headline 재작성 금지).
-    # 기존 기사는 그대로 쌓임. 모든 살아남은 new 후보는 classify 거쳐 TOP/MAIN/SIDE 배치됨.
+    # Step A: intra-batch dedup (new 끼리 중복 제거, body 재작성 X)
     if new_articles:
-        new_articles, dropped = dedup_cluster(new_articles, sched)
+        new_articles, _ = dedup_cluster(new_articles, sched)
         (ROOT / "data" / "deduped_cache.json").write_text(
             json.dumps(new_articles, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Classify: 기존 active + new (모두 원본 body/headline 유지) → TOP/MAIN/SIDE 배치
+    # Step B: cross-existing dedup (new vs 기존 활성 기사. 같은 내용만 drop)
+    if new_articles and state.get("articles"):
+        new_articles, _ = cross_existing_dedup(new_articles, state["articles"], sched)
+
+    # Step C: classify (기존 + new 모두 TOP/MAIN/SIDE 배치)
     _classify_and_save(state, new_articles, now, sched)
 
 

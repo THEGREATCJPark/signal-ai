@@ -1,0 +1,170 @@
+[
+  {
+    "verdict": "parse_error",
+    "confidence": 0.0,
+    "evidence_quote": "",
+    "reason": "Expecting value: line 1 column 1 (char 0)",
+    "raw": "{\n  \"verdict\": \"speculation\",",
+    "id": "art-202604170339-114",
+    "headline": "클로드 오푸스 4.7 출시, 성능 논란 및 제한적 사용 정책으로 사용자 불만 증폭",
+    "placement": "side",
+    "keywords": [
+      "있습니다",
+      "보였다는",
+      "클로드",
+      "오푸스",
+      "4.7",
+      "사용자",
+      "새로운",
+      "4.6"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "parse_error",
+    "confidence": 0.0,
+    "evidence_quote": "",
+    "reason": "Expecting value: line 1 column 1 (char 0)",
+    "raw": "{\n  \"verdict\": \"speculation",
+    "id": "art-202604170339-111",
+    "headline": "Anthropic, Claude Opus 4.7 출시: 향상된 성능과 새로운 기능",
+    "placement": "side",
+    "keywords": [
+      "Claude",
+      "Opus",
+      "4.7",
+      "향상된",
+      "새로운",
+      "기능",
+      "최신",
+      "Anthropic이"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "parse_error",
+    "confidence": 0.0,
+    "evidence_quote": "",
+    "reason": "Expecting value: line 1 column 1 (char 0)",
+    "raw": "{\n  \"verdict\": \"partial",
+    "id": "art-202604170339-103",
+    "headline": "Claude Opus 4.7, Google Cloud Vertex AI에서 포착되며 출시 임박 기대감 증폭",
+    "placement": "side",
+    "keywords": [
+      "4.7",
+      "Claude",
+      "Vertex",
+      "Opus",
+      "AI",
+      "Google",
+      "Cloud",
+      "있다"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "parse_error",
+    "confidence": 0.0,
+    "evidence_quote": "",
+    "reason": "Expecting value: line 1 column 1 (char 0)",
+    "raw": "{\n  \"verdict\": \"speculation\",",
+    "id": "art-202604170339-83",
+    "headline": "Anthropic, 차세대 'Opus 4.7' 모델과 AI 디자인 도구 개발 박차",
+    "placement": "side",
+    "keywords": [
+      "AI",
+      "디자인",
+      "Opus",
+      "4.7",
+      "것으로",
+      "차세대",
+      "개발",
+      "함께"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "parse_error",
+    "confidence": 0.0,
+    "evidence_quote": "",
+    "reason": "Expecting value: line 1 column 1 (char 0)",
+    "raw": "{\n  \"verdict\": \"speculation\",",
+    "id": "art-202604170339-98",
+    "headline": "클로드 오푸스 4.7, 100만 토큰 컨텍스트 윈도우와 향상된 성능으로 출시 임박",
+    "placement": "main",
+    "keywords": [
+      "클로드",
+      "오푸스",
+      "컨텍스트",
+      "4.7",
+      "토큰",
+      "작업",
+      "GPT-5.4",
+      "GDPval"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "parse_error",
+    "confidence": 0.0,
+    "evidence_quote": "",
+    "reason": "Expecting value: line 1 column 1 (char 0)",
+    "raw": "{\n  \"verdict\": \"unsupported\",",
+    "id": "art-202604170339-117",
+    "headline": "Claude Opus 4.7, Droid 플랫폼에 출시 및 50% 할인 제공",
+    "placement": "side",
+    "keywords": [
+      "Droid",
+      "Claude",
+      "Opus",
+      "4.7",
+      "플랫폼에",
+      "최신",
+      "AI",
+      "더욱"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "parse_error",
+    "confidence": 0.0,
+    "evidence_quote": "",
+    "reason": "Expecting value: line 1 column 1 (char 0)",
+    "raw": "{\n  \"verdict\": \"",
+    "id": "art-202604170339-119",
+    "headline": "Claude Opus 4.7, 새로운 토크나이저 도입으로 토큰 소비량 50% 증가",
+    "placement": "side",
+    "keywords": [
+      "Claude",
+      "Opus",
+      "4.7",
+      "것으로",
+      "새로운",
+      "토큰",
+      "사용",
+      "Anthropic의"
+    ],
+    "snippets_len": 6016
+  },
+  {
+    "verdict": "parse_error",
+    "confidence": 0.0,
+    "evidence_quote": "",
+    "reason": "Expecting value: line 1 column 1 (char 0)",
+    "raw": "{\n  \"verdict\": \"un",
+    "id": "art-202604170339-62",
+    "headline": "새로운 AI 모델 'Deepseek 6.7' 공개, AI 커뮤니티 관심 집중",
+    "placement": "side",
+    "keywords": [
+      "AI",
+      "새로운",
+      "Deepseek",
+      "6.7",
+      "있다",
+      "대한",
+      "Discord",
+      "커뮤니티의"
+    ],
+    "snippets_len": 6016
+  }
+]

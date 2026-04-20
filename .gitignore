@@ -1,0 +1,31 @@
+# Sensitive
+discord_export_config.env
+*.env
+!.env.example
+memory/
+tasks/
+
+# Large exports
+discord_3day_export.txt
+*.raw.txt
+backups/
+
+# State files
+digest_state.json
+*.bak
+
+# System
+.DS_Store
+__pycache__/
+*.pyc
+
+# Python
+venv/
+.venv/
+
+# Crawled data (regenerated each run)
+data/crawled/
+data/*.json
+data/*.txt
+data/signal.db
+data/signal.db-*

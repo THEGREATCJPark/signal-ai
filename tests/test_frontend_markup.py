@@ -115,6 +115,20 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("overflow-wrap: break-word;", title)
         self.assertIn("text-wrap: balance;", title)
 
+    def test_mobile_physics_lab_shows_all_four_candidates_without_side_scroll(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]
+        mobile_stage = css_block(mobile, ".daily-ribbon-stage {")
+        mobile_grid = css_block(mobile, ".physics-lab-grid {")
+        mobile_card = css_block(mobile, ".physics-engine-card {")
+        self.assertIn("height: 390px;", mobile_stage)
+        self.assertIn("display: grid;", mobile_grid)
+        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", mobile_grid)
+        self.assertNotIn("overflow-x: auto;", mobile_grid)
+        self.assertNotIn("scroll-snap-type:", mobile_grid)
+        self.assertIn("min-height: 142px;", mobile_card)
+        self.assertIn("scroll-snap-align: none;", mobile_card)
+
     def test_daily_summary_close_uses_pointerdown_on_mobile(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         self.assertIn("function closeSummarySheet(e)", html)

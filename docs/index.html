@@ -588,23 +588,20 @@
       left: 8px;
       right: auto;
       width: calc(100vw - 16px);
-      height: 260px;
+      height: 390px;
     }
     .physics-lab-panel { padding: 10px; }
     .physics-lab-head { display: block; }
     .physics-lab-note { margin-top: 5px; }
     .physics-lab-grid {
-      display: flex;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
-      overflow-x: auto;
-      padding-bottom: 2px;
-      scroll-snap-type: x proximity;
-      -webkit-overflow-scrolling: touch;
+      padding-bottom: 0;
     }
     .physics-engine-card {
-      flex: 0 0 190px;
-      min-height: 158px;
-      scroll-snap-align: start;
+      min-height: 142px;
+      scroll-snap-align: none;
     }
     .summary-ribbon-pull {
       width: 44px;

@@ -25,7 +25,7 @@ ARTICLES_PATH = ROOT / "docs" / "articles.json"
 PAGES_ARTICLES_PATH = ROOT / "articles.json"
 EXPORTS_ARTICLES_DIR = ROOT / "exports" / "articles"
 JOURNAL_NAME = "First Light AI"
-DAILY_SUMMARY_TITLE = "Daily Don't Die Summary"
+DAILY_SUMMARY_FALLBACK_TITLE = "오늘의 AI 업데이트"
 PUBLISH_BRANCH = os.environ.get("FIRST_LIGHT_PUBLISH_BRANCH", "main")
 MODEL = "gemma-4-26b-a4b-it"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -278,11 +278,19 @@ def publish_after_run(export_path: Path, run_at: datetime) -> None:
     except Exception as e:
         LOG(f"pages publish failed: {e}")
 
-def build_daily_summary_payload(body: str, new_articles: list, run_at: datetime) -> dict:
+def fallback_daily_summary_title(new_articles: list) -> str:
+    if not new_articles:
+        return "새 업데이트 없이 이어지는 하루"
+    first = str(new_articles[0].get("headline") or "").strip()
+    if first:
+        return first[:42].rstrip(" .,…") + ("…" if len(first) > 42 else "")
+    return DAILY_SUMMARY_FALLBACK_TITLE
+
+def build_daily_summary_payload(body: str, new_articles: list, run_at: datetime, title: str | None = None) -> dict:
     date_key = run_at.astimezone(KST).date().isoformat()
     return {
         "schema_version": 1,
-        "title": DAILY_SUMMARY_TITLE,
+        "title": str(title or fallback_daily_summary_title(new_articles)).strip() or DAILY_SUMMARY_FALLBACK_TITLE,
         "date": date_key,
         "generated_at": run_at.isoformat(),
         "article_count": len(new_articles),
@@ -316,10 +324,9 @@ def prompt_daily_summary(new_articles: list) -> str:
     return f"""역할: First Light AI 데일리 에디터.
 오늘 새로 업데이트된 청크 처리 결과의 기사 본문 전체를 읽고, 하나의 자세한 데일리 요약글로 다시 쓰세요.
 
-## 제목
-{DAILY_SUMMARY_TITLE}
-
 ## 작성 규칙
+- 오늘 흐름을 대표하는 한국어 제목을 직접 붙일 것.
+- 제목은 18~42자, 과장 없이 핵심 축을 압축.
 - 한국어 본문 1200~2200자.
 - 입력된 각 기사 본문 전체를 근거로 사용하고, 중요한 디테일을 버리지 말 것.
 - 기사 목록식 요약이 아니라 하루 흐름을 하나의 긴 글처럼 연결.
@@ -329,23 +336,26 @@ def prompt_daily_summary(new_articles: list) -> str:
 - 출력은 JSON 객체 하나만.
 
 ## 스키마
-{{"body":"요약 본문"}}
+{{"title":"오늘 흐름을 대표하는 한국어 제목","body":"요약 본문"}}
 
 ## 오늘 새 기사
 {chr(10).join(lines)}
 
 JSON만 출력:"""
 
-def parse_daily_summary_body(text: str) -> str:
+def parse_daily_summary_response(text: str) -> dict:
     s = text.strip()
     s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
     start = s.find('{'); end = s.rfind('}')
     if start != -1 and end > start:
         obj = json.loads(s[start:end+1])
+        title = str(obj.get("title") or "").strip()
         body = str(obj.get("body") or obj.get("summary") or "").strip()
-        if body:
-            return body
-    return s.strip()
+        return {"title": title, "body": body}
+    return {"title": "", "body": s.strip()}
+
+def parse_daily_summary_body(text: str) -> str:
+    return parse_daily_summary_response(text)["body"]
 
 def generate_daily_summary(new_articles: list, run_at: datetime, sched) -> dict:
     if not new_articles or sched is None:
@@ -353,13 +363,17 @@ def generate_daily_summary(new_articles: list, run_at: datetime, sched) -> dict:
     prompt = prompt_daily_summary(new_articles)
     try:
         raw = call_gemma(prompt, sched, max_tok=4096, temp=0.35, json_mode=True)
-        body = parse_daily_summary_body(raw)
+        parsed = parse_daily_summary_response(raw)
+        title = parsed["title"]
+        body = parsed["body"]
         if len(body) < 40:
             body = fallback_daily_summary_body(new_articles)
+            title = fallback_daily_summary_title(new_articles)
     except Exception as e:
         LOG(f"daily summary fallback: {e}")
         body = fallback_daily_summary_body(new_articles)
-    return build_daily_summary_payload(body, new_articles, run_at)
+        title = fallback_daily_summary_title(new_articles)
+    return build_daily_summary_payload(body, new_articles, run_at, title=title)
 
 def write_daily_new_articles_export(new_articles: list, run_at: datetime, daily_summary: dict | None = None) -> Path:
     """Write the per-day new-article JSON used by downstream local pipelines."""

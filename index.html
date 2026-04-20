@@ -74,6 +74,8 @@
 
   /* ── Masthead ── */
   .masthead {
+    position: relative;
+    overflow: visible;
     text-align: center;
     padding: 48px 24px 28px;
     border-bottom: 3px double var(--rule);
@@ -260,15 +262,16 @@
 
   /* ── Daily pull-ribbon ── */
   .daily-ribbon-stage {
-    position: fixed;
-    top: 168px;
-    right: 18px;
+    position: absolute;
+    top: 56px;
+    right: 20px;
     width: 76px;
     height: 312px;
     margin: 0;
     padding: 0;
     z-index: 60;
     pointer-events: none;
+    perspective: 760px;
   }
   .daily-ribbon-stage[hidden] { display: none; }
   .summary-physics {
@@ -308,6 +311,8 @@
     --ribbon-x: 0px;
     --ribbon-y: 26px;
     --ribbon-tilt: 0deg;
+    --ribbon-fold-x: 0deg;
+    --ribbon-fold-y: 0deg;
     position: absolute;
     left: 50%;
     top: 0;
@@ -317,6 +322,7 @@
     border: 1px solid var(--rule);
     border-radius: 6px;
     background:
+      linear-gradient(115deg, rgba(255,255,255,.58) 0 14%, transparent 14% 34%, rgba(20,20,20,.08) 34% 38%, transparent 38% 64%, rgba(255,255,255,.36) 64% 76%, rgba(20,20,20,.07) 76% 82%, transparent 82%),
       linear-gradient(180deg, rgba(185,28,28,.14), transparent 20%, rgba(20,20,20,.05) 50%, transparent 82%, rgba(185,28,28,.18)),
       repeating-linear-gradient(180deg, rgba(20,20,20,.035) 0 1px, transparent 1px 7px),
       var(--paper);
@@ -329,7 +335,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transform: translate(calc(-50% + var(--ribbon-x)), var(--ribbon-y)) rotate(var(--ribbon-tilt));
+    transform-style: preserve-3d;
+    transform: translate(calc(-50% + var(--ribbon-x)), var(--ribbon-y)) rotate(var(--ribbon-tilt)) rotateX(var(--ribbon-fold-x)) rotateY(var(--ribbon-fold-y));
     transform-origin: 50% -40px;
     z-index: 62;
   }
@@ -343,6 +350,10 @@
     inset: 12px 9px 38px;
     border-left: 1px solid rgba(20,20,20,.22);
     border-right: 1px solid rgba(20,20,20,.22);
+    background:
+      radial-gradient(ellipse at 30% 18%, rgba(255,255,255,.46), transparent 34%),
+      linear-gradient(90deg, rgba(20,20,20,.08), transparent 18%, rgba(255,255,255,.18) 42%, rgba(20,20,20,.07) 72%, transparent);
+    transform: translateZ(1px);
   }
   .summary-ribbon-pull::after {
     left: 10px;
@@ -364,30 +375,16 @@
     writing-mode: vertical-rl;
     text-orientation: mixed;
     font-family: var(--mono);
-    font-size: .76rem;
+    font-size: .78rem;
     font-weight: 800;
     letter-spacing: .14em;
-    text-transform: uppercase;
     line-height: 1;
     color: var(--ink);
-    margin: 16px 0 42px;
+    margin: 16px 0 22px;
     position: relative;
     z-index: 1;
   }
-  .ribbon-meta {
-    display: block;
-    position: absolute;
-    bottom: 42px;
-    left: 50%;
-    transform: translateX(-50%);
-    writing-mode: vertical-rl;
-    font-family: var(--mono);
-    font-size: 8px;
-    letter-spacing: .08em;
-    color: var(--ink-4);
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
+  .ribbon-meta { display: none; }
   .ribbon-handle {
     position: absolute;
     left: 50%;
@@ -497,7 +494,7 @@
   }
   @media (max-width: 720px) {
     .daily-ribbon-stage {
-      top: 146px;
+      top: 84px;
       right: -6px;
       width: 56px;
       height: 242px;
@@ -510,10 +507,9 @@
       min-height: 144px;
     }
     .ribbon-line {
-      font-size: .68rem;
-      margin-bottom: 34px;
+      font-size: .7rem;
+      margin-bottom: 18px;
     }
-    .ribbon-meta { display: none; }
     .ribbon-handle {
       width: 38px;
       height: 24px;
@@ -743,9 +739,8 @@
     <span class="dot">·</span>
     <span>VOL. 001</span>
   </div>
+  <section class="daily-ribbon-stage" id="daily-summary-stage" hidden></section>
 </header>
-
-<section class="daily-ribbon-stage" id="daily-summary-stage" hidden></section>
 
 <div class="layout">
   <aside class="side side-left" id="side-left"></aside>
@@ -836,8 +831,7 @@
   function renderDailyRibbon(summary) {
     const stage = $('daily-summary-stage');
     if (!stage || !summary || !summary.body) return;
-    const title = summary.title || "Daily Don't Die Summary";
-    const count = Number(summary.article_count || 0);
+    const title = summary.title || "오늘의 AI 업데이트";
     stage.hidden = false;
     stage.innerHTML = `
       <div class="summary-physics" id="summary-physics">
@@ -852,17 +846,17 @@
           <circle class="summary-bead" data-bead="1" r="4"></circle>
           <circle class="summary-bead" data-bead="2" r="4"></circle>
         </svg>
-        <button class="summary-ribbon-pull" id="summary-ribbon-pull" type="button" aria-expanded="false" aria-controls="summary-sheet" aria-label="${esc(title)} 열기">
+        <button class="summary-ribbon-pull" id="summary-ribbon-pull" type="button" aria-expanded="false" aria-controls="summary-sheet" aria-label="Don't Die. 요약 열기">
           <span class="ribbon-title">${esc(title)}</span>
-          <span class="ribbon-line">Daily Summary</span>
-          <span class="ribbon-meta">${esc(String(count))} updates</span>
+          <span class="ribbon-line">Don't Die.</span>
+          <span class="ribbon-meta" aria-hidden="true"></span>
           <span class="ribbon-handle">PULL</span>
         </button>
         <article class="summary-sheet" id="summary-sheet" aria-hidden="true">
           <div class="summary-sheet-head">
             <div>
-              <div class="summary-sheet-kicker">${esc(title)} · ${esc(summary.date || '')}</div>
-              <h2 class="summary-sheet-title">오늘의 AI 흐름 전체 요약</h2>
+              <div class="summary-sheet-kicker">Don't Die. · ${esc(summary.date || '')}</div>
+              <h2 class="summary-sheet-title">${formatInlineText(title)}</h2>
             </div>
             <button class="summary-close" id="summary-close" type="button">접기</button>
           </div>
@@ -885,20 +879,23 @@
       x: 0, y: 26, vx: 0, vy: 0,
       targetX: 0, targetY: 26,
       dragging: false,
+      swinging: false,
+      swingAngle: 0,
+      swingVelocity: 0,
       open: false,
       startX: 0, startY: 0,
+      lastX: 0, lastY: 0,
       baseX: 0, baseY: 0,
       dragDistance: 0,
     };
     const collapsedY = 26;
     const openY = 78;
-    const pullLimit = 132;
-    const threshold = 82;
+    const pullLimit = 138;
+    const toggleThreshold = 116;
 
     function setOpen(next) {
       state.open = next;
       state.targetY = next ? openY : collapsedY;
-      state.targetX = 0;
       physics.classList.toggle('open', next);
       physics.classList.remove('primed');
       ribbon.setAttribute('aria-expanded', String(next));
@@ -927,16 +924,37 @@
       });
       ribbon.style.setProperty('--ribbon-x', `${state.x.toFixed(2)}px`);
       ribbon.style.setProperty('--ribbon-y', `${state.y.toFixed(2)}px`);
-      ribbon.style.setProperty('--ribbon-tilt', `${clamp(state.x * .035 + state.vy * .08, -7, 7).toFixed(2)}deg`);
+      ribbon.style.setProperty('--ribbon-tilt', `${clamp(state.x * .08 + state.vx * .18, -12, 12).toFixed(2)}deg`);
+      ribbon.style.setProperty('--ribbon-fold-x', `${clamp(state.y * .04 - 3, -3, 5).toFixed(2)}deg`);
+      ribbon.style.setProperty('--ribbon-fold-y', `${clamp(-state.x * .12, -8, 8).toFixed(2)}deg`);
+    }
+    function startPendulum(impulse) {
+      if (reduced) return;
+      state.swinging = true;
+      state.swingAngle = clamp(state.x / 38, -1.15, 1.15);
+      state.swingVelocity = clamp(impulse * .018, -0.24, 0.24);
     }
     function tick() {
       if (!state.dragging && !reduced) {
         state.vy += (state.targetY - state.y) * .115;
-        state.vx += (state.targetX - state.x) * .09;
         state.vy *= .74;
-        state.vx *= .76;
         state.y += state.vy;
-        state.x += state.vx;
+        if (state.swinging) {
+          state.swingVelocity += -state.swingAngle * .045;
+          state.swingVelocity *= .972;
+          state.swingAngle += state.swingVelocity;
+          const nextX = Math.sin(state.swingAngle) * 38;
+          state.vx = nextX - state.x;
+          state.x = nextX;
+          if (Math.abs(state.swingVelocity) < .0025 && Math.abs(state.swingAngle) < .018) {
+            state.swinging = false;
+            state.targetX = 0;
+          }
+        } else {
+          state.vx += (state.targetX - state.x) * .09;
+          state.vx *= .76;
+          state.x += state.vx;
+        }
       } else if (reduced) {
         state.y = state.targetY;
         state.x = state.targetX;
@@ -949,9 +967,12 @@
       state.dragging = true;
       state.startX = e.clientX;
       state.startY = e.clientY;
+      state.lastX = e.clientX;
+      state.lastY = e.clientY;
       state.baseX = state.x;
       state.baseY = state.y;
       state.dragDistance = 0;
+      state.swinging = false;
       ribbon.setPointerCapture(e.pointerId);
     });
     ribbon.addEventListener('pointermove', (e) => {
@@ -959,20 +980,23 @@
       const dx = e.clientX - state.startX;
       const dy = e.clientY - state.startY;
       state.dragDistance = Math.max(state.dragDistance, Math.hypot(dx, dy));
-        state.x = clamp(state.baseX + dx * .42, -34, 34);
+      state.x = clamp(state.baseX + dx * .58, -42, 42);
       state.y = clamp(state.baseY + dy, 8, pullLimit);
-      state.vx = 0;
-      state.vy = 0;
-      physics.classList.toggle('primed', !state.open && state.y > threshold);
+      state.vx = e.clientX - state.lastX;
+      state.vy = e.clientY - state.lastY;
+      state.lastX = e.clientX;
+      state.lastY = e.clientY;
+      physics.classList.toggle('primed', state.y > toggleThreshold);
       draw();
     });
     function endDrag(e) {
       if (!state.dragging) return;
       state.dragging = false;
       if (ribbon.hasPointerCapture(e.pointerId)) ribbon.releasePointerCapture(e.pointerId);
-      if (!state.open && state.y > threshold) setOpen(true);
-      else if (state.open && state.y < 70) setOpen(false);
+      const shouldToggle = state.y > toggleThreshold;
+      if (shouldToggle) setOpen(!state.open);
       else setOpen(state.open);
+      startPendulum(state.vx);
     }
     ribbon.addEventListener('pointerup', endDrag);
     ribbon.addEventListener('pointercancel', endDrag);

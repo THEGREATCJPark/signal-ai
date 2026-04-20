@@ -12,12 +12,17 @@ KST = timezone(timedelta(hours=9))
 
 
 class DailyExportsTest(unittest.TestCase):
-    def test_build_daily_summary_payload_uses_fixed_title_and_metadata(self):
+    def test_build_daily_summary_payload_uses_generated_title_and_metadata(self):
         run_at = datetime(2026, 4, 20, 8, 0, tzinfo=KST)
         articles = [{"id": "a1"}, {"id": "a2"}]
-        payload = run_hourly.build_daily_summary_payload("오늘의 AI 흐름입니다.", articles, run_at)
+        payload = run_hourly.build_daily_summary_payload(
+            "오늘의 AI 흐름입니다.",
+            articles,
+            run_at,
+            title="보안과 모델 경쟁이 겹친 하루",
+        )
         self.assertEqual(payload["schema_version"], 1)
-        self.assertEqual(payload["title"], "Daily Don't Die Summary")
+        self.assertEqual(payload["title"], "보안과 모델 경쟁이 겹친 하루")
         self.assertEqual(payload["date"], "2026-04-20")
         self.assertEqual(payload["generated_at"], run_at.isoformat())
         self.assertEqual(payload["article_count"], 2)
@@ -35,8 +40,17 @@ class DailyExportsTest(unittest.TestCase):
         ])
 
         self.assertIn("1200~2200자", prompt)
+        self.assertIn('"title":"오늘 흐름을 대표하는 한국어 제목"', prompt)
+        self.assertIn('"body":"요약 본문"', prompt)
         self.assertIn(long_body, prompt)
         self.assertIn("끝부분-반드시-포함", prompt)
+
+    def test_parse_daily_summary_response_reads_title_and_body(self):
+        parsed = run_hourly.parse_daily_summary_response(
+            '{"title":"모델 경쟁과 보안 경보가 겹친 하루","body":"오늘은 보안 이슈와 모델 루머가 함께 움직였습니다."}'
+        )
+        self.assertEqual(parsed["title"], "모델 경쟁과 보안 경보가 겹친 하루")
+        self.assertEqual(parsed["body"], "오늘은 보안 이슈와 모델 루머가 함께 움직였습니다.")
 
     def test_write_daily_new_articles_export_uses_date_folder_and_metadata(self):
         run_at = datetime(2026, 4, 20, 12, 0, tzinfo=KST)
@@ -51,7 +65,7 @@ class DailyExportsTest(unittest.TestCase):
                 "placement": "side",
             }
         ]
-        daily_summary = run_hourly.build_daily_summary_payload("하루 요약", articles, run_at)
+        daily_summary = run_hourly.build_daily_summary_payload("하루 요약", articles, run_at, title="하루 제목")
         with tempfile.TemporaryDirectory() as td:
             with patch.object(run_hourly, "EXPORTS_ARTICLES_DIR", Path(td)):
                 out = run_hourly.write_daily_new_articles_export(articles, run_at, daily_summary)
@@ -63,7 +77,7 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(payload["generated_at"], run_at.isoformat())
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["articles"][0]["headline"], "새 기사")
-        self.assertEqual(payload["daily_summary"]["title"], "Daily Don't Die Summary")
+        self.assertEqual(payload["daily_summary"]["title"], "하루 제목")
         self.assertEqual(payload["daily_summary"]["body"], "하루 요약")
 
     def test_write_daily_new_articles_export_writes_empty_run(self):
@@ -210,7 +224,12 @@ class DailyExportsTest(unittest.TestCase):
                 "placed_at": run_at.isoformat(),
             }
         ]
-        summary = run_hourly.build_daily_summary_payload("오늘은 새 모델 공개가 중심입니다.", new_articles, run_at)
+        summary = run_hourly.build_daily_summary_payload(
+            "오늘은 새 모델 공개가 중심입니다.",
+            new_articles,
+            run_at,
+            title="새 모델 공개가 중심이 된 하루",
+        )
         with tempfile.TemporaryDirectory() as td:
             with (
                 patch.object(run_hourly, "EXPORTS_ARTICLES_DIR", Path(td)),
@@ -221,7 +240,7 @@ class DailyExportsTest(unittest.TestCase):
             ):
                 run_hourly._classify_and_save(state, new_articles, run_at, sched=None)
 
-        self.assertEqual(state["daily_summary"]["title"], "Daily Don't Die Summary")
+        self.assertEqual(state["daily_summary"]["title"], "새 모델 공개가 중심이 된 하루")
         self.assertEqual(state["daily_summary"]["body"], "오늘은 새 모델 공개가 중심입니다.")
 
 

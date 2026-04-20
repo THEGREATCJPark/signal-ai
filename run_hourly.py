@@ -12,7 +12,7 @@
    - 규칙: TOP=1(또는 0), MAIN≤6, SIDE 무제한
    - 입력: 규칙 + 최근 3h 결정 로그 + 현재 기사(placement 포함) + 새 기사
    - 검증 실패 → 무한 재시도
-7) articles.json 저장 + build_gist.py 호출
+7) articles.json 저장 + build_gist.py 호출 + GitHub Pages 공개 산출물 푸시
 """
 from __future__ import annotations
 import argparse, json, os, re, subprocess, sys, time, threading, random
@@ -22,9 +22,11 @@ import requests
 
 ROOT = Path(__file__).parent
 ARTICLES_PATH = ROOT / "docs" / "articles.json"
+PAGES_ARTICLES_PATH = ROOT / "articles.json"
 EXPORTS_ARTICLES_DIR = ROOT / "exports" / "articles"
 JOURNAL_NAME = "First Light AI"
 DAILY_SUMMARY_TITLE = "Daily Don't Die Summary"
+PUBLISH_BRANCH = os.environ.get("FIRST_LIGHT_PUBLISH_BRANCH", "main")
 MODEL = "gemma-4-26b-a4b-it"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 KST = timezone(timedelta(hours=9))
@@ -221,7 +223,60 @@ def save_state(state):
     bak = ARTICLES_PATH.with_suffix(".json.bak")
     if ARTICLES_PATH.exists():
         bak.write_text(ARTICLES_PATH.read_text(encoding="utf-8"), encoding="utf-8")
-    ARTICLES_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    payload = json.dumps(state, ensure_ascii=False, indent=2)
+    ARTICLES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ARTICLES_PATH.write_text(payload, encoding="utf-8")
+    PAGES_ARTICLES_PATH.write_text(payload, encoding="utf-8")
+
+def git_relative(path: Path) -> str:
+    return str(Path(path).resolve().relative_to(ROOT.resolve()))
+
+def publish_public_artifacts(paths: list[Path], run_at: datetime) -> bool:
+    """Commit and push only public artifacts needed by GitHub Pages."""
+    rels = []
+    for path in paths:
+        p = Path(path)
+        if not p.exists():
+            continue
+        try:
+            rel = git_relative(p)
+        except ValueError:
+            continue
+        if rel not in rels:
+            rels.append(rel)
+    if not rels:
+        return False
+
+    add = subprocess.run(["git", "add", "--", *rels], capture_output=True, text=True)
+    if add.returncode != 0:
+        raise RuntimeError(f"git add failed: {add.stderr.strip()}")
+
+    diff = subprocess.run(["git", "diff", "--cached", "--quiet", "--", *rels], capture_output=True, text=True)
+    if diff.returncode == 0:
+        return False
+    if diff.returncode != 1:
+        raise RuntimeError(f"git diff failed: {diff.stderr.strip()}")
+
+    date_key = run_at.astimezone(KST).date().isoformat()
+    commit = subprocess.run(
+        ["git", "commit", "-m", f"chore: publish {JOURNAL_NAME} {date_key}", "--", *rels],
+        capture_output=True,
+        text=True,
+    )
+    if commit.returncode != 0:
+        raise RuntimeError(f"git commit failed: {commit.stderr.strip()}")
+
+    push = subprocess.run(["git", "push", "origin", f"HEAD:{PUBLISH_BRANCH}"], capture_output=True, text=True)
+    if push.returncode != 0:
+        raise RuntimeError(f"git push failed: {push.stderr.strip()}")
+    return True
+
+def publish_after_run(export_path: Path, run_at: datetime) -> None:
+    try:
+        changed = publish_public_artifacts([ARTICLES_PATH, PAGES_ARTICLES_PATH, export_path], run_at)
+        LOG("pages publish pushed" if changed else "pages publish skipped (no changes)")
+    except Exception as e:
+        LOG(f"pages publish failed: {e}")
 
 def build_daily_summary_payload(body: str, new_articles: list, run_at: datetime) -> dict:
     date_key = run_at.astimezone(KST).date().isoformat()
@@ -928,6 +983,7 @@ def main():
         export_path = write_daily_new_articles_export([], now, daily_summary)
         LOG(f"daily new-article export → {export_path}")
         subprocess.run(["python3", str(ROOT / "build_gist.py")], check=False)
+        publish_after_run(export_path, now)
         return
 
     chunks = chunk_by_messages(chat)
@@ -1068,6 +1124,7 @@ def _classify_and_save(state, new_articles, now, sched):
         LOG(r.stdout.strip().split("\n")[-1])
     else:
         LOG(f"gist push failed: {r.stderr[-300:]}")
+    publish_after_run(export_path, now)
 
 
 if __name__ == "__main__":

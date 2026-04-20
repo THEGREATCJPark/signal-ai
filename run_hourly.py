@@ -19,6 +19,7 @@ import argparse, json, os, re, subprocess, sys, time, threading, random
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import requests
+from db.articles import load_public_state, save_public_state
 
 ROOT = Path(__file__).parent
 ARTICLES_PATH = ROOT / "docs" / "articles.json"
@@ -186,14 +187,21 @@ def parse_placement_json(text):
 def new_id(now: datetime, n: int) -> str:
     return f"art-{now.strftime('%Y%m%d%H%M')}-{n:02d}"
 
-def load_state():
-    if not ARTICLES_PATH.exists():
-        return {
-            "schema_version": 2, "last_run_at": None,
-            "generated_at": datetime.now(KST).isoformat(),
-            "journal": JOURNAL_NAME, "model": MODEL, "articles": [], "decision_log": [],
-        }
-    data = json.loads(ARTICLES_PATH.read_text(encoding="utf-8"))
+def default_state() -> dict:
+    return {
+        "schema_version": 2,
+        "last_run_at": None,
+        "generated_at": datetime.now(KST).isoformat(),
+        "journal": JOURNAL_NAME,
+        "model": MODEL,
+        "articles": [],
+        "decision_log": [],
+    }
+
+
+def normalize_state(data: dict | None) -> dict:
+    if not data:
+        return default_state()
     if data.get("schema_version") == 2:
         return data
     # migrate v1 → v2
@@ -219,7 +227,19 @@ def load_state():
         "decision_log": [],
     }
 
+
+def load_state():
+    data = load_public_state()
+    if data is None:
+        raise RuntimeError(
+            "Supabase public_state is empty. Run "
+            "scripts/backfill_articles_to_supabase.py before the daily pipeline."
+        )
+    return normalize_state(data)
+
+
 def save_state(state):
+    save_public_state(state)
     bak = ARTICLES_PATH.with_suffix(".json.bak")
     if ARTICLES_PATH.exists():
         bak.write_text(ARTICLES_PATH.read_text(encoding="utf-8"), encoding="utf-8")

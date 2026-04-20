@@ -2,8 +2,8 @@
 """
 End-to-end automation:
 1. Run all crawlers
-2. Ingest to SQLite DB
-3. Query last 3 days across all sources
+2. Ingest to Supabase posts
+3. Query last 3 days across all sources via Supabase RPC
 4. Gemma 4 → headlines + articles (one-shot, 제목:/본문: format)
 5. Save JSON + HTML
 6. Update public gist
@@ -12,13 +12,13 @@ Run: python3 run_full.py
 No manual intervention required. Errors = script exits non-zero.
 """
 from __future__ import annotations
-import json, os, re, sys, time, threading, html as html_mod, subprocess, sqlite3
+import json, os, re, sys, time, threading, html as html_mod, subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import requests
+from db.posts import list_recent_posts_by_source
 
 ROOT = Path(__file__).parent
-DB_PATH = ROOT / "data" / "signal.db"
 GIST_ID = "a9a6b3f417be5221efd2969fe8da85ed"
 MODEL = "gemma-4-31b-it"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -83,7 +83,7 @@ def step_crawl():
     LOG(r.stdout.strip().split("\n")[-1])
 
 def step_ingest():
-    LOG("[2/6] Ingesting to DB...")
+    LOG("[2/6] Ingesting to Supabase posts...")
     r = subprocess.run(["python3", str(ROOT / "db" / "ingest.py")],
                        capture_output=True, text=True, timeout=120)
     if r.returncode != 0:
@@ -91,41 +91,31 @@ def step_ingest():
     LOG("  " + r.stdout.strip().split("\n")[-1])
 
 def step_query_context(days=3, per_source=15):
-    LOG(f"[3/6] Querying last {days} days from DB...")
-    c = sqlite3.connect(DB_PATH)
-    c.row_factory = sqlite3.Row
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    LOG(f"[3/6] Querying last {days} days from Supabase...")
+    rows = list_recent_posts_by_source(days=days, per_source=per_source)
 
-    by_source = {}
-    for row in c.execute(
-        "SELECT source, content, metadata, timestamp, author, source_url "
-        "FROM posts WHERE timestamp > ? ORDER BY timestamp DESC",
-        (cutoff,)
-    ):
-        src = row["source"]
-        by_source.setdefault(src, []).append(dict(row))
-
-    # Per-source: sort by score from metadata, take top N
     def score_of(row):
-        try: m = json.loads(row["metadata"])
-        except: m = {}
-        return (m.get("points") or m.get("score") or m.get("upvotes")
-                or m.get("likes") or m.get("num_comments") or 0)
+        meta = row.get("metadata") or {}
+        if isinstance(meta, str):
+            try:
+                meta = json.loads(meta)
+            except Exception:
+                meta = {}
+        if not isinstance(meta, dict):
+            meta = {}
+        return (meta.get("points") or meta.get("score") or meta.get("upvotes")
+                or meta.get("likes") or meta.get("num_comments") or row.get("score") or 0)
 
     context_entries = []
-    total_posts = 0
-    for src, rows in by_source.items():
-        rows.sort(key=score_of, reverse=True)
-        top = rows[:per_source]
-        total_posts += len(top)
-        for r in top:
-            preview = (r["content"] or "")[:350].replace("\n", " ")
-            score = score_of(r)
-            context_entries.append(f"[{src}] ({score}) {preview}")
+    source_counts = {}
+    for row in rows:
+        src = row.get("source") or "unknown"
+        source_counts[src] = source_counts.get(src, 0) + 1
+        preview = (row.get("content") or "")[:350].replace("\n", " ")
+        context_entries.append(f"[{src}] ({score_of(row)}) {preview}")
 
-    c.close()
-    LOG(f"  {total_posts} posts across {len(by_source)} sources selected")
-    return "\n\n".join(context_entries), {s: len(rows[:per_source]) for s, rows in by_source.items()}
+    LOG(f"  {len(rows)} posts across {len(source_counts)} sources selected")
+    return "\n\n".join(context_entries), source_counts
 
 def step_generate(context, sched):
     LOG("[4/6] Generating headlines + articles (Gemma)...")

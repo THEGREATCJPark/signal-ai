@@ -102,6 +102,7 @@ class DailyExportsTest(unittest.TestCase):
             with (
                 patch.object(run_hourly, "ARTICLES_PATH", docs_path),
                 patch.object(run_hourly, "PAGES_ARTICLES_PATH", pages_path),
+                patch.object(run_hourly, "save_public_state"),
             ):
                 run_hourly.save_state(state)
 

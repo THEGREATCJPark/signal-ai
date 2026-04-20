@@ -8,12 +8,11 @@
 4) 청크별 LLM 호출 → [no] 또는 [yes]+<data>...
    (프롬프트 입력: 최근 20개 기사 '제목만' + 이 청크 원문)
 5) 청크 결과 merge + 제목 Jaccard 중복 제거
-6) 3일 초과 기사 drop
-7) 새 기사 있으면 분류 호출 1회
+6) 새 기사 있으면 분류 호출 1회
    - 규칙: TOP=1(또는 0), MAIN≤6, SIDE 무제한
    - 입력: 규칙 + 최근 3h 결정 로그 + 현재 기사(placement 포함) + 새 기사
    - 검증 실패 → 무한 재시도
-8) articles.json 저장 + build_gist.py 호출
+7) articles.json 저장 + build_gist.py 호출
 """
 from __future__ import annotations
 import argparse, json, os, re, subprocess, sys, time, threading, random
@@ -32,7 +31,6 @@ CHANNEL_ID = "1365049274068631644"
 
 CHUNK_MAX_CHARS = 80_000
 MAX_MAIN = 6
-EXPIRY_HOURS = 72
 DECISION_LOG_HOURS = 3
 TITLES_FOR_DEDUP = 20
 KEY_MIN_GAP_S = 3.0
@@ -913,15 +911,6 @@ def main():
 
 
 def _classify_and_save(state, new_articles, now, sched):
-    # expire
-    before = len(state["articles"])
-    state["articles"] = [
-        a for a in state["articles"]
-        if (now - datetime.fromisoformat(a["created_at"])).total_seconds() < EXPIRY_HOURS * 3600
-    ]
-    if before != len(state["articles"]):
-        LOG(f"expired {before - len(state['articles'])} old articles")
-
     # 주의: placement를 강제 None으로 리셋하지 않음 (merge가 기존 id 승계한 경우 placement 유지)
     if not new_articles:
         LOG("no new articles — keeping placements")

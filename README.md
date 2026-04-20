@@ -45,8 +45,8 @@ The wrapper loads only the local `DISCORD_TOKEN` from `discord_export_config.env
 ## Public Files
 
 - `docs/index.html`: front page
-- `docs/archive.html`: 72-hour archive
-- `docs/articles.json`: active public article state
+- `docs/archive.html`: full article archive
+- `docs/articles.json`: accumulated public article state
 - `exports/articles/YYYY-MM-DD.json`: per-day new article export for other local pipelines
 
 ## Discord Exporter

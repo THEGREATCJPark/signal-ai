@@ -24,6 +24,7 @@ ROOT = Path(__file__).parent
 ARTICLES_PATH = ROOT / "docs" / "articles.json"
 EXPORTS_ARTICLES_DIR = ROOT / "exports" / "articles"
 JOURNAL_NAME = "First Light AI"
+DAILY_SUMMARY_TITLE = "Daily Don't Die Summary"
 MODEL = "gemma-4-26b-a4b-it"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 KST = timezone(timedelta(hours=9))
@@ -222,17 +223,99 @@ def save_state(state):
         bak.write_text(ARTICLES_PATH.read_text(encoding="utf-8"), encoding="utf-8")
     ARTICLES_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
-def write_daily_new_articles_export(new_articles: list, run_at: datetime) -> Path:
+def build_daily_summary_payload(body: str, new_articles: list, run_at: datetime) -> dict:
+    date_key = run_at.astimezone(KST).date().isoformat()
+    return {
+        "schema_version": 1,
+        "title": DAILY_SUMMARY_TITLE,
+        "date": date_key,
+        "generated_at": run_at.isoformat(),
+        "article_count": len(new_articles),
+        "body": str(body or "").strip(),
+    }
+
+def fallback_daily_summary_body(new_articles: list) -> str:
+    if not new_articles:
+        return "오늘 새로 확인된 업데이트는 없습니다. 기존 기사와 아카이브는 그대로 유지됩니다."
+    parts = []
+    for a in new_articles[:10]:
+        tag = "찌라시" if a.get("category") == "rumor" else "뉴스"
+        trust = "낮은 신뢰" if a.get("trust") == "low" else "확인된 흐름"
+        parts.append(f"{a.get('headline', '').strip()}({tag}, {trust})")
+    if len(new_articles) > 10:
+        parts.append(f"그 외 {len(new_articles) - 10}건")
+    return "오늘 업데이트는 " + ", ".join(parts) + "을 중심으로 정리됩니다."
+
+def prompt_daily_summary(new_articles: list) -> str:
+    if not new_articles:
+        return ""
+    lines = []
+    for i, a in enumerate(new_articles, 1):
+        body = (a.get("body") or "").replace("\n", " ")[:500]
+        lines.append(
+            f"{i}. [{a.get('category','news')}/{a.get('trust','high')}] "
+            f"{a.get('headline','')} — {body}"
+        )
+    return f"""역할: First Light AI 데일리 에디터.
+오늘 새로 업데이트된 전체 내용을 하나의 읽기 좋은 요약문으로 정리하세요.
+
+## 제목
+{DAILY_SUMMARY_TITLE}
+
+## 작성 규칙
+- 한국어 본문 450~900자.
+- 기사 나열이 아니라 하루 흐름을 하나의 글처럼 연결.
+- 중요한 축, 루머/낮은 신뢰 항목의 불확실성, 모델·제품·인프라 흐름을 함께 정리.
+- 입력에 없는 사실을 만들지 말 것.
+- 출력은 JSON 객체 하나만.
+
+## 스키마
+{{"body":"요약 본문"}}
+
+## 오늘 새 기사
+{chr(10).join(lines)}
+
+JSON만 출력:"""
+
+def parse_daily_summary_body(text: str) -> str:
+    s = text.strip()
+    s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
+    start = s.find('{'); end = s.rfind('}')
+    if start != -1 and end > start:
+        obj = json.loads(s[start:end+1])
+        body = str(obj.get("body") or obj.get("summary") or "").strip()
+        if body:
+            return body
+    return s.strip()
+
+def generate_daily_summary(new_articles: list, run_at: datetime, sched) -> dict:
+    if not new_articles or sched is None:
+        return build_daily_summary_payload(fallback_daily_summary_body(new_articles), new_articles, run_at)
+    prompt = prompt_daily_summary(new_articles)
+    try:
+        raw = call_gemma(prompt, sched, max_tok=2048, temp=0.35, json_mode=True)
+        body = parse_daily_summary_body(raw)
+        if len(body) < 40:
+            body = fallback_daily_summary_body(new_articles)
+    except Exception as e:
+        LOG(f"daily summary fallback: {e}")
+        body = fallback_daily_summary_body(new_articles)
+    return build_daily_summary_payload(body, new_articles, run_at)
+
+def write_daily_new_articles_export(new_articles: list, run_at: datetime, daily_summary: dict | None = None) -> Path:
     """Write the per-day new-article JSON used by downstream local pipelines."""
     EXPORTS_ARTICLES_DIR.mkdir(parents=True, exist_ok=True)
     date_key = run_at.astimezone(KST).date().isoformat()
     out_path = EXPORTS_ARTICLES_DIR / f"{date_key}.json"
+    if daily_summary is None:
+        daily_summary = build_daily_summary_payload(fallback_daily_summary_body(new_articles), new_articles, run_at)
     payload = {
         "schema_version": 1,
         "journal": JOURNAL_NAME,
         "date": date_key,
         "generated_at": run_at.isoformat(),
         "count": len(new_articles),
+        "daily_summary": daily_summary,
         "articles": new_articles,
     }
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -839,8 +922,10 @@ def main():
         state["last_run_at"] = now.isoformat()
         state["generated_at"] = now.isoformat()
         state["journal"] = JOURNAL_NAME
+        daily_summary = generate_daily_summary([], now, sched)
+        state["daily_summary"] = daily_summary
         save_state(state)
-        export_path = write_daily_new_articles_export([], now)
+        export_path = write_daily_new_articles_export([], now, daily_summary)
         LOG(f"daily new-article export → {export_path}")
         subprocess.run(["python3", str(ROOT / "build_gist.py")], check=False)
         return
@@ -971,9 +1056,11 @@ def _classify_and_save(state, new_articles, now, sched):
     state["last_run_at"] = now.isoformat()
     state["generated_at"] = now.isoformat()
     state["journal"] = JOURNAL_NAME
+    daily_summary = generate_daily_summary(new_articles, now, sched)
+    state["daily_summary"] = daily_summary
     save_state(state)
     LOG("state saved")
-    export_path = write_daily_new_articles_export(new_articles, now)
+    export_path = write_daily_new_articles_export(new_articles, now, daily_summary)
     LOG(f"daily new-article export → {export_path}")
 
     r = subprocess.run(["python3", str(ROOT / "build_gist.py")], capture_output=True, text=True)

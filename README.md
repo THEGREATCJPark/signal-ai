@@ -20,11 +20,11 @@ Live preview:
 
 ## Runtime
 
-Windows Task Scheduler owns the daily noon trigger:
+Windows Task Scheduler owns the daily 08:00 KST trigger:
 
 ```text
 Task name: First Light AI Daily
-Schedule: daily at 12:00
+Schedule: daily at 08:00 KST
 Action: wsl.exe -e bash -lc 'cd /home/pineapple/bunjum2/signal && ./run_cron.sh >> /tmp/signal_daily.log 2>&1'
 ```
 

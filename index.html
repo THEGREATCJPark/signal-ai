@@ -258,6 +258,36 @@
   .hero .read-more::after { content: '→'; transition: transform .2s; }
   .hero:hover .read-more::after { transform: translateX(4px); }
 
+  .daily-summary {
+    padding: 28px 0 34px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin: 0 0 34px;
+  }
+  .daily-summary .summary-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 14px;
+  }
+  .daily-summary .summary-date {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-4);
+    margin-bottom: 16px;
+  }
+  .daily-summary p {
+    font-family: var(--serif);
+    font-size: 1.04rem;
+    line-height: 1.82;
+    color: var(--ink-2);
+  }
+
   /* ── MAIN grid ── */
   .grid {
     display: grid;
@@ -596,6 +626,16 @@
         <p class="lede">${esc(excerpt(t.body, 240))}</p>
         <div class="read-more">Read the full story</div>
       </article>
+    `;
+  }
+  const dailySummary = data.daily_summary;
+  if (dailySummary && dailySummary.body) {
+    html += `
+      <section class="daily-summary" aria-label="${esc(dailySummary.title || "Daily Don't Die Summary")}">
+        <div class="summary-title">${esc(dailySummary.title || "Daily Don't Die Summary")}</div>
+        <div class="summary-date">${esc(dailySummary.date || '')} · ${esc(String(dailySummary.article_count || 0))} UPDATES</div>
+        ${paragraphs(dailySummary.body).map(p => `<p>${esc(p)}</p>`).join('')}
+      </section>
     `;
   }
   if (main.length) {

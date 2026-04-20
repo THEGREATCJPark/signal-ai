@@ -95,8 +95,15 @@
   }
   .entry:hover { background: var(--paper-alt); }
   @media (max-width: 720px) {
-    .entry { grid-template-columns: 80px 1fr; gap: 16px; }
-    .entry .badge { grid-row: 1; grid-column: 2; justify-self: end; }
+    .container { padding: 28px 24px; }
+    .entry {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px 14px;
+      padding: 24px 0;
+    }
+    .entry .when { grid-column: 1; grid-row: 1; }
+    .entry .badge { grid-column: 2; grid-row: 1; justify-self: end; }
+    .entry .content { grid-column: 1 / -1; min-width: 0; }
   }
   .entry .when {
     font-family: var(--mono); font-size: 11px;

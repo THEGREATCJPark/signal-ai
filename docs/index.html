@@ -842,18 +842,45 @@
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
   }
-  const VISUAL_CANDIDATES = [
-    { id: 'silk-bookmark', label: 'Silk Bookmark', hint: 'pleated satin', style: 'silk' },
-    { id: 'brass-chain', label: 'Brass Chain', hint: 'warm metal', style: 'chain' },
-    { id: 'glass-prism', label: 'Glass Prism', hint: 'clear shard', style: 'glass' },
-    { id: 'wax-seal', label: 'Wax Seal', hint: 'cord + stamp', style: 'wax' },
-    { id: 'origami-fold', label: 'Origami Fold', hint: 'paper crease', style: 'origami' },
-    { id: 'carbon-blade', label: 'Carbon Blade', hint: 'woven black', style: 'carbon' },
-    { id: 'enamel-pin', label: 'Enamel Pin', hint: 'hard enamel', style: 'enamel' },
-    { id: 'thread-loop', label: 'Thread Loop', hint: 'soft fabric', style: 'thread' },
-    { id: 'chrome-clip', label: 'Chrome Clip', hint: 'spring steel', style: 'chrome' },
-    { id: 'kite-cloth', label: 'Kite Cloth', hint: 'taut textile', style: 'kite' },
+  const PHYSICS_REFERENCES = {
+    verlet: { name: 'verlet-js', url: 'https://github.com/subprotocol/verlet-js' },
+    cloth: { name: 'breeze', url: 'https://github.com/holtsetio/breeze' },
+    rigid: { name: 'matter-js', url: 'https://github.com/liabru/matter-js' },
+    soft: { name: 'Oimo.js', url: 'https://github.com/lo-th/Oimo.js' },
+    cradle: { name: 'p2.js', url: 'https://github.com/schteppe/p2.js' },
+    fluid: { name: 'WebGL Fluid', url: 'https://github.com/PavelDoGreat/WebGL-Fluid-Simulation' },
+    magnetic: { name: 'matter-attractors', url: 'https://github.com/liabru/matter-attractors' },
+    torsion: { name: 'ammo.js', url: 'https://github.com/kripken/ammo.js' },
+    gyro: { name: 'cannon.js', url: 'https://github.com/schteppe/cannon.js' },
+    suspension: { name: 'rapier.js', url: 'https://github.com/dimforge/rapier.js' },
+  };
+
+  const PHYSICS_CANDIDATES = [
+    { id: 'verlet-rope', label: 'Verlet Rope', hint: 'constraint chain', ref: 'verlet', accent: '#b4232f' },
+    { id: 'pbd-cloth', label: 'PBD Cloth', hint: 'pinned fabric', ref: 'cloth', accent: '#0f766e' },
+    { id: 'rigid-hinge', label: 'Rigid Hinge', hint: 'angular body', ref: 'rigid', accent: '#a16207' },
+    { id: 'soft-body', label: 'Soft Body', hint: 'pressure mesh', ref: 'soft', accent: '#be185d' },
+    { id: 'newton-cradle', label: 'Cradle', hint: 'impact transfer', ref: 'cradle', accent: '#334155' },
+    { id: 'fluid-splat', label: 'Fluid Splat', hint: 'vortex field', ref: 'fluid', accent: '#0369a1' },
+    { id: 'magnetic-field', label: 'Magnetic Field', hint: 'inverse force', ref: 'magnetic', accent: '#7c2d12' },
+    { id: 'torsion-strip', label: 'Torsion Strip', hint: 'twist joints', ref: 'torsion', accent: '#4c1d95' },
+    { id: 'gyro-precession', label: 'Gyro', hint: 'precession', ref: 'gyro', accent: '#155e75' },
+    { id: 'suspension-bounce', label: 'Suspension', hint: 'spring damper', ref: 'suspension', accent: '#166534' },
   ];
+
+  function blendHex(hex, other, amount) {
+    const parse = (value) => {
+      const raw = value.replace('#', '');
+      return [
+        parseInt(raw.slice(0, 2), 16),
+        parseInt(raw.slice(2, 4), 16),
+        parseInt(raw.slice(4, 6), 16),
+      ];
+    };
+    const a = parse(hex);
+    const b = parse(other);
+    return `rgb(${a.map((v, i) => Math.round(v * (1 - amount) + b[i] * amount)).join(',')})`;
+  }
 
   function resizeCanvas(canvas) {
     const rect = canvas.getBoundingClientRect();
@@ -869,22 +896,6 @@
     return { ctx, w: rect.width || 190, h: rect.height || 150, dpr };
   }
 
-  function candidatePalette(candidate) {
-    const palettes = {
-      'silk-bookmark': { a: '#7f1111', b: '#e11d48', c: '#fff1f2', ink: '#fff7ed', line: 'rgba(92,12,12,.8)' },
-      'brass-chain': { a: '#7c4a03', b: '#e6b85c', c: '#fff4c6', ink: '#261508', line: 'rgba(72,42,8,.72)' },
-      'glass-prism': { a: '#7dd3fc', b: '#e0f2fe', c: '#ffffff', ink: '#0f172a', line: 'rgba(14,116,144,.58)' },
-      'wax-seal': { a: '#881337', b: '#be123c', c: '#fecdd3', ink: '#fff1f2', line: 'rgba(88,28,20,.78)' },
-      'origami-fold': { a: '#f5efe0', b: '#d9c9a5', c: '#ffffff', ink: '#241c15', line: 'rgba(60,44,26,.52)' },
-      'carbon-blade': { a: '#09090b', b: '#3f3f46', c: '#d4d4d8', ink: '#f8fafc', line: 'rgba(255,255,255,.22)' },
-      'enamel-pin': { a: '#111827', b: '#b91c1c', c: '#f9fafb', ink: '#fef2f2', line: 'rgba(17,24,39,.84)' },
-      'thread-loop': { a: '#1f2937', b: '#f43f5e', c: '#ffe4e6', ink: '#fff7ed', line: 'rgba(31,41,55,.5)' },
-      'chrome-clip': { a: '#7c858d', b: '#f8fafc', c: '#cbd5e1', ink: '#101010', line: 'rgba(71,85,105,.72)' },
-      'kite-cloth': { a: '#0f766e', b: '#f97316', c: '#fff7ed', ink: '#fff7ed', line: 'rgba(15,118,110,.64)' },
-    };
-    return palettes[candidate.id] || palettes['silk-bookmark'];
-  }
-
   function roundRect(ctx, x, y, w, h, r) {
     const radius = Math.min(r, w / 2, h / 2);
     ctx.beginPath();
@@ -896,461 +907,673 @@
     ctx.closePath();
   }
 
-  function drawSpecularBand(ctx, x, y, w, h, alpha = .34) {
-    const shine = ctx.createLinearGradient(x, y, x + w, y + h);
-    shine.addColorStop(0, `rgba(255,255,255,${alpha})`);
-    shine.addColorStop(.18, 'rgba(255,255,255,0)');
-    shine.addColorStop(.58, `rgba(255,255,255,${alpha * .78})`);
-    shine.addColorStop(.74, 'rgba(255,255,255,0)');
-    shine.addColorStop(1, 'rgba(0,0,0,.12)');
-    ctx.fillStyle = shine;
-    ctx.fill();
+  function modelKey(w, h) {
+    return `${Math.round(w)}x${Math.round(h)}`;
   }
 
-  function drawWrinkleLines(ctx, x, y, w, h, count, phase, color) {
+  function particle(x, y, z = 0, pinned = false) {
+    return { x, y, z, px: x, py: y, pz: z, pinned };
+  }
+
+  function verletIntegrate(p, ax, ay, az, drag = .985) {
+    if (p.pinned) return;
+    const vx = (p.x - p.px) * drag;
+    const vy = (p.y - p.py) * drag;
+    const vz = (p.z - p.pz) * drag;
+    p.px = p.x;
+    p.py = p.y;
+    p.pz = p.z;
+    p.x += vx + ax;
+    p.y += vy + ay;
+    p.z += vz + az;
+  }
+
+  function solveDistance(a, b, target, stiffness = 1) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const dz = b.z - a.z;
+    const dist = Math.hypot(dx, dy, dz) || .0001;
+    const diff = (dist - target) / dist * stiffness;
+    const ox = dx * diff * .5;
+    const oy = dy * diff * .5;
+    const oz = dz * diff * .5;
+    if (!a.pinned) { a.x += ox; a.y += oy; a.z += oz; }
+    if (!b.pinned) { b.x -= ox; b.y -= oy; b.z -= oz; }
+  }
+
+  function project3d(x, y, z, w, h, camera = 370) {
+    const scale = camera / (camera + z);
+    return { x: w * .5 + x * scale, y: h * .5 + y * scale, scale };
+  }
+
+  function rotate3d(pt, rx, ry, rz) {
+    let { x, y, z } = pt;
+    const cx = Math.cos(rx), sx = Math.sin(rx);
+    const cy = Math.cos(ry), sy = Math.sin(ry);
+    const cz = Math.cos(rz), sz = Math.sin(rz);
+    let y1 = y * cx - z * sx;
+    let z1 = y * sx + z * cx;
+    y = y1; z = z1;
+    let x1 = x * cy + z * sy;
+    z1 = -x * sy + z * cy;
+    x = x1; z = z1;
+    x1 = x * cz - y * sz;
+    y1 = x * sz + y * cz;
+    return { x: x1, y: y1, z };
+  }
+
+  function pathPoints(ctx, pts) {
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.closePath();
+  }
+
+  function drawEnvironmentReflection(ctx, pts, phase = 0, alpha = .32) {
     ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = .7;
-    for (let i = 0; i < count; i++) {
-      const px = x + (w * (i + .5)) / count;
-      const bend = Math.sin(phase + i * 1.7) * w * .035;
+    pathPoints(ctx, pts);
+    ctx.clip();
+    const minX = Math.min(...pts.map(p => p.x));
+    const maxX = Math.max(...pts.map(p => p.x));
+    const minY = Math.min(...pts.map(p => p.y));
+    const maxY = Math.max(...pts.map(p => p.y));
+    const span = Math.max(maxX - minX, 20);
+    for (let i = -1; i < 4; i++) {
+      const x = minX - span * .5 + i * span * .42 + Math.sin(phase + i) * 5;
+      const grad = ctx.createLinearGradient(x, minY, x + span * .26, maxY);
+      grad.addColorStop(0, 'rgba(255,255,255,0)');
+      grad.addColorStop(.34, `rgba(255,255,255,${alpha})`);
+      grad.addColorStop(.48, `rgba(255,255,255,${alpha * .18})`);
+      grad.addColorStop(1, 'rgba(20,20,20,0)');
+      ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.moveTo(px, y + 8);
-      ctx.bezierCurveTo(px + bend, y + h * .28, px - bend, y + h * .62, px + bend * .5, y + h - 10);
+      ctx.moveTo(x, minY - 18);
+      ctx.lineTo(x + span * .18, minY - 18);
+      ctx.lineTo(x + span * .56, maxY + 18);
+      ctx.lineTo(x + span * .38, maxY + 18);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawFresnelHighlight(ctx, pts, color = 'rgba(255,255,255,.76)', width = 1.35) {
+    ctx.save();
+    pathPoints(ctx, pts);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawReferenceBadge(ctx, candidate, w, h) {
+    const ref = PHYSICS_REFERENCES[candidate.ref];
+    if (!ref) return;
+    ctx.save();
+    ctx.font = '700 7px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = 'rgba(20,20,20,.44)';
+    ctx.fillText(ref.name, w - 8, h - 7);
+    ctx.restore();
+  }
+
+  function drawLabBackground(ctx, candidate, t, w, h) {
+    ctx.clearRect(0, 0, w, h);
+    const bg = ctx.createLinearGradient(0, 0, w, h);
+    bg.addColorStop(0, 'rgba(255,255,255,.72)');
+    bg.addColorStop(.46, 'rgba(245,242,232,.5)');
+    bg.addColorStop(1, 'rgba(20,20,20,.08)');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    ctx.globalAlpha = .2;
+    ctx.strokeStyle = candidate.accent;
+    ctx.lineWidth = .55;
+    for (let x = -h; x < w + h; x += 18) {
+      ctx.beginPath();
+      ctx.moveTo(x + Math.sin(t) * 4, h);
+      ctx.lineTo(x + h, 0);
       ctx.stroke();
     }
     ctx.restore();
   }
 
-  function drawCanvasLabel(ctx, text, x, y, angle, color, size = 10) {
+  function drawAnchor(ctx, x, y, color) {
     ctx.save();
-    ctx.translate(x, y);
+    const g = ctx.createRadialGradient(x - 1.5, y - 1.5, .8, x, y, 4.8);
+    g.addColorStop(0, '#fff');
+    g.addColorStop(.45, color);
+    g.addColorStop(1, 'rgba(20,20,20,.35)');
+    ctx.fillStyle = g;
+    ctx.strokeStyle = 'rgba(20,20,20,.42)';
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function projectedPanel(cx, cy, width, height, rx, ry, rz, w, h, notch = true) {
+    const local = notch
+      ? [
+          { x: -width / 2, y: -height / 2, z: 0 },
+          { x: width / 2, y: -height / 2, z: 0 },
+          { x: width / 2, y: height * .24, z: 0 },
+          { x: width * .16, y: height / 2, z: 0 },
+          { x: 0, y: height * .36, z: 0 },
+          { x: -width * .16, y: height / 2, z: 0 },
+          { x: -width / 2, y: height * .24, z: 0 },
+        ]
+      : [
+          { x: -width / 2, y: -height / 2, z: 0 },
+          { x: width / 2, y: -height / 2, z: 0 },
+          { x: width / 2, y: height / 2, z: 0 },
+          { x: -width / 2, y: height / 2, z: 0 },
+        ];
+    return local.map((pt) => {
+      const r = rotate3d(pt, rx, ry, rz);
+      return project3d(cx + r.x, cy + r.y, r.z, w, h);
+    });
+  }
+
+  function fillPanel(ctx, pts, candidate, shade = .5, phase = 0) {
+    const minX = Math.min(...pts.map(p => p.x));
+    const maxX = Math.max(...pts.map(p => p.x));
+    const minY = Math.min(...pts.map(p => p.y));
+    const maxY = Math.max(...pts.map(p => p.y));
+    const g = ctx.createLinearGradient(minX, minY, maxX, maxY);
+    g.addColorStop(0, 'rgba(255,255,255,.88)');
+    g.addColorStop(.14, candidate.accent);
+    g.addColorStop(.52, blendHex(candidate.accent, '#111111', .58));
+    g.addColorStop(.86, candidate.accent);
+    g.addColorStop(1, 'rgba(255,255,255,.58)');
+    pathPoints(ctx, pts);
+    ctx.fillStyle = g;
+    ctx.shadowColor = 'rgba(20,20,20,.25)';
+    ctx.shadowBlur = 13;
+    ctx.shadowOffsetY = 7;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    drawEnvironmentReflection(ctx, pts, phase, .34 + shade * .12);
+    drawFresnelHighlight(ctx, pts, 'rgba(255,255,255,.7)', 1.2);
+    ctx.save();
+    pathPoints(ctx, pts);
+    ctx.strokeStyle = 'rgba(20,20,20,.36)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPanelText(ctx, text, cx, cy, angle, color = '#fff') {
+    ctx.save();
+    ctx.translate(cx, cy);
     ctx.rotate(angle);
-    ctx.fillStyle = color;
-    ctx.font = `900 ${size}px JetBrains Mono, monospace`;
+    ctx.font = '900 9px JetBrains Mono, monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.letterSpacing = '0px';
+    ctx.fillStyle = color;
     ctx.fillText(text, 0, 0);
     ctx.restore();
   }
 
-  function drawCord(ctx, ax, ay, bx, by, sag, color, width = 1.2) {
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    ctx.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + sag, bx, by);
-    ctx.stroke();
-    ctx.restore();
+  function ensureRope(state, w, h) {
+    const key = `rope:${modelKey(w, h)}`;
+    if (state.key === key && state.rope) return;
+    state.key = key;
+    state.rope = [];
+    const count = 10;
+    const startX = -40;
+    const y = -h * .34;
+    for (let i = 0; i < count; i++) {
+      state.rope.push(particle(startX + i * 8.8, y + i * 4.6, Math.sin(i) * 3, i === 0));
+    }
   }
 
-  function drawFoldedRibbon(ctx, x, y, w, h, angle, p, phase) {
+  function stepVerletRope(ctx, candidate, state, t, w, h) {
+    ensureRope(state, w, h);
+    const pull = state.pointer.active ? state.pointer.pull : 0;
+    const wind = Math.sin(t * 1.5 + state.seed) * .018 + state.pointer.vx * .004;
+    state.rope.forEach((p, i) => {
+      if (i === 0) {
+        p.x = -38 + Math.sin(t * .7) * 2;
+        p.y = -h * .34;
+        p.z = 0;
+        p.px = p.x;
+        p.py = p.y;
+        p.pz = p.z;
+      } else {
+        verletIntegrate(p, wind, .18 + pull * .06, Math.sin(t + i) * .014 + state.pointer.vy * .002);
+      }
+    });
+    const tail = state.rope[state.rope.length - 1];
+    if (state.pointer.active) {
+      tail.x += state.pointer.dx * .025;
+      tail.y += state.pointer.dy * .022;
+      tail.z += Math.sin(t * 2) * .4;
+    }
+    for (let k = 0; k < 6; k++) {
+      for (let i = 0; i < state.rope.length - 1; i++) solveDistance(state.rope[i], state.rope[i + 1], 10, .94);
+    }
+    const pts = state.rope.map(p => project3d(p.x, p.y, p.z, w, h));
     ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.shadowColor = 'rgba(20,20,20,.23)';
-    ctx.shadowBlur = 14;
-    ctx.shadowOffsetY = 8;
+    ctx.strokeStyle = 'rgba(54,28,20,.7)';
+    ctx.lineWidth = 1.35;
     ctx.beginPath();
-    ctx.moveTo(-w / 2, -h / 2);
-    ctx.lineTo(w / 2, -h / 2);
-    ctx.lineTo(w / 2, h * .24);
-    ctx.lineTo(w * .13, h / 2);
-    ctx.lineTo(0, h * .36);
-    ctx.lineTo(-w * .13, h / 2);
-    ctx.lineTo(-w / 2, h * .24);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    g.addColorStop(0, p.c);
-    g.addColorStop(.14, p.b);
-    g.addColorStop(.5, p.a);
-    g.addColorStop(.74, p.b);
-    g.addColorStop(1, '#380606');
+    pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+    ctx.stroke();
+    ctx.restore();
+    drawAnchor(ctx, pts[0].x, pts[0].y, candidate.accent);
+    const angle = Math.atan2(tail.y - state.rope[state.rope.length - 2].y, tail.x - state.rope[state.rope.length - 2].x) - Math.PI / 2;
+    const panel = projectedPanel(tail.x + 10, tail.y + 34, 44, 60, .55, Math.sin(t + state.seed) * .55, angle, w, h, true);
+    fillPanel(ctx, panel, candidate, .48, t);
+    drawPanelText(ctx, "Don't Die.", pts[pts.length - 1].x + 9, pts[pts.length - 1].y + 30, angle, '#fff8f0');
+  }
+
+  function ensureCloth(state, w, h) {
+    const key = `cloth:${modelKey(w, h)}`;
+    if (state.key === key && state.cloth) return;
+    state.key = key;
+    const cols = 6;
+    const rows = 6;
+    const gap = Math.min(w, h) * .09;
+    state.cloth = { cols, rows, gap, points: [] };
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        state.cloth.points.push(particle((x - (cols - 1) / 2) * gap, -h * .28 + y * gap, Math.sin(x + y) * 3, y === 0 && (x === 0 || x === cols - 1 || x === 3)));
+      }
+    }
+  }
+
+  function stepPbdCloth(ctx, candidate, state, t, w, h) {
+    ensureCloth(state, w, h);
+    const { cols, rows, gap, points } = state.cloth;
+    points.forEach((p, idx) => {
+      const x = idx % cols;
+      const y = Math.floor(idx / cols);
+      if (p.pinned) {
+        p.x += (x - (cols - 1) / 2) * gap - p.x;
+        p.y += (-h * .29 + Math.sin(t * 1.3 + x) * 2) - p.y;
+        p.z = Math.sin(t + x * .7) * 5;
+        p.px = p.x; p.py = p.y; p.pz = p.z;
+      } else {
+        verletIntegrate(p, Math.sin(t + y) * .012 + state.pointer.vx * .0015, .09 + state.pointer.pull * .045, Math.sin(t * 1.8 + x * .8) * .025);
+      }
+    });
+    if (state.pointer.active) {
+      const mid = points[Math.floor(points.length * .68)];
+      mid.x += state.pointer.dx * .018;
+      mid.y += state.pointer.dy * .018;
+      mid.z -= 10;
+    }
+    for (let k = 0; k < 4; k++) {
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const i = y * cols + x;
+          if (x < cols - 1) solveDistance(points[i], points[i + 1], gap, .82);
+          if (y < rows - 1) solveDistance(points[i], points[i + cols], gap, .82);
+        }
+      }
+    }
+    for (let y = 0; y < rows - 1; y++) {
+      for (let x = 0; x < cols - 1; x++) {
+        const quad = [points[y * cols + x], points[y * cols + x + 1], points[(y + 1) * cols + x + 1], points[(y + 1) * cols + x]].map(p => project3d(p.x, p.y, p.z, w, h));
+        const shade = .24 + y / rows * .36 + Math.sin(t + x) * .04;
+        ctx.save();
+        pathPoints(ctx, quad);
+        ctx.fillStyle = `rgba(15,118,110,${.36 + shade})`;
+        ctx.fill();
+        drawEnvironmentReflection(ctx, quad, t + x, .18);
+        ctx.strokeStyle = 'rgba(255,255,255,.28)';
+        ctx.lineWidth = .55;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    const label = points[Math.floor(points.length * .58)];
+    const lp = project3d(label.x, label.y, label.z - 8, w, h);
+    drawPanelText(ctx, 'DD', lp.x, lp.y, Math.sin(t) * .12, '#f0fdfa');
+  }
+
+  function stepRigidHinge(ctx, candidate, state, t, w, h) {
+    if (!state.rigid) state.rigid = { angle: -.25, vel: 0 };
+    const target = state.pointer.active ? clamp(state.pointer.dx * .012, -.9, .9) : Math.sin(t * .7 + state.seed) * .16;
+    state.rigid.vel += (target - state.rigid.angle) * .07 - Math.sin(state.rigid.angle) * .025;
+    state.rigid.vel *= .91;
+    state.rigid.angle += state.rigid.vel;
+    const hinge = project3d(0, -h * .29, 0, w, h);
+    drawAnchor(ctx, hinge.x, hinge.y, candidate.accent);
+    const length = Math.min(h * .48, 66);
+    const cx = Math.sin(state.rigid.angle) * length * .35;
+    const cy = -h * .13 + Math.cos(state.rigid.angle) * length * .35;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(70,42,12,.55)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(hinge.x, hinge.y);
+    const hook = project3d(cx, cy - 30, 0, w, h);
+    ctx.lineTo(hook.x, hook.y);
+    ctx.stroke();
+    ctx.restore();
+    const panel = projectedPanel(cx, cy, 48, 66, .65, Math.sin(t * .9) * .42, state.rigid.angle, w, h, false);
+    fillPanel(ctx, panel, candidate, .45, t);
+    drawPanelText(ctx, 'HINGE', w * .5 + cx, h * .5 + cy, state.rigid.angle, '#fff7ed');
+  }
+
+  function ensureSoftBody(state, w, h) {
+    const key = `soft:${modelKey(w, h)}`;
+    if (state.key === key && state.body) return;
+    state.key = key;
+    const count = 16;
+    const radius = Math.min(w, h) * .19;
+    state.body = { radius, points: [] };
+    for (let i = 0; i < count; i++) {
+      const a = Math.PI * 2 * i / count;
+      state.body.points.push(particle(Math.cos(a) * radius, Math.sin(a) * radius - 5, Math.sin(a * 2) * 5));
+    }
+  }
+
+  function stepSoftBody(ctx, candidate, state, t, w, h) {
+    ensureSoftBody(state, w, h);
+    const { points, radius } = state.body;
+    points.forEach((p, i) => {
+      const a = Math.PI * 2 * i / points.length;
+      const targetX = Math.cos(a) * radius * (1 + Math.sin(t * 1.6 + i) * .03);
+      const targetY = Math.sin(a) * radius * .82 - 4 + Math.cos(t + i) * 1.6;
+      p.x += (targetX - p.x) * .055 + state.pointer.dx * .002;
+      p.y += (targetY - p.y) * .055 + state.pointer.pull * .8;
+      p.z += (Math.sin(t * 2 + i) * 9 - p.z) * .07;
+    });
+    for (let k = 0; k < 4; k++) {
+      points.forEach((p, i) => solveDistance(p, points[(i + 1) % points.length], radius * .39, .28));
+    }
+    const pts = points.map(p => project3d(p.x, p.y, p.z, w, h));
+    ctx.save();
+    pathPoints(ctx, pts);
+    const g = ctx.createRadialGradient(w * .43, h * .38, 5, w * .5, h * .5, Math.min(w, h) * .34);
+    g.addColorStop(0, 'rgba(255,255,255,.9)');
+    g.addColorStop(.26, 'rgba(244,114,182,.78)');
+    g.addColorStop(.72, candidate.accent);
+    g.addColorStop(1, 'rgba(76,5,25,.88)');
     ctx.fillStyle = g;
+    ctx.shadowColor = 'rgba(20,20,20,.24)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 8;
     ctx.fill();
     ctx.shadowBlur = 0;
-    drawSpecularBand(ctx, -w / 2, -h / 2, w, h, .38);
-    drawWrinkleLines(ctx, -w / 2 + 7, -h / 2 + 7, w - 14, h - 20, 6, phase, 'rgba(255,255,255,.2)');
-    ctx.strokeStyle = p.line;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    drawCanvasLabel(ctx, "Don't Die.", 0, -1, Math.PI / 2, p.ink, 9);
+    drawEnvironmentReflection(ctx, pts, t, .36);
+    drawFresnelHighlight(ctx, pts, 'rgba(255,255,255,.74)', 1.2);
     ctx.restore();
+    drawPanelText(ctx, 'SOFT', w * .5, h * .52, Math.sin(t) * .08, '#fff1f2');
   }
 
-  function drawMetalChain(ctx, x, y, w, h, angle, p, phase) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
+  function stepNewtonCradle(ctx, candidate, state, t, w, h) {
+    if (!state.cradle) state.cradle = { left: .45, right: 0, vLeft: 0, vRight: 0, hit: 0 };
+    const c = state.cradle;
+    const pull = state.pointer.active ? clamp(-state.pointer.dx * .006, -.55, .55) : 0;
+    c.vLeft += (-Math.sin(c.left) * .045) + pull * .02;
+    c.vRight += (-Math.sin(c.right) * .045) - pull * .012;
+    c.vLeft *= .985; c.vRight *= .985;
+    c.left += c.vLeft; c.right += c.vRight;
+    if (Math.abs(c.left) < .045 && c.vLeft < -.018) {
+      c.vRight = -c.vLeft * .92;
+      c.vLeft *= -.12;
+      c.hit = 1;
+    }
+    c.hit *= .9;
+    const topY = h * .2;
+    const baseX = w * .5;
+    const spacing = Math.min(w * .12, 18);
+    const len = Math.min(h * .34, 48);
     for (let i = 0; i < 5; i++) {
-      const lx = -w * .3 + i * w * .15;
+      const angle = i === 0 ? c.left : i === 4 ? c.right : Math.sin(t * 3 + i) * .006 * c.hit;
+      const ax = baseX + (i - 2) * spacing;
+      const bx = ax + Math.sin(angle) * len;
+      const by = topY + Math.cos(angle) * len;
       ctx.save();
-      ctx.translate(lx, -h * .56 - i * 1.4);
-      ctx.rotate((i % 2 ? .75 : -.75) + Math.sin(phase + i) * .08);
-      roundRect(ctx, -5, -9, 10, 18, 5);
-      const chainGrad = ctx.createLinearGradient(-5, -9, 5, 9);
-      chainGrad.addColorStop(0, p.c);
-      chainGrad.addColorStop(.45, p.b);
-      chainGrad.addColorStop(1, p.a);
-      ctx.strokeStyle = chainGrad;
-      ctx.lineWidth = 2.2;
+      ctx.strokeStyle = 'rgba(20,20,20,.34)';
+      ctx.lineWidth = .8;
+      ctx.beginPath();
+      ctx.moveTo(ax, topY);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      drawAnchor(ctx, ax, topY, candidate.accent);
+      const g = ctx.createRadialGradient(bx - 4, by - 5, 1, bx, by, 11);
+      g.addColorStop(0, '#fff');
+      g.addColorStop(.23, '#cbd5e1');
+      g.addColorStop(.56, '#64748b');
+      g.addColorStop(1, '#111827');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(bx, by, 8.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.65)';
       ctx.stroke();
       ctx.restore();
     }
-    ctx.shadowColor = 'rgba(20,20,20,.2)';
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 8;
-    roundRect(ctx, -w / 2, -h / 2, w, h, 14);
-    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    g.addColorStop(0, p.c);
-    g.addColorStop(.32, p.b);
-    g.addColorStop(.7, '#94610d');
-    g.addColorStop(1, p.a);
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    drawSpecularBand(ctx, -w / 2, -h / 2, w, h, .42);
-    ctx.strokeStyle = p.line;
-    ctx.stroke();
-    drawCanvasLabel(ctx, "DON'T", 0, -8, 0, p.ink, 10);
-    drawCanvasLabel(ctx, 'DIE', 0, 8, 0, p.ink, 10);
-    ctx.restore();
+    drawPanelText(ctx, 'IMPACT', w * .5, h * .78, 0, 'rgba(20,20,20,.68)');
   }
 
-  function drawGlassTag(ctx, x, y, w, h, angle, p, phase) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.shadowColor = 'rgba(14,116,144,.22)';
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetY = 10;
-    ctx.beginPath();
-    ctx.moveTo(-w * .4, -h / 2);
-    ctx.lineTo(w * .46, -h * .37);
-    ctx.lineTo(w * .34, h * .42);
-    ctx.lineTo(-w * .18, h / 2);
-    ctx.lineTo(-w * .5, h * .1);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    g.addColorStop(0, 'rgba(255,255,255,.82)');
-    g.addColorStop(.35, 'rgba(125,211,252,.38)');
-    g.addColorStop(.68, 'rgba(224,242,254,.72)');
-    g.addColorStop(1, 'rgba(14,165,233,.22)');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = p.line;
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,.78)';
-    ctx.beginPath();
-    ctx.moveTo(-w * .32, -h * .34);
-    ctx.lineTo(w * .22 + Math.sin(phase) * 4, h * .34);
-    ctx.stroke();
-    drawCanvasLabel(ctx, 'FIRST', 0, -4, .08, p.ink, 10);
-    drawCanvasLabel(ctx, 'LIGHT', 0, 10, .08, p.ink, 10);
-    ctx.restore();
+  function ensureFluid(state, w, h) {
+    const key = `fluid:${modelKey(w, h)}`;
+    if (state.key === key && state.fluid) return;
+    state.key = key;
+    state.fluid = [];
+    for (let i = 0; i < 44; i++) {
+      const a = i * 2.399;
+      const r = Math.sqrt(i / 44) * Math.min(w, h) * .26;
+      state.fluid.push({ x: Math.cos(a) * r, y: Math.sin(a) * r, z: Math.sin(a * 2) * 9, vx: 0, vy: 0 });
+    }
   }
 
-  function drawWaxSeal(ctx, x, y, w, h, angle, p, phase) {
+  function stepFluidSplat(ctx, candidate, state, t, w, h) {
+    ensureFluid(state, w, h);
+    const pts = [];
+    state.fluid.forEach((p, i) => {
+      const dx = p.x;
+      const dy = p.y;
+      const swirl = .0028 + Math.sin(t + i) * .0008 + state.pointer.pull * .0009;
+      p.vx += -dy * swirl + state.pointer.vx * .0008;
+      p.vy += dx * swirl + state.pointer.vy * .0008;
+      p.vx *= .975; p.vy *= .975;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.z = Math.sin(t * 2 + i * .3) * 18;
+      const rad = Math.min(w, h) * .29;
+      const mag = Math.hypot(p.x, p.y) || 1;
+      if (mag > rad) { p.x *= rad / mag; p.y *= rad / mag; p.vx *= -.35; p.vy *= -.35; }
+      pts.push(project3d(p.x, p.y, p.z, w, h));
+    });
     ctx.save();
-    drawCord(ctx, x - w * .2, y - h * .75, x - 4, y - h * .22, 8 + Math.sin(phase) * 3, '#3b2618', 1.5);
-    drawCord(ctx, x + w * .2, y - h * .75, x + 4, y - h * .22, 8 - Math.sin(phase) * 3, '#3b2618', 1.5);
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.shadowColor = 'rgba(64,16,16,.25)';
-    ctx.shadowBlur = 16;
-    ctx.shadowOffsetY = 8;
-    for (let i = 0; i < 9; i++) {
-      const a = (Math.PI * 2 * i) / 9 + phase * .04;
+    pts.forEach((p, i) => {
+      const g = ctx.createRadialGradient(p.x - 2, p.y - 2, 1, p.x, p.y, 12);
+      g.addColorStop(0, 'rgba(255,255,255,.78)');
+      g.addColorStop(.3, 'rgba(56,189,248,.58)');
+      g.addColorStop(1, 'rgba(3,105,161,.04)');
+      ctx.fillStyle = g;
       ctx.beginPath();
-      ctx.arc(Math.cos(a) * w * .33, Math.sin(a) * w * .31, w * .2, 0, Math.PI * 2);
-      ctx.fillStyle = i % 2 ? p.a : p.b;
+      ctx.arc(p.x, p.y, 7 + Math.sin(t + i) * 1.6, 0, Math.PI * 2);
       ctx.fill();
-    }
-    ctx.beginPath();
-    ctx.arc(0, 0, w * .42, 0, Math.PI * 2);
-    const g = ctx.createRadialGradient(-w * .16, -w * .18, 2, 0, 0, w * .48);
-    g.addColorStop(0, p.c);
-    g.addColorStop(.4, p.b);
-    g.addColorStop(1, p.a);
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = p.line;
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    drawCanvasLabel(ctx, 'DD', 0, 0, 0, p.ink, 16);
+    });
+    const lens = projectedPanel(0, 3, Math.min(w, h) * .52, Math.min(w, h) * .34, .9, Math.sin(t) * .35, Math.sin(t * .6) * .22, w, h, false);
+    drawEnvironmentReflection(ctx, lens, t, .42);
+    drawFresnelHighlight(ctx, lens, 'rgba(255,255,255,.68)', 1.4);
     ctx.restore();
+    drawPanelText(ctx, 'FLOW', w * .5, h * .5, Math.sin(t) * .08, '#e0f2fe');
   }
 
-  function drawOrigamiFold(ctx, x, y, w, h, angle, p, phase) {
+  function stepMagneticField(ctx, candidate, state, t, w, h) {
+    if (!state.magnet) state.magnet = { x: 0, y: 5, vx: 0, vy: 0 };
+    const poles = [
+      { x: -w * .22, y: -h * .08, sign: 1 },
+      { x: w * .22, y: h * .1, sign: -1 },
+    ];
+    let fx = 0, fy = 0;
+    poles.forEach((pole) => {
+      const dx = pole.x - state.magnet.x;
+      const dy = pole.y - state.magnet.y;
+      const d2 = Math.max(220, dx * dx + dy * dy);
+      fx += dx / d2 * pole.sign * 19;
+      fy += dy / d2 * pole.sign * 19;
+    });
+    fx += state.pointer.dx * .002;
+    fy += state.pointer.dy * .002;
+    state.magnet.vx = (state.magnet.vx + fx) * .93;
+    state.magnet.vy = (state.magnet.vy + fy) * .93;
+    state.magnet.x = clamp(state.magnet.x + state.magnet.vx, -w * .28, w * .28);
+    state.magnet.y = clamp(state.magnet.y + state.magnet.vy, -h * .22, h * .28);
     ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.shadowColor = 'rgba(20,20,20,.16)';
-    ctx.shadowBlur = 16;
-    ctx.shadowOffsetY = 9;
-    ctx.beginPath();
-    ctx.moveTo(-w / 2, -h / 2);
-    ctx.lineTo(w / 2, -h / 2 + 8);
-    ctx.lineTo(w * .38, h / 2);
-    ctx.lineTo(-w / 2, h * .34);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    g.addColorStop(0, p.c);
-    g.addColorStop(.55, p.a);
-    g.addColorStop(1, p.b);
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.beginPath();
-    ctx.moveTo(-w / 2, -h / 2);
-    ctx.lineTo(w * .12 + Math.sin(phase) * 2, h * .08);
-    ctx.lineTo(w / 2, -h / 2 + 8);
-    ctx.fillStyle = 'rgba(255,255,255,.46)';
-    ctx.fill();
-    ctx.strokeStyle = p.line;
-    ctx.stroke();
-    drawWrinkleLines(ctx, -w * .35, -h * .24, w * .7, h * .62, 5, phase, 'rgba(60,44,26,.18)');
-    drawCanvasLabel(ctx, "Don't Die.", 0, 9, -.06, p.ink, 9);
-    ctx.restore();
-  }
-
-  function drawCarbonBlade(ctx, x, y, w, h, angle, p, phase) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.shadowColor = 'rgba(0,0,0,.34)';
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetY = 9;
-    ctx.beginPath();
-    ctx.moveTo(-w * .38, -h / 2);
-    ctx.lineTo(w * .46, -h * .4);
-    ctx.lineTo(w * .34, h / 2);
-    ctx.lineTo(-w * .48, h * .36);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    g.addColorStop(0, '#020617');
-    g.addColorStop(.42, p.b);
-    g.addColorStop(.6, '#09090b');
-    g.addColorStop(1, '#27272a');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.save();
-    ctx.clip();
-    ctx.strokeStyle = 'rgba(255,255,255,.08)';
-    ctx.lineWidth = 1;
-    for (let i = -8; i < 18; i++) {
+    for (let i = 0; i < 9; i++) {
+      ctx.strokeStyle = `rgba(124,45,18,${.15 + i * .025})`;
+      ctx.lineWidth = .7;
       ctx.beginPath();
-      ctx.moveTo(-w + i * 9 + Math.sin(phase) * 2, -h / 2);
-      ctx.lineTo(i * 9, h / 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(w - i * 9, -h / 2);
-      ctx.lineTo(-i * 9, h / 2);
+      const off = (i - 4) * 7;
+      ctx.moveTo(w * .5 - w * .27, h * .5 - h * .08 + off);
+      ctx.bezierCurveTo(w * .5 - 12, h * .5 - 54 + off * .3, w * .5 + 12, h * .5 + 54 + off * .3, w * .5 + w * .27, h * .5 + h * .1 - off);
       ctx.stroke();
     }
+    poles.forEach((pole) => {
+      const p = project3d(pole.x, pole.y, 0, w, h);
+      drawAnchor(ctx, p.x, p.y, pole.sign > 0 ? '#dc2626' : '#2563eb');
+    });
     ctx.restore();
-    ctx.strokeStyle = p.line;
-    ctx.stroke();
-    drawCanvasLabel(ctx, 'DONT', 0, -5, .08, p.ink, 10);
-    drawCanvasLabel(ctx, 'DIE', 0, 10, .08, p.ink, 10);
-    ctx.restore();
+    const panel = projectedPanel(state.magnet.x, state.magnet.y, 52, 40, .45, Math.sin(t * 1.4) * .55, Math.atan2(state.magnet.vy, state.magnet.vx) * .3, w, h, false);
+    fillPanel(ctx, panel, candidate, .52, t);
+    drawPanelText(ctx, 'FIELD', w * .5 + state.magnet.x, h * .5 + state.magnet.y, 0, '#fff7ed');
   }
 
-  function drawEnamelPin(ctx, x, y, w, h, angle, p, phase) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.shadowColor = 'rgba(20,20,20,.25)';
-    ctx.shadowBlur = 14;
-    ctx.shadowOffsetY = 9;
-    ctx.beginPath();
-    ctx.moveTo(0, -h / 2);
-    ctx.bezierCurveTo(w * .46, -h * .48, w * .5, -h * .04, w * .38, h * .18);
-    ctx.bezierCurveTo(w * .22, h * .42, 0, h / 2, 0, h / 2);
-    ctx.bezierCurveTo(0, h / 2, -w * .22, h * .42, -w * .38, h * .18);
-    ctx.bezierCurveTo(-w * .5, -h * .04, -w * .46, -h * .48, 0, -h / 2);
-    const g = ctx.createRadialGradient(-w * .18, -h * .2, 4, 0, 0, w * .58);
-    g.addColorStop(0, p.c);
-    g.addColorStop(.33, p.b);
-    g.addColorStop(.72, p.a);
-    g.addColorStop(1, '#030712');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = 'rgba(255,255,255,.62)';
-    ctx.stroke();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = p.line;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, -h * .16, w * .12 + Math.sin(phase) * 1.2, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,.82)';
-    ctx.fill();
-    drawCanvasLabel(ctx, 'DIE', 0, h * .12, 0, p.ink, 11);
-    ctx.restore();
+  function stepTorsionStrip(ctx, candidate, state, t, w, h) {
+    const segments = 13;
+    const width = Math.min(w, h) * .26;
+    const height = Math.min(h * .62, 82);
+    const rows = [];
+    const twistPull = state.pointer.active ? state.pointer.dx * .018 : 0;
+    for (let i = 0; i < segments; i++) {
+      const v = i / (segments - 1);
+      const y = -height / 2 + v * height;
+      const twist = Math.sin(t * 1.4 + v * 4 + state.seed) * .75 + twistPull * (v - .5);
+      const left = rotate3d({ x: -width / 2, y, z: 0 }, .5, twist, Math.sin(t) * .08);
+      const right = rotate3d({ x: width / 2, y, z: 0 }, .5, twist, Math.sin(t) * .08);
+      rows.push([project3d(left.x, left.y, left.z, w, h), project3d(right.x, right.y, right.z, w, h)]);
+    }
+    for (let i = 0; i < rows.length - 1; i++) {
+      const quad = [rows[i][0], rows[i][1], rows[i + 1][1], rows[i + 1][0]];
+      ctx.save();
+      pathPoints(ctx, quad);
+      ctx.fillStyle = i % 2 ? 'rgba(76,29,149,.78)' : 'rgba(167,139,250,.62)';
+      ctx.fill();
+      drawEnvironmentReflection(ctx, quad, t + i, .22);
+      drawFresnelHighlight(ctx, quad, 'rgba(255,255,255,.42)', .65);
+      ctx.restore();
+    }
+    drawPanelText(ctx, 'TWIST', w * .5, h * .5, Math.sin(t) * .16, '#f5f3ff');
   }
 
-  function drawThreadLoop(ctx, x, y, w, h, angle, p, phase) {
+  function stepGyroPrecession(ctx, candidate, state, t, w, h) {
+    if (!state.gyro) state.gyro = { yaw: 0, spin: 0, tilt: .8 };
+    state.gyro.spin += .22 + Math.abs(state.pointer.vx) * .006;
+    state.gyro.yaw += .025 + state.pointer.dx * .0009;
+    state.gyro.tilt += (state.pointer.active ? clamp(state.pointer.dy * .004, -.35, .35) : Math.sin(t * .8) * .02) - state.gyro.tilt * .018;
+    const axisA = project3d(Math.cos(state.gyro.yaw) * -42, Math.sin(state.gyro.tilt) * -18, -20, w, h);
+    const axisB = project3d(Math.cos(state.gyro.yaw) * 42, Math.sin(state.gyro.tilt) * 18, 20, w, h);
     ctx.save();
-    ctx.strokeStyle = p.line;
+    ctx.strokeStyle = 'rgba(20,20,20,.5)';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.ellipse(x, y - h * .42, w * .42, h * .22 + Math.sin(phase) * 1.5, Math.sin(phase) * .08, 0, Math.PI * 2);
+    ctx.moveTo(axisA.x, axisA.y);
+    ctx.lineTo(axisB.x, axisB.y);
     ctx.stroke();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    roundRect(ctx, -w * .32, -h * .16, w * .64, h * .62, 8);
-    const g = ctx.createLinearGradient(-w * .32, -h * .16, w * .32, h * .46);
-    g.addColorStop(0, p.c);
-    g.addColorStop(.36, p.b);
-    g.addColorStop(1, p.a);
+    const disc = [];
+    const rx = 43;
+    const ry = 15;
+    for (let i = 0; i < 28; i++) {
+      const a = Math.PI * 2 * i / 28 + state.gyro.spin;
+      const p = rotate3d({ x: Math.cos(a) * rx, y: Math.sin(a) * ry, z: 0 }, state.gyro.tilt, state.gyro.yaw, .1);
+      disc.push(project3d(p.x, p.y, p.z, w, h));
+    }
+    pathPoints(ctx, disc);
+    const g = ctx.createRadialGradient(w * .45, h * .42, 2, w * .5, h * .5, 50);
+    g.addColorStop(0, '#fff');
+    g.addColorStop(.26, '#67e8f9');
+    g.addColorStop(.7, candidate.accent);
+    g.addColorStop(1, '#083344');
     ctx.fillStyle = g;
-    ctx.shadowColor = 'rgba(20,20,20,.18)';
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = 'rgba(20,20,20,.22)';
+    ctx.shadowBlur = 14;
     ctx.shadowOffsetY = 7;
     ctx.fill();
     ctx.shadowBlur = 0;
-    drawWrinkleLines(ctx, -w * .25, -h * .1, w * .5, h * .48, 7, phase, 'rgba(255,255,255,.18)');
-    ctx.strokeStyle = p.line;
-    ctx.stroke();
-    drawCanvasLabel(ctx, "Don't Die.", 0, h * .12, 0, p.ink, 8);
+    drawEnvironmentReflection(ctx, disc, t, .36);
+    drawFresnelHighlight(ctx, disc, 'rgba(255,255,255,.78)', 1.1);
     ctx.restore();
+    drawPanelText(ctx, 'GYRO', w * .5, h * .5, Math.sin(state.gyro.yaw) * .2, '#ecfeff');
   }
 
-  function drawChromeClip(ctx, x, y, w, h, angle, p, phase) {
+  function stepSuspensionBounce(ctx, candidate, state, t, w, h) {
+    if (!state.suspension) state.suspension = { y: 0, vy: 0, pitch: 0, vp: 0 };
+    const s = state.suspension;
+    const target = state.pointer.active ? clamp(state.pointer.dy * .22, -18, 26) : Math.sin(t * 2 + state.seed) * 4;
+    s.vy += (target - s.y) * .075 - s.vy * .04;
+    s.vy *= .88;
+    s.y += s.vy;
+    const pitchTarget = state.pointer.dx * .004 + Math.sin(t * 1.6) * .08;
+    s.vp += (pitchTarget - s.pitch) * .075;
+    s.vp *= .86;
+    s.pitch += s.vp;
+    const baseY = h * .5 + s.y;
+    const leftTop = { x: w * .35, y: baseY - 22 };
+    const rightTop = { x: w * .65, y: baseY - 22 };
+    const leftBottom = { x: w * .33, y: h * .73 };
+    const rightBottom = { x: w * .67, y: h * .73 };
     ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.lineWidth = 9;
-    ctx.lineCap = 'round';
-    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    g.addColorStop(0, '#475569');
-    g.addColorStop(.24, p.b);
-    g.addColorStop(.42, '#94a3b8');
-    g.addColorStop(.67, '#f8fafc');
-    g.addColorStop(1, '#64748b');
-    ctx.strokeStyle = g;
-    ctx.shadowColor = 'rgba(20,20,20,.2)';
-    ctx.shadowBlur = 14;
-    ctx.shadowOffsetY = 8;
-    ctx.beginPath();
-    ctx.moveTo(-w * .28, -h * .42);
-    ctx.quadraticCurveTo(w * .42, -h * .48, w * .28, h * .24);
-    ctx.quadraticCurveTo(w * .18, h * .54, -w * .16, h * .34);
-    ctx.quadraticCurveTo(-w * .38, h * .2, -w * .2, -h * .18 + Math.sin(phase) * 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(20,20,20,.38)';
     ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255,255,255,.72)';
-    ctx.beginPath();
-    ctx.moveTo(-w * .18, -h * .36);
-    ctx.quadraticCurveTo(w * .28, -h * .4, w * .18, h * .18);
-    ctx.stroke();
-    drawCanvasLabel(ctx, 'DD', -w * .02, h * .02, .14, p.ink, 10);
-    ctx.restore();
-  }
-
-  function drawKiteCloth(ctx, x, y, w, h, angle, p, phase) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(angle);
-    ctx.shadowColor = 'rgba(20,20,20,.18)';
-    ctx.shadowBlur = 15;
-    ctx.shadowOffsetY = 8;
-    ctx.beginPath();
-    ctx.moveTo(0, -h / 2);
-    ctx.lineTo(w / 2, -h * .06 + Math.sin(phase) * 2);
-    ctx.lineTo(0, h / 2);
-    ctx.lineTo(-w / 2, -h * .08 - Math.sin(phase) * 2);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    g.addColorStop(0, p.c);
-    g.addColorStop(.36, p.a);
-    g.addColorStop(.58, p.b);
-    g.addColorStop(1, '#134e4a');
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.strokeStyle = p.line;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, -h / 2);
-    ctx.lineTo(0, h / 2);
-    ctx.moveTo(-w / 2, -h * .08);
-    ctx.lineTo(w / 2, -h * .06);
-    ctx.strokeStyle = 'rgba(255,255,255,.38)';
-    ctx.stroke();
-    drawWrinkleLines(ctx, -w * .38, -h * .28, w * .76, h * .58, 5, phase, 'rgba(255,255,255,.16)');
-    drawCanvasLabel(ctx, 'DIE', 0, h * .04, 0, p.ink, 10);
-    ctx.restore();
-  }
-
-  function drawVisualCandidate(ctx, candidate, state, t, w, h) {
-    const p = candidatePalette(candidate);
-    ctx.clearRect(0, 0, w, h);
-    const bg = ctx.createLinearGradient(0, 0, w, h);
-    bg.addColorStop(0, 'rgba(255,255,255,.34)');
-    bg.addColorStop(.52, 'rgba(250,248,243,.18)');
-    bg.addColorStop(1, 'rgba(20,20,20,.05)');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, w, h);
-    const anchorX = w * .5;
-    const anchorY = Math.max(12, h * .12);
-    const bob = Math.sin(t * 1.8 + state.seed) * 2.2;
-    const cx = anchorX + state.x;
-    const cy = h * .53 + state.y * .32 + bob;
-    const angle = clamp(state.swing + state.x * .004, -.45, .45);
-    const scale = clamp(Math.min(w / 190, h / 148), .58, 1.1);
-    drawCord(ctx, anchorX - 18 * scale, anchorY, cx - 11 * scale, cy - 46 * scale, 10 + Math.sin(t + state.seed) * 3, p.line, 1.05);
-    drawCord(ctx, anchorX + 18 * scale, anchorY, cx + 11 * scale, cy - 46 * scale, 10 - Math.sin(t + state.seed) * 3, p.line, 1.05);
-    ctx.fillStyle = p.c;
-    ctx.strokeStyle = p.line;
-    [anchorX - 18 * scale, anchorX + 18 * scale].forEach((x) => {
+    [[leftTop, leftBottom], [rightTop, rightBottom]].forEach(([a, b], i) => {
       ctx.beginPath();
-      ctx.arc(x, anchorY, 3.2 * scale, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(a.x, a.y);
+      for (let k = 0; k < 6; k++) {
+        const v = k / 5;
+        const x = a.x + (b.x - a.x) * v + Math.sin(k * Math.PI) * 5;
+        const y = a.y + (b.y - a.y) * v;
+        ctx.lineTo(x + (k % 2 ? 4 : -4), y);
+      }
+      ctx.lineTo(b.x, b.y);
       ctx.stroke();
+      drawAnchor(ctx, b.x, b.y, i ? '#166534' : '#84cc16');
     });
-    const phase = t * 2 + state.seed;
-    const objectW = 52 * scale;
-    const objectH = 82 * scale;
-    if (candidate.style === 'silk') drawFoldedRibbon(ctx, cx, cy, objectW, objectH, angle, p, phase);
-    else if (candidate.style === 'chain') drawMetalChain(ctx, cx, cy, objectW * 1.08, objectH * .84, angle, p, phase);
-    else if (candidate.style === 'glass') drawGlassTag(ctx, cx, cy, objectW * 1.05, objectH * .86, angle, p, phase);
-    else if (candidate.style === 'wax') drawWaxSeal(ctx, cx, cy, objectW * 1.1, objectH * .75, angle, p, phase);
-    else if (candidate.style === 'origami') drawOrigamiFold(ctx, cx, cy, objectW * 1.1, objectH * .86, angle, p, phase);
-    else if (candidate.style === 'carbon') drawCarbonBlade(ctx, cx, cy, objectW, objectH, angle, p, phase);
-    else if (candidate.style === 'enamel') drawEnamelPin(ctx, cx, cy, objectW * 1.05, objectH * .84, angle, p, phase);
-    else if (candidate.style === 'thread') drawThreadLoop(ctx, cx, cy, objectW * 1.18, objectH * .92, angle, p, phase);
-    else if (candidate.style === 'chrome') drawChromeClip(ctx, cx, cy, objectW * 1.18, objectH * .92, angle, p, phase);
-    else drawKiteCloth(ctx, cx, cy, objectW * 1.16, objectH * .92, angle, p, phase);
+    const panel = projectedPanel(0, s.y - 12, 78, 36, .64, s.pitch, s.pitch * .35, w, h, false);
+    fillPanel(ctx, panel, candidate, .48, t);
+    ctx.restore();
+    drawPanelText(ctx, 'SPRING', w * .5, baseY - 14, s.pitch, '#f0fdf4');
   }
 
-  function initVisualCandidateLab({ card, candidate, setOpen, toggleOpen, reduced }) {
+  function drawPhysicsCandidate(ctx, candidate, state, t, w, h) {
+    drawLabBackground(ctx, candidate, t, w, h);
+    if (candidate.id === 'verlet-rope') stepVerletRope(ctx, candidate, state, t, w, h);
+    else if (candidate.id === 'pbd-cloth') stepPbdCloth(ctx, candidate, state, t, w, h);
+    else if (candidate.id === 'rigid-hinge') stepRigidHinge(ctx, candidate, state, t, w, h);
+    else if (candidate.id === 'soft-body') stepSoftBody(ctx, candidate, state, t, w, h);
+    else if (candidate.id === 'newton-cradle') stepNewtonCradle(ctx, candidate, state, t, w, h);
+    else if (candidate.id === 'fluid-splat') stepFluidSplat(ctx, candidate, state, t, w, h);
+    else if (candidate.id === 'magnetic-field') stepMagneticField(ctx, candidate, state, t, w, h);
+    else if (candidate.id === 'torsion-strip') stepTorsionStrip(ctx, candidate, state, t, w, h);
+    else if (candidate.id === 'gyro-precession') stepGyroPrecession(ctx, candidate, state, t, w, h);
+    else stepSuspensionBounce(ctx, candidate, state, t, w, h);
+    drawReferenceBadge(ctx, candidate, w, h);
+  }
+
+  function initPhysicsCandidateLab({ card, candidate, setOpen, toggleOpen, reduced }) {
     const canvas = card.querySelector('canvas');
     const state = {
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      swing: 0,
-      swingVelocity: 0,
-      dragging: false,
+      seed: PHYSICS_CANDIDATES.findIndex((c) => c.id === candidate.id) * .71,
+      pointer: { active: false, x: 0, y: 0, dx: 0, dy: 0, vx: 0, vy: 0, pull: 0 },
+      dragDistance: 0,
       startX: 0,
       startY: 0,
-      baseX: 0,
-      baseY: 0,
       lastX: 0,
       lastY: 0,
-      dragDistance: 0,
-      seed: VISUAL_CANDIDATES.findIndex((c) => c.id === candidate.id) * .73,
       marked: false,
     };
     function localPoint(e) {
@@ -1362,38 +1585,50 @@
       card.dataset.engineStatus = next ? 'drawing' : 'ready';
     }
     canvas.addEventListener('pointerdown', (e) => {
-      state.dragging = true;
+      const pt = localPoint(e);
+      state.pointer.active = true;
+      state.pointer.x = pt.x;
+      state.pointer.y = pt.y;
+      state.pointer.dx = 0;
+      state.pointer.dy = 0;
+      state.pointer.vx = 0;
+      state.pointer.vy = 0;
+      state.pointer.pull = 0;
       state.startX = e.clientX;
       state.startY = e.clientY;
-      state.baseX = state.x;
-      state.baseY = state.y;
       state.lastX = e.clientX;
       state.lastY = e.clientY;
       state.dragDistance = 0;
       canvas.setPointerCapture(e.pointerId);
     });
     canvas.addEventListener('pointermove', (e) => {
-      if (!state.dragging) return;
+      if (!state.pointer.active) return;
+      const pt = localPoint(e);
       const dx = e.clientX - state.startX;
       const dy = e.clientY - state.startY;
       state.dragDistance = Math.max(state.dragDistance, Math.hypot(dx, dy));
-      state.x = clamp(state.baseX + dx * .52, -42, 42);
-      state.y = clamp(state.baseY + dy * .44, -20, 58);
-      state.vx = e.clientX - state.lastX;
-      state.vy = e.clientY - state.lastY;
-      state.swing = clamp(state.x * .012, -.42, .42);
+      state.pointer.x = pt.x;
+      state.pointer.y = pt.y;
+      state.pointer.dx = dx;
+      state.pointer.dy = dy;
+      state.pointer.vx = e.clientX - state.lastX;
+      state.pointer.vy = e.clientY - state.lastY;
+      state.pointer.pull = clamp(dy / 76, -1, 1.4);
       state.lastX = e.clientX;
       state.lastY = e.clientY;
-      togglePrimed(dy > 34);
+      togglePrimed(Math.abs(dx) > 30 || dy > 34);
     });
     function release(e) {
-      if (!state.dragging) return;
-      state.dragging = false;
+      if (!state.pointer.active) return;
+      state.pointer.active = false;
       if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      const dx = e.clientX - state.startX;
       const dy = e.clientY - state.startY;
-      state.swingVelocity = clamp(state.vx * .012, -.34, .34);
+      state.pointer.dx = dx * .2;
+      state.pointer.dy = dy * .2;
+      state.pointer.pull = 0;
       togglePrimed(false);
-      if (dy > 34) toggleOpen();
+      if (Math.abs(dx) > 30 || dy > 34) toggleOpen();
     }
     canvas.addEventListener('pointerup', release);
     canvas.addEventListener('pointercancel', release);
@@ -1409,20 +1644,14 @@
     });
     card.dataset.engineStatus = 'ready';
     return {
-      update(time) {
+      update(ms) {
         const { ctx, w, h } = resizeCanvas(canvas);
-        if (!state.dragging && !reduced) {
-          state.vx += -state.x * .085;
-          state.vy += -state.y * .09;
-          state.vx *= .78;
-          state.vy *= .77;
-          state.x += state.vx;
-          state.y += state.vy;
-          state.swingVelocity += -state.swing * .062 + state.vx * .0016;
-          state.swingVelocity *= .94;
-          state.swing += state.swingVelocity;
-        }
-        drawVisualCandidate(ctx, candidate, state, time, w, h);
+        const time = reduced ? state.seed : ms / 1000;
+        state.pointer.dx *= .88;
+        state.pointer.dy *= .88;
+        state.pointer.vx *= .86;
+        state.pointer.vy *= .86;
+        drawPhysicsCandidate(ctx, candidate, state, time, w, h);
         if (!state.marked) {
           try { card.dataset.preview = canvas.toDataURL('image/png').slice(0, 24); }
           catch { card.dataset.preview = 'blocked'; }
@@ -1439,14 +1668,14 @@
     stage.hidden = false;
     stage.innerHTML = `
       <div class="summary-physics" id="summary-physics">
-        <section class="physics-lab-panel" aria-label="Don't Die visual candidate bench">
+        <section class="physics-lab-panel" aria-label="Don't Die physics candidate bench">
           <div class="physics-lab-head">
-            <div class="physics-lab-kicker">Don't Die. Object Bench</div>
-            <div class="physics-lab-note">Pull one object · tap to open</div>
+            <div class="physics-lab-kicker">Don't Die. Physics Bench</div>
+            <div class="physics-lab-note">Pull sideways/down · tap to open</div>
           </div>
           <div class="physics-lab-grid">
-            ${VISUAL_CANDIDATES.map((candidate) => `
-              <div class="physics-engine-card engine-card-${candidate.id}" role="button" tabindex="0" data-design-engine="${candidate.id}" data-engine-status="drawing" aria-label="${esc(candidate.label)} Don't Die. 요약 열기">
+            ${PHYSICS_CANDIDATES.map((candidate) => `
+              <div class="physics-engine-card engine-card-${candidate.id}" role="button" tabindex="0" data-physics-engine="${candidate.id}" data-engine-status="drawing" aria-label="${esc(candidate.label)} Don't Die. 요약 열기">
                 <div class="engine-viewport"><canvas class="engine-canvas" aria-hidden="true"></canvas></div>
                 <div class="engine-caption"><span class="engine-name">${esc(candidate.label)}</span><span class="engine-hint">${esc(candidate.hint)}</span></div>
               </div>
@@ -1481,13 +1710,12 @@
       sheet.setAttribute('aria-hidden', String(!next));
     }
     function toggleOpen() { setOpen(!openState); }
-    physics.querySelectorAll('[data-design-engine]').forEach((card) => {
-      const candidate = VISUAL_CANDIDATES.find((item) => item.id === card.dataset.designEngine);
-      if (candidate) engineLabs.push(initVisualCandidateLab({ card, candidate, setOpen, toggleOpen, reduced }));
+    physics.querySelectorAll('[data-physics-engine]').forEach((card) => {
+      const candidate = PHYSICS_CANDIDATES.find((item) => item.id === card.dataset.physicsEngine);
+      if (candidate) engineLabs.push(initPhysicsCandidateLab({ card, candidate, setOpen, toggleOpen, reduced }));
     });
     function tick(ms) {
-      const time = ms / 1000;
-      engineLabs.forEach((lab) => lab && lab.update && lab.update(time));
+      engineLabs.forEach((lab) => lab && lab.update && lab.update(ms));
       requestAnimationFrame(tick);
     }
     function closeSummarySheet(e) {

@@ -55,47 +55,58 @@ class FrontendMarkupTest(unittest.TestCase):
         sheet = css_block(html, ".summary-sheet {")
         self.assertIn("text-align: left;", sheet)
 
-    def test_daily_summary_candidates_use_spring_toggle_and_material_depth(self):
+    def test_daily_summary_candidates_use_distinct_physics_and_reflections(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn("perspective:", css_block(html, ".daily-ribbon-stage {"))
         self.assertIn("transform-style: preserve-3d;", css_block(html, ".physics-engine-card {"))
-        self.assertIn("state.swing", html)
-        self.assertIn("state.vx", html)
-        self.assertIn("drawWrinkleLines", html)
-        self.assertIn("drawSpecularBand", html)
+        self.assertIn("const PHYSICS_REFERENCES = {", html)
+        for fn in [
+            "stepVerletRope",
+            "stepPbdCloth",
+            "stepRigidHinge",
+            "stepSoftBody",
+            "stepNewtonCradle",
+            "stepFluidSplat",
+            "stepMagneticField",
+            "stepTorsionStrip",
+            "stepGyroPrecession",
+            "stepSuspensionBounce",
+        ]:
+            self.assertIn(f"function {fn}", html)
+        self.assertIn("project3d", html)
+        self.assertIn("drawEnvironmentReflection", html)
+        self.assertIn("drawFresnelHighlight", html)
+        self.assertIn("drawReferenceBadge", html)
         self.assertIn("setOpen(!openState)", html)
 
-    def test_daily_summary_has_ten_visual_3d_candidates(self):
+    def test_daily_summary_has_ten_repo_referenced_physics_candidates(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         self.assertIn("html { scroll-behavior: smooth; overflow-x: hidden; }", html)
         self.assertRegex(html, r"body \{[^}]*overflow-x: hidden;")
         self.assertIn('class="physics-lab-grid"', html)
-        self.assertIn("const VISUAL_CANDIDATES = [", html)
-        for engine_id in [
-            "silk-bookmark",
-            "brass-chain",
-            "glass-prism",
-            "wax-seal",
-            "origami-fold",
-            "carbon-blade",
-            "enamel-pin",
-            "thread-loop",
-            "chrome-clip",
-            "kite-cloth",
+        self.assertIn("const PHYSICS_CANDIDATES = [", html)
+        for engine_id, repo in [
+            ("verlet-rope", "https://github.com/subprotocol/verlet-js"),
+            ("pbd-cloth", "https://github.com/holtsetio/breeze"),
+            ("rigid-hinge", "https://github.com/liabru/matter-js"),
+            ("soft-body", "https://github.com/lo-th/Oimo.js"),
+            ("newton-cradle", "https://github.com/schteppe/p2.js"),
+            ("fluid-splat", "https://github.com/PavelDoGreat/WebGL-Fluid-Simulation"),
+            ("magnetic-field", "https://github.com/liabru/matter-attractors"),
+            ("torsion-strip", "https://github.com/kripken/ammo.js"),
+            ("gyro-precession", "https://github.com/schteppe/cannon.js"),
+            ("suspension-bounce", "https://github.com/dimforge/rapier.js"),
         ]:
             self.assertIn(f"id: '{engine_id}'", html)
-        self.assertIn('data-design-engine="${candidate.id}"', html)
-        self.assertIn("VISUAL_CANDIDATES.map", html)
-        self.assertIn("function initVisualCandidateLab", html)
-        self.assertIn("function drawVisualCandidate", html)
-        self.assertIn("function candidatePalette", html)
-        self.assertIn("drawFoldedRibbon", html)
-        self.assertIn("drawMetalChain", html)
-        self.assertIn("drawGlassTag", html)
-        self.assertIn("drawWaxSeal", html)
+            self.assertIn(repo, html)
+        self.assertIn('data-physics-engine="${candidate.id}"', html)
+        self.assertIn("PHYSICS_CANDIDATES.map", html)
+        self.assertIn("function initPhysicsCandidateLab", html)
+        self.assertIn("function drawPhysicsCandidate", html)
         self.assertIn("data-engine-status", html)
         self.assertIn("canvas.toDataURL", html)
         self.assertIn("setOpen(!openState)", html)
+        self.assertNotIn("const VISUAL_CANDIDATES = [", html)
         self.assertNotIn('data-summary-engine="planck-rope"', html)
         self.assertNotIn('data-summary-engine="three-cloth"', html)
         self.assertNotIn("https://cdn.jsdelivr.net/npm/matter-js@", html)

@@ -55,45 +55,55 @@ class FrontendMarkupTest(unittest.TestCase):
         sheet = css_block(html, ".summary-sheet {")
         self.assertIn("text-align: left;", sheet)
 
-    def test_daily_summary_ribbon_uses_pendulum_toggle_and_3d_cloth(self):
+    def test_daily_summary_candidates_use_spring_toggle_and_material_depth(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn("perspective:", css_block(html, ".daily-ribbon-stage {"))
-        self.assertIn("perspective(760px)", html)
-        self.assertIn("rotateX(var(--ribbon-fold-x))", html)
-        self.assertIn("linear-gradient(115deg", html)
-        self.assertIn("swingAngle", html)
-        self.assertIn("swingVelocity", html)
-        self.assertIn("startPendulum", html)
-        self.assertIn("setOpen(!state.open)", html)
+        self.assertIn("transform-style: preserve-3d;", css_block(html, ".physics-engine-card {"))
+        self.assertIn("state.swing", html)
+        self.assertIn("state.vx", html)
+        self.assertIn("drawWrinkleLines", html)
+        self.assertIn("drawSpecularBand", html)
+        self.assertIn("setOpen(!openState)", html)
 
-    def test_daily_summary_has_multi_engine_physics_comparison_lab(self):
+    def test_daily_summary_has_ten_visual_3d_candidates(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         self.assertIn("html { scroll-behavior: smooth; overflow-x: hidden; }", html)
         self.assertRegex(html, r"body \{[^}]*overflow-x: hidden;")
         self.assertIn('class="physics-lab-grid"', html)
-        self.assertGreaterEqual(html.count('class="physics-engine-card'), 4)
-        self.assertIn('data-summary-engine="native-spring"', html)
-        self.assertIn('data-summary-engine="matter-chain"', html)
-        self.assertIn('data-summary-engine="planck-rope"', html)
-        self.assertIn('data-summary-engine="three-cloth"', html)
-        self.assertIn("https://cdn.jsdelivr.net/npm/matter-js@", html)
-        self.assertIn("https://cdnjs.cloudflare.com/ajax/libs/planck-js/", html)
-        self.assertIn("await import('https://unpkg.com/three@", html)
-        self.assertIn("const PHYSICS_ENGINES = [", html)
-        self.assertIn("function initNativeSpringBookmark", html)
-        self.assertIn("function initMatterChainTag", html)
-        self.assertIn("function initPlanckRopeTag", html)
-        self.assertIn("function initThreeClothTag", html)
-        self.assertIn("new THREE.BufferGeometry()", html)
-        self.assertIn("preserveDrawingBuffer: true", html)
-        self.assertIn("geometry.computeVertexNormals()", html)
-        self.assertIn("Matter.Engine.create", html)
-        self.assertIn("planck.World", html)
+        self.assertIn("const VISUAL_CANDIDATES = [", html)
+        for engine_id in [
+            "silk-bookmark",
+            "brass-chain",
+            "glass-prism",
+            "wax-seal",
+            "origami-fold",
+            "carbon-blade",
+            "enamel-pin",
+            "thread-loop",
+            "chrome-clip",
+            "kite-cloth",
+        ]:
+            self.assertIn(f"id: '{engine_id}'", html)
+        self.assertIn('data-design-engine="${candidate.id}"', html)
+        self.assertIn("VISUAL_CANDIDATES.map", html)
+        self.assertIn("function initVisualCandidateLab", html)
+        self.assertIn("function drawVisualCandidate", html)
+        self.assertIn("function candidatePalette", html)
+        self.assertIn("drawFoldedRibbon", html)
+        self.assertIn("drawMetalChain", html)
+        self.assertIn("drawGlassTag", html)
+        self.assertIn("drawWaxSeal", html)
         self.assertIn("data-engine-status", html)
+        self.assertIn("canvas.toDataURL", html)
+        self.assertIn("setOpen(!openState)", html)
+        self.assertNotIn('data-summary-engine="planck-rope"', html)
+        self.assertNotIn('data-summary-engine="three-cloth"', html)
+        self.assertNotIn("https://cdn.jsdelivr.net/npm/matter-js@", html)
+        self.assertNotIn("https://cdnjs.cloudflare.com/ajax/libs/planck-js/", html)
+        self.assertNotIn("await import('https://unpkg.com/three@", html)
         self.assertNotIn('class="ribbon-mode-selector"', html)
         self.assertNotIn('<canvas class="ribbon-cloth-canvas"', html)
-        self.assertIn("verlet", html.lower())
-        self.assertIn("engineLabs.forEach", html)
+        self.assertEqual(html.count('class="physics-engine-card'), 1)
 
     def test_mobile_daily_summary_sheet_starts_near_top_with_breathing_room(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
@@ -115,18 +125,18 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("overflow-wrap: break-word;", title)
         self.assertIn("text-wrap: balance;", title)
 
-    def test_mobile_physics_lab_shows_all_four_candidates_without_side_scroll(self):
+    def test_mobile_physics_lab_shows_all_ten_candidates_without_side_scroll(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]
         mobile_stage = css_block(mobile, ".daily-ribbon-stage {")
         mobile_grid = css_block(mobile, ".physics-lab-grid {")
         mobile_card = css_block(mobile, ".physics-engine-card {")
-        self.assertIn("height: 390px;", mobile_stage)
+        self.assertIn("height: 636px;", mobile_stage)
         self.assertIn("display: grid;", mobile_grid)
         self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", mobile_grid)
         self.assertNotIn("overflow-x: auto;", mobile_grid)
         self.assertNotIn("scroll-snap-type:", mobile_grid)
-        self.assertIn("min-height: 142px;", mobile_card)
+        self.assertIn("min-height: 91px;", mobile_card)
         self.assertIn("scroll-snap-align: none;", mobile_card)
 
     def test_daily_summary_close_uses_pointerdown_on_mobile(self):

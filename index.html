@@ -261,13 +261,13 @@
   .hero .read-more::after { content: '→'; transition: transform .2s; }
   .hero:hover .read-more::after { transform: translateX(4px); }
 
-  /* ── Daily physics comparison lab ── */
+  /* ── Daily visual candidate lab ── */
   .daily-ribbon-stage {
     position: absolute;
     top: 128px;
-    left: max(18px, calc(50% - 460px));
-    width: min(920px, calc(100vw - 36px));
-    height: 276px;
+    left: max(18px, calc(50% - 530px));
+    width: min(1060px, calc(100vw - 36px));
+    height: 386px;
     margin: 0;
     padding: 0;
     z-index: 60;
@@ -285,21 +285,22 @@
     pointer-events: auto;
     text-align: left;
     background:
-      linear-gradient(180deg, rgba(250,248,243,.96), rgba(243,240,231,.94)),
-      repeating-linear-gradient(90deg, rgba(20,20,20,.035) 0 1px, transparent 1px 18px);
+      radial-gradient(circle at 12% 0%, rgba(255,255,255,.78), transparent 28%),
+      linear-gradient(180deg, rgba(250,248,243,.98), rgba(238,235,226,.95)),
+      repeating-linear-gradient(90deg, rgba(20,20,20,.026) 0 1px, transparent 1px 18px);
     border: 1px solid var(--rule);
     border-radius: 6px;
     box-shadow: 0 28px 70px rgba(20,20,20,.16), inset 0 1px 0 rgba(255,255,255,.75);
-    padding: 14px;
+    padding: 12px;
   }
   .physics-lab-head {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
     gap: 16px;
-    padding: 0 2px 12px;
+    padding: 0 2px 10px;
     border-bottom: 1px solid var(--rule-soft);
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
   .physics-lab-kicker {
     font-family: var(--mono);
@@ -318,20 +319,25 @@
   }
   .physics-lab-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 9px;
   }
   .physics-engine-card {
     position: relative;
-    min-height: 174px;
+    min-height: 154px;
     border: 1px solid var(--rule-soft);
     border-radius: 6px;
-    background: color-mix(in srgb, var(--paper) 94%, white);
+    background:
+      radial-gradient(circle at 18% 14%, rgba(255,255,255,.7), transparent 34%),
+      linear-gradient(145deg, rgba(255,255,255,.5), rgba(20,20,20,.045)),
+      color-mix(in srgb, var(--paper) 94%, white);
     color: var(--ink);
     overflow: hidden;
     cursor: grab;
     touch-action: none;
     user-select: none;
+    transform-style: preserve-3d;
+    perspective: 620px;
     box-shadow: inset 0 1px 0 rgba(255,255,255,.68), 0 12px 24px rgba(20,20,20,.08);
   }
   .physics-engine-card:active { cursor: grabbing; }
@@ -340,8 +346,8 @@
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(circle at 18% 12%, rgba(255,255,255,.64), transparent 30%),
-      linear-gradient(145deg, rgba(185,28,28,.08), transparent 42%, rgba(20,20,20,.08));
+      linear-gradient(115deg, rgba(255,255,255,.22), transparent 32%, rgba(20,20,20,.08) 74%, transparent),
+      radial-gradient(circle at 78% 86%, rgba(20,20,20,.1), transparent 36%);
     pointer-events: none;
     z-index: 1;
   }
@@ -362,7 +368,7 @@
     position: absolute;
     left: 10px;
     right: 10px;
-    bottom: 9px;
+    bottom: 8px;
     z-index: 4;
     display: flex;
     justify-content: space-between;
@@ -386,111 +392,10 @@
     color: var(--ink-4);
     text-align: right;
   }
-  .summary-ribbon-pull {
-    --ribbon-x: 0px;
-    --ribbon-y: 26px;
-    --ribbon-tilt: 0deg;
-    --ribbon-fold-x: 0deg;
-    --ribbon-fold-y: 0deg;
-    position: absolute;
-    left: 50%;
-    top: 18px;
-    width: 52px;
-    min-height: 118px;
-    padding: 0;
-    border: 1px solid var(--rule);
-    border-radius: 6px;
-    background:
-      linear-gradient(115deg, rgba(255,255,255,.58) 0 14%, transparent 14% 34%, rgba(20,20,20,.08) 34% 38%, transparent 38% 64%, rgba(255,255,255,.36) 64% 76%, rgba(20,20,20,.07) 76% 82%, transparent 82%),
-      linear-gradient(180deg, rgba(185,28,28,.14), transparent 20%, rgba(20,20,20,.05) 50%, transparent 82%, rgba(185,28,28,.18)),
-      repeating-linear-gradient(180deg, rgba(20,20,20,.035) 0 1px, transparent 1px 7px),
-      var(--paper);
-    color: var(--ink);
-    box-shadow: 0 18px 34px rgba(20,20,20,.12), inset 0 1px 0 rgba(255,255,255,.75);
-    cursor: grab;
-    touch-action: none;
-    user-select: none;
-    pointer-events: auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transform-style: preserve-3d;
-    transform: perspective(760px) translate(calc(-50% + var(--ribbon-x)), var(--ribbon-y)) rotate(var(--ribbon-tilt)) rotateX(var(--ribbon-fold-x)) rotateY(var(--ribbon-fold-y));
-    transform-origin: 50% -40px;
-    z-index: 62;
-  }
-  .summary-ribbon-pull:active { cursor: grabbing; }
-  .summary-ribbon-pull::before,
-  .summary-ribbon-pull::after {
-    content: '';
-    position: absolute;
-  }
-  .summary-ribbon-pull::before {
-    inset: 12px 9px 38px;
-    border-left: 1px solid rgba(20,20,20,.22);
-    border-right: 1px solid rgba(20,20,20,.22);
-    background:
-      radial-gradient(ellipse at 30% 18%, rgba(255,255,255,.46), transparent 34%),
-      linear-gradient(90deg, rgba(20,20,20,.08), transparent 18%, rgba(255,255,255,.18) 42%, rgba(20,20,20,.07) 72%, transparent);
-    transform: translateZ(1px);
-  }
-  .summary-ribbon-pull::after {
-    left: 10px;
-    right: 10px;
-    bottom: 16px;
-    height: 1px;
-    border-top: 1px solid rgba(20,20,20,.28);
-  }
-  .ribbon-title {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  .ribbon-line {
-    display: block;
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-    font-family: var(--mono);
-    font-size: .68rem;
-    font-weight: 800;
-    letter-spacing: .14em;
-    line-height: 1;
-    color: var(--ink);
-    margin: 16px 0 22px;
-    position: relative;
-    z-index: 2;
-    text-shadow: 0 1px 0 rgba(250,248,243,.72), 0 10px 18px rgba(20,20,20,.18);
-  }
-  .ribbon-meta { display: none; }
-  .ribbon-handle {
-    position: absolute;
-    left: 50%;
-    bottom: -22px;
-    width: 52px;
-    height: 22px;
-    transform: translateX(-50%);
-    border: 1px solid var(--rule);
-    border-top: none;
-    border-radius: 0 0 6px 6px;
-    background: var(--ink);
-    color: var(--paper);
-    font-family: var(--mono);
-    font-size: 9px;
-    letter-spacing: .14em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 12px 18px rgba(20,20,20,.14);
-    z-index: 3;
-  }
-  .summary-physics.primed .ribbon-handle { background: var(--accent); }
-  .engine-card-matter .engine-viewport,
-  .engine-card-planck .engine-viewport,
-  .engine-card-three .engine-viewport {
-    filter: drop-shadow(0 12px 18px rgba(20,20,20,.14));
+  .physics-engine-card[data-engine-status="drawing"] .engine-name::after {
+    content: ' · drawing';
+    color: var(--ink-4);
+    font-weight: 700;
   }
   .summary-sheet {
     position: fixed;
@@ -584,37 +489,38 @@
   }
   @media (max-width: 720px) {
     .daily-ribbon-stage {
-      top: 206px;
+      top: 156px;
       left: 8px;
       right: auto;
       width: calc(100vw - 16px);
-      height: 390px;
+      height: 636px;
     }
-    .physics-lab-panel { padding: 10px; }
+    .physics-lab-panel { padding: 8px; }
     .physics-lab-head { display: block; }
     .physics-lab-note { margin-top: 5px; }
     .physics-lab-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
+      gap: 7px;
       padding-bottom: 0;
     }
     .physics-engine-card {
-      min-height: 142px;
+      min-height: 91px;
       scroll-snap-align: none;
     }
-    .summary-ribbon-pull {
-      width: 44px;
-      min-height: 104px;
+    .engine-caption {
+      left: 7px;
+      right: 7px;
+      bottom: 5px;
+      gap: 5px;
     }
-    .ribbon-line {
-      font-size: .62rem;
-      margin-bottom: 14px;
+    .engine-name {
+      font-size: 8px;
+      letter-spacing: .06em;
     }
-    .ribbon-handle {
-      width: 44px;
-      height: 22px;
-      bottom: -22px;
+    .engine-hint {
+      font-size: 7px;
+      letter-spacing: .06em;
     }
     .summary-sheet {
       top: max(8px, env(safe-area-inset-top));
@@ -639,7 +545,7 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .summary-ribbon-pull,
+    .physics-engine-card,
     .summary-sheet,
     .summary-physics {
       transition: none;
@@ -936,41 +842,19 @@
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
   }
-  const PHYSICS_ENGINES = [
-    { id: 'native-spring', label: 'Native Spring', hint: 'CSS + spring' },
-    { id: 'matter-chain', label: 'Matter.js Chain', hint: 'rigid constraints' },
-    { id: 'planck-rope', label: 'Planck Rope', hint: 'Box2D bodies' },
-    { id: 'three-cloth', label: 'Three Cloth', hint: 'Verlet mesh' },
+  const VISUAL_CANDIDATES = [
+    { id: 'silk-bookmark', label: 'Silk Bookmark', hint: 'pleated satin', style: 'silk' },
+    { id: 'brass-chain', label: 'Brass Chain', hint: 'warm metal', style: 'chain' },
+    { id: 'glass-prism', label: 'Glass Prism', hint: 'clear shard', style: 'glass' },
+    { id: 'wax-seal', label: 'Wax Seal', hint: 'cord + stamp', style: 'wax' },
+    { id: 'origami-fold', label: 'Origami Fold', hint: 'paper crease', style: 'origami' },
+    { id: 'carbon-blade', label: 'Carbon Blade', hint: 'woven black', style: 'carbon' },
+    { id: 'enamel-pin', label: 'Enamel Pin', hint: 'hard enamel', style: 'enamel' },
+    { id: 'thread-loop', label: 'Thread Loop', hint: 'soft fabric', style: 'thread' },
+    { id: 'chrome-clip', label: 'Chrome Clip', hint: 'spring steel', style: 'chrome' },
+    { id: 'kite-cloth', label: 'Kite Cloth', hint: 'taut textile', style: 'kite' },
   ];
-  const scriptLoads = new Map();
-  let threeImportPromise = null;
-  function loadScriptOnce(src, globalName) {
-    if (globalName && window[globalName]) return Promise.resolve(window[globalName]);
-    if (!scriptLoads.has(src)) {
-      scriptLoads.set(src, new Promise((resolve, reject) => {
-        const tag = document.createElement('script');
-        tag.src = src;
-        tag.async = true;
-        tag.onload = () => resolve(globalName ? window[globalName] : true);
-        tag.onerror = reject;
-        document.head.appendChild(tag);
-      }));
-    }
-    return scriptLoads.get(src);
-  }
-  async function loadMatter() {
-    return await loadScriptOnce('https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js', 'Matter');
-  }
-  async function loadPlanck() {
-    await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/planck-js/1.4.2/planck.min.js', 'planck');
-    return window.planck || window.pl;
-  }
-  async function loadThree() {
-    if (!threeImportPromise) {
-      threeImportPromise = (async () => await import('https://unpkg.com/three@0.164.1/build/three.module.js'))();
-    }
-    return threeImportPromise;
-  }
+
   function resizeCanvas(canvas) {
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -982,514 +866,572 @@
     }
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    return { ctx, w: rect.width || 190, h: rect.height || 160, dpr };
+    return { ctx, w: rect.width || 190, h: rect.height || 150, dpr };
   }
-  function drawPaperTag(ctx, x, y, w, h, angle, fill, ink, label) {
+
+  function candidatePalette(candidate) {
+    const palettes = {
+      'silk-bookmark': { a: '#7f1111', b: '#e11d48', c: '#fff1f2', ink: '#fff7ed', line: 'rgba(92,12,12,.8)' },
+      'brass-chain': { a: '#7c4a03', b: '#e6b85c', c: '#fff4c6', ink: '#261508', line: 'rgba(72,42,8,.72)' },
+      'glass-prism': { a: '#7dd3fc', b: '#e0f2fe', c: '#ffffff', ink: '#0f172a', line: 'rgba(14,116,144,.58)' },
+      'wax-seal': { a: '#881337', b: '#be123c', c: '#fecdd3', ink: '#fff1f2', line: 'rgba(88,28,20,.78)' },
+      'origami-fold': { a: '#f5efe0', b: '#d9c9a5', c: '#ffffff', ink: '#241c15', line: 'rgba(60,44,26,.52)' },
+      'carbon-blade': { a: '#09090b', b: '#3f3f46', c: '#d4d4d8', ink: '#f8fafc', line: 'rgba(255,255,255,.22)' },
+      'enamel-pin': { a: '#111827', b: '#b91c1c', c: '#f9fafb', ink: '#fef2f2', line: 'rgba(17,24,39,.84)' },
+      'thread-loop': { a: '#1f2937', b: '#f43f5e', c: '#ffe4e6', ink: '#fff7ed', line: 'rgba(31,41,55,.5)' },
+      'chrome-clip': { a: '#7c858d', b: '#f8fafc', c: '#cbd5e1', ink: '#101010', line: 'rgba(71,85,105,.72)' },
+      'kite-cloth': { a: '#0f766e', b: '#f97316', c: '#fff7ed', ink: '#fff7ed', line: 'rgba(15,118,110,.64)' },
+    };
+    return palettes[candidate.id] || palettes['silk-bookmark'];
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    const radius = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + w, y, x + w, y + h, radius);
+    ctx.arcTo(x + w, y + h, x, y + h, radius);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.arcTo(x, y, x + w, y, radius);
+    ctx.closePath();
+  }
+
+  function drawSpecularBand(ctx, x, y, w, h, alpha = .34) {
+    const shine = ctx.createLinearGradient(x, y, x + w, y + h);
+    shine.addColorStop(0, `rgba(255,255,255,${alpha})`);
+    shine.addColorStop(.18, 'rgba(255,255,255,0)');
+    shine.addColorStop(.58, `rgba(255,255,255,${alpha * .78})`);
+    shine.addColorStop(.74, 'rgba(255,255,255,0)');
+    shine.addColorStop(1, 'rgba(0,0,0,.12)');
+    ctx.fillStyle = shine;
+    ctx.fill();
+  }
+
+  function drawWrinkleLines(ctx, x, y, w, h, count, phase, color) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = .7;
+    for (let i = 0; i < count; i++) {
+      const px = x + (w * (i + .5)) / count;
+      const bend = Math.sin(phase + i * 1.7) * w * .035;
+      ctx.beginPath();
+      ctx.moveTo(px, y + 8);
+      ctx.bezierCurveTo(px + bend, y + h * .28, px - bend, y + h * .62, px + bend * .5, y + h - 10);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawCanvasLabel(ctx, text, x, y, angle, color, size = 10) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
+    ctx.fillStyle = color;
+    ctx.font = `900 ${size}px JetBrains Mono, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.letterSpacing = '0px';
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }
+
+  function drawCord(ctx, ax, ay, bx, by, sag, color, width = 1.2) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + sag, bx, by);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawFoldedRibbon(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.shadowColor = 'rgba(20,20,20,.23)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 8;
     ctx.beginPath();
     ctx.moveTo(-w / 2, -h / 2);
     ctx.lineTo(w / 2, -h / 2);
     ctx.lineTo(w / 2, h * .24);
-    ctx.lineTo(0, h / 2);
+    ctx.lineTo(w * .13, h / 2);
+    ctx.lineTo(0, h * .36);
+    ctx.lineTo(-w * .13, h / 2);
     ctx.lineTo(-w / 2, h * .24);
     ctx.closePath();
     const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
-    g.addColorStop(0, 'rgba(255,255,255,.72)');
-    g.addColorStop(.28, fill);
-    g.addColorStop(.64, fill);
-    g.addColorStop(1, 'rgba(20,20,20,.15)');
+    g.addColorStop(0, p.c);
+    g.addColorStop(.14, p.b);
+    g.addColorStop(.5, p.a);
+    g.addColorStop(.74, p.b);
+    g.addColorStop(1, '#380606');
     ctx.fillStyle = g;
-    ctx.shadowColor = 'rgba(20,20,20,.18)';
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetY = 10;
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = 'rgba(20,20,20,.82)';
+    drawSpecularBand(ctx, -w / 2, -h / 2, w, h, .38);
+    drawWrinkleLines(ctx, -w / 2 + 7, -h / 2 + 7, w - 14, h - 20, 6, phase, 'rgba(255,255,255,.2)');
+    ctx.strokeStyle = p.line;
     ctx.lineWidth = 1;
     ctx.stroke();
-    ctx.fillStyle = ink;
-    ctx.font = '800 10px JetBrains Mono, monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.translate(0, -2);
-    ctx.rotate(Math.PI / 2);
-    ctx.fillText(label, 0, 0);
+    drawCanvasLabel(ctx, "Don't Die.", 0, -1, Math.PI / 2, p.ink, 9);
     ctx.restore();
   }
-  function initNativeSpringBookmark({ card, setOpen, reduced }) {
-    const ribbon = card.querySelector('.summary-ribbon-pull');
+
+  function drawMetalChain(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    for (let i = 0; i < 5; i++) {
+      const lx = -w * .3 + i * w * .15;
+      ctx.save();
+      ctx.translate(lx, -h * .56 - i * 1.4);
+      ctx.rotate((i % 2 ? .75 : -.75) + Math.sin(phase + i) * .08);
+      roundRect(ctx, -5, -9, 10, 18, 5);
+      const chainGrad = ctx.createLinearGradient(-5, -9, 5, 9);
+      chainGrad.addColorStop(0, p.c);
+      chainGrad.addColorStop(.45, p.b);
+      chainGrad.addColorStop(1, p.a);
+      ctx.strokeStyle = chainGrad;
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.shadowColor = 'rgba(20,20,20,.2)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 8;
+    roundRect(ctx, -w / 2, -h / 2, w, h, 14);
+    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    g.addColorStop(0, p.c);
+    g.addColorStop(.32, p.b);
+    g.addColorStop(.7, '#94610d');
+    g.addColorStop(1, p.a);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    drawSpecularBand(ctx, -w / 2, -h / 2, w, h, .42);
+    ctx.strokeStyle = p.line;
+    ctx.stroke();
+    drawCanvasLabel(ctx, "DON'T", 0, -8, 0, p.ink, 10);
+    drawCanvasLabel(ctx, 'DIE', 0, 8, 0, p.ink, 10);
+    ctx.restore();
+  }
+
+  function drawGlassTag(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.shadowColor = 'rgba(14,116,144,.22)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 10;
+    ctx.beginPath();
+    ctx.moveTo(-w * .4, -h / 2);
+    ctx.lineTo(w * .46, -h * .37);
+    ctx.lineTo(w * .34, h * .42);
+    ctx.lineTo(-w * .18, h / 2);
+    ctx.lineTo(-w * .5, h * .1);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    g.addColorStop(0, 'rgba(255,255,255,.82)');
+    g.addColorStop(.35, 'rgba(125,211,252,.38)');
+    g.addColorStop(.68, 'rgba(224,242,254,.72)');
+    g.addColorStop(1, 'rgba(14,165,233,.22)');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = p.line;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.78)';
+    ctx.beginPath();
+    ctx.moveTo(-w * .32, -h * .34);
+    ctx.lineTo(w * .22 + Math.sin(phase) * 4, h * .34);
+    ctx.stroke();
+    drawCanvasLabel(ctx, 'FIRST', 0, -4, .08, p.ink, 10);
+    drawCanvasLabel(ctx, 'LIGHT', 0, 10, .08, p.ink, 10);
+    ctx.restore();
+  }
+
+  function drawWaxSeal(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    drawCord(ctx, x - w * .2, y - h * .75, x - 4, y - h * .22, 8 + Math.sin(phase) * 3, '#3b2618', 1.5);
+    drawCord(ctx, x + w * .2, y - h * .75, x + 4, y - h * .22, 8 - Math.sin(phase) * 3, '#3b2618', 1.5);
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.shadowColor = 'rgba(64,16,16,.25)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 8;
+    for (let i = 0; i < 9; i++) {
+      const a = (Math.PI * 2 * i) / 9 + phase * .04;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * w * .33, Math.sin(a) * w * .31, w * .2, 0, Math.PI * 2);
+      ctx.fillStyle = i % 2 ? p.a : p.b;
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, w * .42, 0, Math.PI * 2);
+    const g = ctx.createRadialGradient(-w * .16, -w * .18, 2, 0, 0, w * .48);
+    g.addColorStop(0, p.c);
+    g.addColorStop(.4, p.b);
+    g.addColorStop(1, p.a);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = p.line;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    drawCanvasLabel(ctx, 'DD', 0, 0, 0, p.ink, 16);
+    ctx.restore();
+  }
+
+  function drawOrigamiFold(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.shadowColor = 'rgba(20,20,20,.16)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 9;
+    ctx.beginPath();
+    ctx.moveTo(-w / 2, -h / 2);
+    ctx.lineTo(w / 2, -h / 2 + 8);
+    ctx.lineTo(w * .38, h / 2);
+    ctx.lineTo(-w / 2, h * .34);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    g.addColorStop(0, p.c);
+    g.addColorStop(.55, p.a);
+    g.addColorStop(1, p.b);
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(-w / 2, -h / 2);
+    ctx.lineTo(w * .12 + Math.sin(phase) * 2, h * .08);
+    ctx.lineTo(w / 2, -h / 2 + 8);
+    ctx.fillStyle = 'rgba(255,255,255,.46)';
+    ctx.fill();
+    ctx.strokeStyle = p.line;
+    ctx.stroke();
+    drawWrinkleLines(ctx, -w * .35, -h * .24, w * .7, h * .62, 5, phase, 'rgba(60,44,26,.18)');
+    drawCanvasLabel(ctx, "Don't Die.", 0, 9, -.06, p.ink, 9);
+    ctx.restore();
+  }
+
+  function drawCarbonBlade(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.shadowColor = 'rgba(0,0,0,.34)';
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 9;
+    ctx.beginPath();
+    ctx.moveTo(-w * .38, -h / 2);
+    ctx.lineTo(w * .46, -h * .4);
+    ctx.lineTo(w * .34, h / 2);
+    ctx.lineTo(-w * .48, h * .36);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    g.addColorStop(0, '#020617');
+    g.addColorStop(.42, p.b);
+    g.addColorStop(.6, '#09090b');
+    g.addColorStop(1, '#27272a');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.save();
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,.08)';
+    ctx.lineWidth = 1;
+    for (let i = -8; i < 18; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-w + i * 9 + Math.sin(phase) * 2, -h / 2);
+      ctx.lineTo(i * 9, h / 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(w - i * 9, -h / 2);
+      ctx.lineTo(-i * 9, h / 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = p.line;
+    ctx.stroke();
+    drawCanvasLabel(ctx, 'DONT', 0, -5, .08, p.ink, 10);
+    drawCanvasLabel(ctx, 'DIE', 0, 10, .08, p.ink, 10);
+    ctx.restore();
+  }
+
+  function drawEnamelPin(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.shadowColor = 'rgba(20,20,20,.25)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 9;
+    ctx.beginPath();
+    ctx.moveTo(0, -h / 2);
+    ctx.bezierCurveTo(w * .46, -h * .48, w * .5, -h * .04, w * .38, h * .18);
+    ctx.bezierCurveTo(w * .22, h * .42, 0, h / 2, 0, h / 2);
+    ctx.bezierCurveTo(0, h / 2, -w * .22, h * .42, -w * .38, h * .18);
+    ctx.bezierCurveTo(-w * .5, -h * .04, -w * .46, -h * .48, 0, -h / 2);
+    const g = ctx.createRadialGradient(-w * .18, -h * .2, 4, 0, 0, w * .58);
+    g.addColorStop(0, p.c);
+    g.addColorStop(.33, p.b);
+    g.addColorStop(.72, p.a);
+    g.addColorStop(1, '#030712');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(255,255,255,.62)';
+    ctx.stroke();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = p.line;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, -h * .16, w * .12 + Math.sin(phase) * 1.2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,.82)';
+    ctx.fill();
+    drawCanvasLabel(ctx, 'DIE', 0, h * .12, 0, p.ink, 11);
+    ctx.restore();
+  }
+
+  function drawThreadLoop(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    ctx.strokeStyle = p.line;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(x, y - h * .42, w * .42, h * .22 + Math.sin(phase) * 1.5, Math.sin(phase) * .08, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    roundRect(ctx, -w * .32, -h * .16, w * .64, h * .62, 8);
+    const g = ctx.createLinearGradient(-w * .32, -h * .16, w * .32, h * .46);
+    g.addColorStop(0, p.c);
+    g.addColorStop(.36, p.b);
+    g.addColorStop(1, p.a);
+    ctx.fillStyle = g;
+    ctx.shadowColor = 'rgba(20,20,20,.18)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 7;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    drawWrinkleLines(ctx, -w * .25, -h * .1, w * .5, h * .48, 7, phase, 'rgba(255,255,255,.18)');
+    ctx.strokeStyle = p.line;
+    ctx.stroke();
+    drawCanvasLabel(ctx, "Don't Die.", 0, h * .12, 0, p.ink, 8);
+    ctx.restore();
+  }
+
+  function drawChromeClip(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.lineWidth = 9;
+    ctx.lineCap = 'round';
+    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    g.addColorStop(0, '#475569');
+    g.addColorStop(.24, p.b);
+    g.addColorStop(.42, '#94a3b8');
+    g.addColorStop(.67, '#f8fafc');
+    g.addColorStop(1, '#64748b');
+    ctx.strokeStyle = g;
+    ctx.shadowColor = 'rgba(20,20,20,.2)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 8;
+    ctx.beginPath();
+    ctx.moveTo(-w * .28, -h * .42);
+    ctx.quadraticCurveTo(w * .42, -h * .48, w * .28, h * .24);
+    ctx.quadraticCurveTo(w * .18, h * .54, -w * .16, h * .34);
+    ctx.quadraticCurveTo(-w * .38, h * .2, -w * .2, -h * .18 + Math.sin(phase) * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,.72)';
+    ctx.beginPath();
+    ctx.moveTo(-w * .18, -h * .36);
+    ctx.quadraticCurveTo(w * .28, -h * .4, w * .18, h * .18);
+    ctx.stroke();
+    drawCanvasLabel(ctx, 'DD', -w * .02, h * .02, .14, p.ink, 10);
+    ctx.restore();
+  }
+
+  function drawKiteCloth(ctx, x, y, w, h, angle, p, phase) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.shadowColor = 'rgba(20,20,20,.18)';
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetY = 8;
+    ctx.beginPath();
+    ctx.moveTo(0, -h / 2);
+    ctx.lineTo(w / 2, -h * .06 + Math.sin(phase) * 2);
+    ctx.lineTo(0, h / 2);
+    ctx.lineTo(-w / 2, -h * .08 - Math.sin(phase) * 2);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+    g.addColorStop(0, p.c);
+    g.addColorStop(.36, p.a);
+    g.addColorStop(.58, p.b);
+    g.addColorStop(1, '#134e4a');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = p.line;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -h / 2);
+    ctx.lineTo(0, h / 2);
+    ctx.moveTo(-w / 2, -h * .08);
+    ctx.lineTo(w / 2, -h * .06);
+    ctx.strokeStyle = 'rgba(255,255,255,.38)';
+    ctx.stroke();
+    drawWrinkleLines(ctx, -w * .38, -h * .28, w * .76, h * .58, 5, phase, 'rgba(255,255,255,.16)');
+    drawCanvasLabel(ctx, 'DIE', 0, h * .04, 0, p.ink, 10);
+    ctx.restore();
+  }
+
+  function drawVisualCandidate(ctx, candidate, state, t, w, h) {
+    const p = candidatePalette(candidate);
+    ctx.clearRect(0, 0, w, h);
+    const bg = ctx.createLinearGradient(0, 0, w, h);
+    bg.addColorStop(0, 'rgba(255,255,255,.34)');
+    bg.addColorStop(.52, 'rgba(250,248,243,.18)');
+    bg.addColorStop(1, 'rgba(20,20,20,.05)');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+    const anchorX = w * .5;
+    const anchorY = Math.max(12, h * .12);
+    const bob = Math.sin(t * 1.8 + state.seed) * 2.2;
+    const cx = anchorX + state.x;
+    const cy = h * .53 + state.y * .32 + bob;
+    const angle = clamp(state.swing + state.x * .004, -.45, .45);
+    const scale = clamp(Math.min(w / 190, h / 148), .58, 1.1);
+    drawCord(ctx, anchorX - 18 * scale, anchorY, cx - 11 * scale, cy - 46 * scale, 10 + Math.sin(t + state.seed) * 3, p.line, 1.05);
+    drawCord(ctx, anchorX + 18 * scale, anchorY, cx + 11 * scale, cy - 46 * scale, 10 - Math.sin(t + state.seed) * 3, p.line, 1.05);
+    ctx.fillStyle = p.c;
+    ctx.strokeStyle = p.line;
+    [anchorX - 18 * scale, anchorX + 18 * scale].forEach((x) => {
+      ctx.beginPath();
+      ctx.arc(x, anchorY, 3.2 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+    const phase = t * 2 + state.seed;
+    const objectW = 52 * scale;
+    const objectH = 82 * scale;
+    if (candidate.style === 'silk') drawFoldedRibbon(ctx, cx, cy, objectW, objectH, angle, p, phase);
+    else if (candidate.style === 'chain') drawMetalChain(ctx, cx, cy, objectW * 1.08, objectH * .84, angle, p, phase);
+    else if (candidate.style === 'glass') drawGlassTag(ctx, cx, cy, objectW * 1.05, objectH * .86, angle, p, phase);
+    else if (candidate.style === 'wax') drawWaxSeal(ctx, cx, cy, objectW * 1.1, objectH * .75, angle, p, phase);
+    else if (candidate.style === 'origami') drawOrigamiFold(ctx, cx, cy, objectW * 1.1, objectH * .86, angle, p, phase);
+    else if (candidate.style === 'carbon') drawCarbonBlade(ctx, cx, cy, objectW, objectH, angle, p, phase);
+    else if (candidate.style === 'enamel') drawEnamelPin(ctx, cx, cy, objectW * 1.05, objectH * .84, angle, p, phase);
+    else if (candidate.style === 'thread') drawThreadLoop(ctx, cx, cy, objectW * 1.18, objectH * .92, angle, p, phase);
+    else if (candidate.style === 'chrome') drawChromeClip(ctx, cx, cy, objectW * 1.18, objectH * .92, angle, p, phase);
+    else drawKiteCloth(ctx, cx, cy, objectW * 1.16, objectH * .92, angle, p, phase);
+  }
+
+  function initVisualCandidateLab({ card, candidate, setOpen, toggleOpen, reduced }) {
+    const canvas = card.querySelector('canvas');
     const state = {
-      x: 0, y: 26, vx: 0, vy: 0,
-      targetX: 0, targetY: 26,
-      dragging: false,
-      swinging: false,
-      swingAngle: 0,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      swing: 0,
       swingVelocity: 0,
-      open: false,
-      startX: 0, startY: 0,
-      baseX: 0, baseY: 0,
-      lastX: 0, dragDistance: 0,
+      dragging: false,
+      startX: 0,
+      startY: 0,
+      baseX: 0,
+      baseY: 0,
+      lastX: 0,
+      lastY: 0,
+      dragDistance: 0,
+      seed: VISUAL_CANDIDATES.findIndex((c) => c.id === candidate.id) * .73,
+      marked: false,
     };
-    function apply() {
-      ribbon.style.setProperty('--ribbon-x', `${state.x.toFixed(2)}px`);
-      ribbon.style.setProperty('--ribbon-y', `${state.y.toFixed(2)}px`);
-      ribbon.style.setProperty('--ribbon-tilt', `${clamp(state.x * .08 + state.vx * .18, -12, 12).toFixed(2)}deg`);
-      ribbon.style.setProperty('--ribbon-fold-x', `${clamp(state.y * .04 - 3, -3, 5).toFixed(2)}deg`);
-      ribbon.style.setProperty('--ribbon-fold-y', `${clamp(-state.x * .12, -8, 8).toFixed(2)}deg`);
+    function localPoint(e) {
+      const rect = canvas.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     }
-    function syncOpen(next) {
-      state.open = next;
-      state.targetY = next ? 76 : 26;
-      setOpen(next);
-      ribbon.setAttribute('aria-expanded', String(next));
+    function togglePrimed(next) {
+      card.classList.toggle('primed', next);
+      card.dataset.engineStatus = next ? 'drawing' : 'ready';
     }
-    function startPendulum(impulse) {
-      if (reduced) return;
-      state.swinging = true;
-      state.swingAngle = clamp(state.x / 38, -1.15, 1.15);
-      state.swingVelocity = clamp(impulse * .018, -0.24, 0.24);
-    }
-    ribbon.addEventListener('pointerdown', (e) => {
+    canvas.addEventListener('pointerdown', (e) => {
       state.dragging = true;
       state.startX = e.clientX;
       state.startY = e.clientY;
       state.baseX = state.x;
       state.baseY = state.y;
       state.lastX = e.clientX;
+      state.lastY = e.clientY;
       state.dragDistance = 0;
-      state.swinging = false;
-      ribbon.setPointerCapture(e.pointerId);
+      canvas.setPointerCapture(e.pointerId);
     });
-    ribbon.addEventListener('pointermove', (e) => {
+    canvas.addEventListener('pointermove', (e) => {
       if (!state.dragging) return;
       const dx = e.clientX - state.startX;
       const dy = e.clientY - state.startY;
       state.dragDistance = Math.max(state.dragDistance, Math.hypot(dx, dy));
-      state.x = clamp(state.baseX + dx * .58, -42, 42);
-      state.y = clamp(state.baseY + dy, 8, 126);
+      state.x = clamp(state.baseX + dx * .52, -42, 42);
+      state.y = clamp(state.baseY + dy * .44, -20, 58);
       state.vx = e.clientX - state.lastX;
+      state.vy = e.clientY - state.lastY;
+      state.swing = clamp(state.x * .012, -.42, .42);
       state.lastX = e.clientX;
-      card.classList.toggle('primed', state.y > 104);
-      apply();
+      state.lastY = e.clientY;
+      togglePrimed(dy > 34);
     });
-    function endDrag(e) {
+    function release(e) {
       if (!state.dragging) return;
       state.dragging = false;
-      if (ribbon.hasPointerCapture(e.pointerId)) ribbon.releasePointerCapture(e.pointerId);
-      if (state.y > 104) syncOpen(!state.open);
-      else syncOpen(state.open);
-      card.classList.remove('primed');
-      startPendulum(state.vx);
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      const dy = e.clientY - state.startY;
+      state.swingVelocity = clamp(state.vx * .012, -.34, .34);
+      togglePrimed(false);
+      if (dy > 34) toggleOpen();
     }
-    ribbon.addEventListener('pointerup', endDrag);
-    ribbon.addEventListener('pointercancel', endDrag);
-    ribbon.addEventListener('click', () => {
+    canvas.addEventListener('pointerup', release);
+    canvas.addEventListener('pointercancel', release);
+    card.addEventListener('click', () => {
       if (state.dragDistance > 6) return;
-      setOpen(!state.open);
-      state.open = !state.open;
+      toggleOpen();
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleOpen();
+      }
     });
     card.dataset.engineStatus = 'ready';
     return {
-      update() {
+      update(time) {
+        const { ctx, w, h } = resizeCanvas(canvas);
         if (!state.dragging && !reduced) {
-          state.vy += (state.targetY - state.y) * .115;
-          state.vy *= .74;
+          state.vx += -state.x * .085;
+          state.vy += -state.y * .09;
+          state.vx *= .78;
+          state.vy *= .77;
+          state.x += state.vx;
           state.y += state.vy;
-          if (state.swinging) {
-            state.swingVelocity += -state.swingAngle * .045;
-            state.swingVelocity *= .972;
-            state.swingAngle += state.swingVelocity;
-            const nextX = Math.sin(state.swingAngle) * 38;
-            state.vx = nextX - state.x;
-            state.x = nextX;
-            if (Math.abs(state.swingVelocity) < .0025 && Math.abs(state.swingAngle) < .018) {
-              state.swinging = false;
-              state.targetX = 0;
-            }
-          } else {
-            state.vx += (state.targetX - state.x) * .09;
-            state.vx *= .76;
-            state.x += state.vx;
-          }
+          state.swingVelocity += -state.swing * .062 + state.vx * .0016;
+          state.swingVelocity *= .94;
+          state.swing += state.swingVelocity;
         }
-        apply();
-      },
-    };
-  }
-  async function initMatterChainTag({ card, setOpen, reduced }) {
-    const Matter = await loadMatter();
-    const canvas = card.querySelector('canvas');
-    const engine = Matter.Engine.create();
-    engine.gravity.y = .75;
-    const world = engine.world;
-    let tag = null;
-    let anchors = [];
-    let constraints = [];
-    let dragging = false;
-    let dragStartY = 0;
-    function rebuild() {
-      const { w, h } = resizeCanvas(canvas);
-      Matter.Composite.clear(world, false);
-      anchors = [
-        Matter.Bodies.circle(w * .38, 18, 3, { isStatic: true }),
-        Matter.Bodies.circle(w * .62, 18, 3, { isStatic: true }),
-      ];
-      tag = Matter.Bodies.rectangle(w * .5, h * .48, 58, 78, {
-        chamfer: { radius: 6 },
-        frictionAir: .045,
-        density: .002,
-      });
-      constraints = anchors.map((anchor, i) => Matter.Constraint.create({
-        bodyA: anchor,
-        bodyB: tag,
-        pointB: { x: i ? 19 : -19, y: -36 },
-        length: h * .32,
-        stiffness: .036,
-        damping: .08,
-      }));
-      Matter.World.add(world, [...anchors, tag, ...constraints]);
-    }
-    function draw() {
-      const { ctx, w, h } = resizeCanvas(canvas);
-      ctx.clearRect(0, 0, w, h);
-      ctx.strokeStyle = 'rgba(20,20,20,.62)';
-      ctx.lineWidth = 1.2;
-      constraints.forEach((c) => {
-        const ax = c.bodyA.position.x;
-        const ay = c.bodyA.position.y;
-        const bx = c.bodyB.position.x + c.pointB.x;
-        const by = c.bodyB.position.y + c.pointB.y;
-        ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + 8, bx, by);
-        ctx.stroke();
-      });
-      anchors.forEach((a) => {
-        ctx.beginPath();
-        ctx.arc(a.position.x, a.position.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#faf8f3';
-        ctx.fill();
-        ctx.strokeStyle = '#141414';
-        ctx.stroke();
-      });
-      drawPaperTag(ctx, tag.position.x, tag.position.y, 58, 86, tag.angle, '#b91c1c', '#faf8f3', "DON'T DIE");
-    }
-    canvas.addEventListener('pointerdown', (e) => {
-      dragging = true;
-      dragStartY = e.offsetY;
-      canvas.setPointerCapture(e.pointerId);
-    });
-    canvas.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      Matter.Body.setPosition(tag, { x: e.offsetX, y: e.offsetY });
-      Matter.Body.setVelocity(tag, { x: e.movementX || 0, y: e.movementY || 0 });
-    });
-    function release(e) {
-      if (!dragging) return;
-      dragging = false;
-      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
-      if (e.offsetY - dragStartY > 34) setOpen(true);
-    }
-    canvas.addEventListener('pointerup', release);
-    canvas.addEventListener('pointercancel', release);
-    card.addEventListener('click', (e) => { if (e.target === canvas) return; setOpen(true); });
-    rebuild();
-    card.dataset.engineStatus = 'ready';
-    return {
-      update() {
-        if (!reduced) Matter.Engine.update(engine, 1000 / 60);
-        draw();
-      },
-    };
-  }
-  async function initPlanckRopeTag({ card, setOpen, reduced }) {
-    const planck = await loadPlanck();
-    const canvas = card.querySelector('canvas');
-    const Vec2 = planck.Vec2;
-    const world = new planck.World(Vec2(0, 7.5));
-    const bodies = [];
-    let dragging = false;
-    let dragStartY = 0;
-    for (let i = 0; i < 7; i++) {
-      const body = i === 0
-        ? world.createBody(Vec2(0, 0))
-        : world.createDynamicBody(Vec2(0, i * .28));
-      body.createFixture(planck.Circle(i === 6 ? .24 : .045), { density: i === 6 ? 1.2 : .25, friction: .25 });
-      bodies.push(body);
-    }
-    function spring(a, b, rest, k) {
-      const pa = a.getPosition();
-      const pb = b.getPosition();
-      const dx = pb.x - pa.x;
-      const dy = pb.y - pa.y;
-      const d = Math.hypot(dx, dy) || .0001;
-      const f = (d - rest) * k;
-      const fx = dx / d * f;
-      const fy = dy / d * f;
-      if (a.isDynamic()) a.applyForceToCenter(Vec2(fx, fy), true);
-      if (b.isDynamic()) b.applyForceToCenter(Vec2(-fx, -fy), true);
-    }
-    function draw() {
-      const { ctx, w, h } = resizeCanvas(canvas);
-      ctx.clearRect(0, 0, w, h);
-      const scale = Math.min(w, h) / 2.2;
-      const ox = w / 2;
-      const oy = 20;
-      const pts = bodies.map((b) => {
-        const p = b.getPosition();
-        return { x: ox + p.x * scale, y: oy + p.y * scale };
-      });
-      ctx.strokeStyle = 'rgba(20,20,20,.62)';
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-      ctx.stroke();
-      pts.slice(0, -1).forEach((p) => {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = '#faf8f3';
-        ctx.fill();
-        ctx.strokeStyle = '#141414';
-        ctx.stroke();
-      });
-      drawPaperTag(ctx, pts[6].x, pts[6].y + 18, 62, 78, bodies[6].getAngle() * .35, '#141414', '#faf8f3', "DON'T DIE");
-    }
-    canvas.addEventListener('pointerdown', (e) => {
-      dragging = true;
-      dragStartY = e.offsetY;
-      canvas.setPointerCapture(e.pointerId);
-    });
-    canvas.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      const { w, h } = resizeCanvas(canvas);
-      const scale = Math.min(w, h) / 2.2;
-      bodies[6].setPosition(Vec2((e.offsetX - w / 2) / scale, (e.offsetY - 20) / scale));
-      bodies[6].setLinearVelocity(Vec2((e.movementX || 0) / 22, (e.movementY || 0) / 22));
-    });
-    function release(e) {
-      if (!dragging) return;
-      dragging = false;
-      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
-      if (e.offsetY - dragStartY > 34) setOpen(true);
-    }
-    canvas.addEventListener('pointerup', release);
-    canvas.addEventListener('pointercancel', release);
-    card.addEventListener('click', (e) => { if (e.target === canvas) return; setOpen(true); });
-    card.dataset.engineStatus = 'ready';
-    return {
-      update() {
-        if (!reduced) {
-          for (let i = 0; i < bodies.length - 1; i++) spring(bodies[i], bodies[i + 1], .28, 22);
-          world.step(1 / 60);
+        drawVisualCandidate(ctx, candidate, state, time, w, h);
+        if (!state.marked) {
+          try { card.dataset.preview = canvas.toDataURL('image/png').slice(0, 24); }
+          catch { card.dataset.preview = 'blocked'; }
+          state.marked = true;
         }
-        draw();
       },
     };
   }
-  async function initThreeClothTag({ card, setOpen, reduced }) {
-    const THREE = await loadThree();
-    const canvas = card.querySelector('canvas');
-    const scene = new THREE.Scene();
-    const camera = new THREE.OrthographicCamera(-1.25, 1.25, 1.45, -1.45, .1, 12);
-    camera.position.set(0, 0, 5);
-    const renderer = new THREE.WebGLRenderer({
-      canvas,
-      alpha: true,
-      antialias: true,
-      preserveDrawingBuffer: true,
-      powerPreference: 'high-performance',
-    });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    if (THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
-    const cols = 10;
-    const rows = 20;
-    const ribbonWidth = .82;
-    const ribbonHeight = 2.28;
-    const positions = new Float32Array((cols + 1) * (rows + 1) * 3);
-    const uvs = new Float32Array((cols + 1) * (rows + 1) * 2);
-    const indices = [];
-    const particles = [];
-    const constraints = [];
-    const topY = 1.04;
 
-    function vertexIndex(x, y) { return y * (cols + 1) + x; }
-    function addConstraint(a, b, kind) {
-      const pa = particles[a];
-      const pb = particles[b];
-      const dx = pa.restX - pb.restX;
-      const dy = pa.restY - pb.restY;
-      const dz = pa.restZ - pb.restZ;
-      constraints.push({ a, b, kind, rest: Math.hypot(dx, dy, dz) });
-    }
-
-    for (let y = 0; y <= rows; y++) {
-      const v = y / rows;
-      for (let x = 0; x <= cols; x++) {
-        const u = x / cols;
-        const idx = vertexIndex(x, y);
-        const restX = (u - .5) * ribbonWidth;
-        const restY = topY - v * ribbonHeight;
-        particles[idx] = {
-          x: restX, y: restY, z: 0,
-          prevX: restX, prevY: restY, prevZ: 0,
-          restX, restY, restZ: 0,
-          u, v, pinned: y === 0,
-        };
-        positions[idx * 3] = restX;
-        positions[idx * 3 + 1] = restY;
-        positions[idx * 3 + 2] = 0;
-        uvs[idx * 2] = u;
-        uvs[idx * 2 + 1] = v;
-      }
-    }
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
-        const a = vertexIndex(x, y);
-        const b = vertexIndex(x + 1, y);
-        const c = vertexIndex(x, y + 1);
-        const d = vertexIndex(x + 1, y + 1);
-        indices.push(a, c, b, b, c, d);
-      }
-    }
-    for (let y = 0; y <= rows; y++) {
-      for (let x = 0; x <= cols; x++) {
-        const i = vertexIndex(x, y);
-        if (x < cols) addConstraint(i, vertexIndex(x + 1, y), 'stretch');
-        if (y < rows) addConstraint(i, vertexIndex(x, y + 1), 'stretch');
-        if (x < cols && y < rows) addConstraint(i, vertexIndex(x + 1, y + 1), 'shear');
-        if (x > 0 && y < rows) addConstraint(i, vertexIndex(x - 1, y + 1), 'shear');
-        if (x + 2 <= cols) addConstraint(i, vertexIndex(x + 2, y), 'bend');
-        if (y + 2 <= rows) addConstraint(i, vertexIndex(x, y + 2), 'bend');
-      }
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setIndex(indices);
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-    geometry.computeVertexNormals();
-    const material = new THREE.MeshStandardMaterial({
-      color: 0xb91c1c,
-      roughness: .74,
-      metalness: 0,
-      side: THREE.DoubleSide,
-      transparent: false,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -.08;
-    scene.add(mesh);
-    scene.add(new THREE.AmbientLight(0xffffff, 1.8));
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
-    keyLight.position.set(-1.2, 1.8, 3.4);
-    scene.add(keyLight);
-    const rimLight = new THREE.DirectionalLight(0xb91c1c, .9);
-    rimLight.position.set(1.2, -1.1, 2.6);
-    scene.add(rimLight);
-
-    let lastTime = performance.now();
-    let elapsed = 0;
-
-    function resize() {
-      const w = Math.max(120, Math.round(canvas.clientWidth || 180));
-      const h = Math.max(120, Math.round(canvas.clientHeight || 150));
-      renderer.setSize(w, h, false);
-    }
-    function solveConstraint(c) {
-      const a = particles[c.a];
-      const b = particles[c.b];
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const dz = b.z - a.z;
-      const dist = Math.hypot(dx, dy, dz) || .0001;
-      const stiffness = c.kind === 'bend' ? .22 : c.kind === 'shear' ? .38 : .74;
-      const correction = (dist - c.rest) / dist * stiffness * .5;
-      const cx = dx * correction;
-      const cy = dy * correction;
-      const cz = dz * correction;
-      if (!a.pinned) { a.x += cx; a.y += cy; a.z += cz; }
-      if (!b.pinned) { b.x -= cx; b.y -= cy; b.z -= cz; }
-    }
-    function step(input = { x: 0, y: 0, vx: 0 }) {
-      // Verlet integration keeps the cloth state stable without a heavier physics engine.
-      const now = performance.now();
-      const dt = Math.min(32, now - lastTime) / 16.6667;
-      lastTime = now;
-      elapsed += dt * .016;
-      const pullX = clamp((input.x || 0) / 44, -1.15, 1.15);
-      const pullY = clamp((input.y || 0) / 112, -.24, 1.08);
-      const velocityKick = clamp((input.vx || 0) / 24, -1, 1);
-      particles.forEach((p) => {
-        const falloff = p.v * p.v;
-        if (p.pinned) {
-          p.x = p.restX + pullX * .03;
-          p.y = p.restY;
-          p.z = Math.sin(elapsed * 2.2 + p.u * 4.8) * .006;
-          p.prevX = p.x;
-          p.prevY = p.y;
-          p.prevZ = p.z;
-          return;
-        }
-        const vx = (p.x - p.prevX) * .982;
-        const vy = (p.y - p.prevY) * .982;
-        const vz = (p.z - p.prevZ) * .982;
-        p.prevX = p.x;
-        p.prevY = p.y;
-        p.prevZ = p.z;
-        const wave = Math.sin(elapsed * 1.8 + p.v * 10.4 + p.u * 5.1);
-        const side = Math.sin((p.u - .5) * Math.PI);
-        p.x += vx + pullX * .72 * falloff * .024 + velocityKick * falloff * .01;
-        p.y += vy - .0038 * dt - pullY * falloff * .012;
-        p.z += vz + wave * .018 * falloff + side * pullX * .085 * falloff;
-      });
-      for (let i = 0; i < 5; i++) {
-        constraints.forEach(solveConstraint);
-      }
-      particles.forEach((p, idx) => {
-        const crease = Math.sin(p.v * Math.PI * 7 + elapsed * 1.8) * Math.sin(p.u * Math.PI);
-        positions[idx * 3] = p.x;
-        positions[idx * 3 + 1] = p.y;
-        positions[idx * 3 + 2] = p.z + crease * .085 * p.v * .38;
-      });
-      geometry.attributes.position.needsUpdate = true;
-      geometry.computeVertexNormals();
-      mesh.rotation.z = clamp(input.x * .0028, -.18, .18);
-      mesh.rotation.y = clamp(-input.x * .006, -.28, .28);
-      renderer.render(scene, camera);
-    }
-    let dragging = false;
-    let startY = 0;
-    canvas.addEventListener('pointerdown', (e) => {
-      dragging = true;
-      startY = e.offsetY;
-      canvas.setPointerCapture(e.pointerId);
-    });
-    canvas.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      step({ x: e.offsetX - canvas.clientWidth / 2, y: e.offsetY - startY, vx: e.movementX || 0 });
-    });
-    function release(e) {
-      if (!dragging) return;
-      dragging = false;
-      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
-      if (e.offsetY - startY > 34) setOpen(true);
-    }
-    canvas.addEventListener('pointerup', release);
-    canvas.addEventListener('pointercancel', release);
-    card.addEventListener('click', (e) => { if (e.target === canvas) return; setOpen(true); });
-    window.addEventListener('resize', resize);
-    resize();
-    card.dataset.engineStatus = 'ready';
-    return {
-      update(input) { if (!reduced) step(input); },
-      dispose() {
-        renderer.dispose();
-        geometry.dispose();
-        material.dispose();
-      },
-    };
-  }
   function renderDailyRibbon(summary) {
     const stage = $('daily-summary-stage');
     if (!stage || !summary || !summary.body) return;
@@ -1497,35 +1439,18 @@
     stage.hidden = false;
     stage.innerHTML = `
       <div class="summary-physics" id="summary-physics">
-        <section class="physics-lab-panel" aria-label="Don't Die physics comparison">
+        <section class="physics-lab-panel" aria-label="Don't Die visual candidate bench">
           <div class="physics-lab-head">
-            <div class="physics-lab-kicker">Don't Die Physics Bench</div>
-            <div class="physics-lab-note">Pull any candidate · tap to open summary</div>
+            <div class="physics-lab-kicker">Don't Die. Object Bench</div>
+            <div class="physics-lab-note">Pull one object · tap to open</div>
           </div>
           <div class="physics-lab-grid">
-            <div class="physics-engine-card engine-card-native" data-summary-engine="native-spring" data-engine-status="loading">
-              <div class="engine-viewport">
-                <button class="summary-ribbon-pull" type="button" aria-expanded="false" aria-controls="summary-sheet" aria-label="Native Spring Don't Die 요약 열기">
-                  <span class="ribbon-title">${esc(title)}</span>
-                  <span class="ribbon-line">Don't Die.</span>
-                  <span class="ribbon-meta" aria-hidden="true"></span>
-                  <span class="ribbon-handle">PULL</span>
-                </button>
+            ${VISUAL_CANDIDATES.map((candidate) => `
+              <div class="physics-engine-card engine-card-${candidate.id}" role="button" tabindex="0" data-design-engine="${candidate.id}" data-engine-status="drawing" aria-label="${esc(candidate.label)} Don't Die. 요약 열기">
+                <div class="engine-viewport"><canvas class="engine-canvas" aria-hidden="true"></canvas></div>
+                <div class="engine-caption"><span class="engine-name">${esc(candidate.label)}</span><span class="engine-hint">${esc(candidate.hint)}</span></div>
               </div>
-              <div class="engine-caption"><span class="engine-name">Native Spring</span><span class="engine-hint">CSS + JS spring</span></div>
-            </div>
-            <div class="physics-engine-card engine-card-matter" data-summary-engine="matter-chain" data-engine-status="loading">
-              <div class="engine-viewport"><canvas class="engine-canvas" aria-hidden="true"></canvas></div>
-              <div class="engine-caption"><span class="engine-name">Matter.js</span><span class="engine-hint">constraint chain</span></div>
-            </div>
-            <div class="physics-engine-card engine-card-planck" data-summary-engine="planck-rope" data-engine-status="loading">
-              <div class="engine-viewport"><canvas class="engine-canvas" aria-hidden="true"></canvas></div>
-              <div class="engine-caption"><span class="engine-name">Planck.js</span><span class="engine-hint">Box2D rope</span></div>
-            </div>
-            <div class="physics-engine-card engine-card-three" data-summary-engine="three-cloth" data-engine-status="loading">
-              <div class="engine-viewport"><canvas class="engine-canvas" aria-hidden="true"></canvas></div>
-              <div class="engine-caption"><span class="engine-name">Three.js</span><span class="engine-hint">Verlet cloth</span></div>
-            </div>
+            `).join('')}
           </div>
         </section>
         <article class="summary-sheet" id="summary-sheet" aria-hidden="true">
@@ -1553,21 +1478,16 @@
       openState = next;
       physics.classList.toggle('open', next);
       physics.classList.remove('primed');
-      physics.querySelectorAll('.summary-ribbon-pull').forEach((button) => {
-        button.setAttribute('aria-expanded', String(next));
-      });
       sheet.setAttribute('aria-hidden', String(!next));
     }
-    const nativeCard = physics.querySelector('[data-summary-engine="native-spring"]');
-    const matterCard = physics.querySelector('[data-summary-engine="matter-chain"]');
-    const planckCard = physics.querySelector('[data-summary-engine="planck-rope"]');
-    const threeCard = physics.querySelector('[data-summary-engine="three-cloth"]');
-    engineLabs.push(initNativeSpringBookmark({ card: nativeCard, setOpen, reduced }));
-    initMatterChainTag({ card: matterCard, setOpen, reduced }).then((lab) => engineLabs.push(lab)).catch(() => matterCard.dataset.engineStatus = 'fallback');
-    initPlanckRopeTag({ card: planckCard, setOpen, reduced }).then((lab) => engineLabs.push(lab)).catch(() => planckCard.dataset.engineStatus = 'fallback');
-    initThreeClothTag({ card: threeCard, setOpen, reduced }).then((lab) => engineLabs.push(lab)).catch(() => threeCard.dataset.engineStatus = 'fallback');
-    function tick() {
-      engineLabs.forEach((lab) => lab && lab.update && lab.update({ open: openState }));
+    function toggleOpen() { setOpen(!openState); }
+    physics.querySelectorAll('[data-design-engine]').forEach((card) => {
+      const candidate = VISUAL_CANDIDATES.find((item) => item.id === card.dataset.designEngine);
+      if (candidate) engineLabs.push(initVisualCandidateLab({ card, candidate, setOpen, toggleOpen, reduced }));
+    });
+    function tick(ms) {
+      const time = ms / 1000;
+      engineLabs.forEach((lab) => lab && lab.update && lab.update(time));
       requestAnimationFrame(tick);
     }
     function closeSummarySheet(e) {

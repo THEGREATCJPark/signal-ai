@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Signal — Discord-only incremental pipeline.
+"""First Light AI — Discord-only incremental pipeline.
 
 매 실행:
 1) 기존 articles.json(schema v2) 로드 (v1이면 migrate)
@@ -23,6 +23,8 @@ import requests
 
 ROOT = Path(__file__).parent
 ARTICLES_PATH = ROOT / "docs" / "articles.json"
+EXPORTS_ARTICLES_DIR = ROOT / "exports" / "articles"
+JOURNAL_NAME = "First Light AI"
 MODEL = "gemma-4-26b-a4b-it"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 KST = timezone(timedelta(hours=9))
@@ -188,7 +190,7 @@ def load_state():
         return {
             "schema_version": 2, "last_run_at": None,
             "generated_at": datetime.now(KST).isoformat(),
-            "model": MODEL, "articles": [], "decision_log": [],
+            "journal": JOURNAL_NAME, "model": MODEL, "articles": [], "decision_log": [],
         }
     data = json.loads(ARTICLES_PATH.read_text(encoding="utf-8"))
     if data.get("schema_version") == 2:
@@ -210,6 +212,7 @@ def load_state():
         "schema_version": 2,
         "last_run_at": period_end,  # 1회차 since = period.end
         "generated_at": gen_at,
+        "journal": JOURNAL_NAME,
         "model": MODEL,
         "articles": articles,
         "decision_log": [],
@@ -220,6 +223,22 @@ def save_state(state):
     if ARTICLES_PATH.exists():
         bak.write_text(ARTICLES_PATH.read_text(encoding="utf-8"), encoding="utf-8")
     ARTICLES_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def write_daily_new_articles_export(new_articles: list, run_at: datetime) -> Path:
+    """Write the per-day new-article JSON used by downstream local pipelines."""
+    EXPORTS_ARTICLES_DIR.mkdir(parents=True, exist_ok=True)
+    date_key = run_at.astimezone(KST).date().isoformat()
+    out_path = EXPORTS_ARTICLES_DIR / f"{date_key}.json"
+    payload = {
+        "schema_version": 1,
+        "journal": JOURNAL_NAME,
+        "date": date_key,
+        "generated_at": run_at.isoformat(),
+        "count": len(new_articles),
+        "articles": new_articles,
+    }
+    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return out_path
 
 
 # ── Discord ─────────────────────────────────────────────────────
@@ -821,7 +840,10 @@ def main():
         LOG("empty chat — no-op except last_run_at bump")
         state["last_run_at"] = now.isoformat()
         state["generated_at"] = now.isoformat()
+        state["journal"] = JOURNAL_NAME
         save_state(state)
+        export_path = write_daily_new_articles_export([], now)
+        LOG(f"daily new-article export → {export_path}")
         subprocess.run(["python3", str(ROOT / "build_gist.py")], check=False)
         return
 
@@ -959,8 +981,11 @@ def _classify_and_save(state, new_articles, now, sched):
 
     state["last_run_at"] = now.isoformat()
     state["generated_at"] = now.isoformat()
+    state["journal"] = JOURNAL_NAME
     save_state(state)
     LOG("state saved")
+    export_path = write_daily_new_articles_export(new_articles, now)
+    LOG(f"daily new-article export → {export_path}")
 
     r = subprocess.run(["python3", str(ROOT / "build_gist.py")], capture_output=True, text=True)
     if r.returncode == 0:

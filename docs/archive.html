@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>SIGNAL — ARCHIVE</title>
+<title>First Light AI — ARCHIVE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600;700;900&family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -238,7 +238,7 @@
 <div class="reader" id="reader" role="dialog" aria-modal="true">
   <div class="reader-panel">
     <button class="reader-close" id="reader-close">×</button>
-    <div class="kicker">SIGNAL · FEATURE</div>
+    <div class="kicker">FIRST LIGHT AI · FEATURE</div>
     <h2 id="reader-title"></h2>
     <div class="byline" id="reader-byline"></div>
     <div class="body" id="reader-body"></div>
@@ -352,7 +352,7 @@
   function openReader(id) {
     const a = byId[id]; if (!a) return;
     $('reader-title').textContent = a.headline;
-    $('reader-byline').textContent = `SIGNAL · ${fmtDT(a.created_at)} · ${(a.placement||'side').toUpperCase()}`;
+    $('reader-byline').textContent = `FIRST LIGHT AI · ${fmtDT(a.created_at)} · ${(a.placement||'side').toUpperCase()}`;
     $('reader-body').innerHTML = paragraphs(a.body).map(p => `<p>${esc(p)}</p>`).join('');
     reader.classList.add('open');
     document.body.style.overflow = 'hidden';

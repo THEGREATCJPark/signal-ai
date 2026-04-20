@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<meta name="description" content="AI 커뮤니티의 시그널을 추적합니다."/>
-<title>SIGNAL — AI 데일리 브리핑</title>
+<meta name="description" content="AI 커뮤니티의 첫 빛을 추적합니다."/>
+<title>First Light AI — 데일리 브리핑</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;600;700;900&family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -80,14 +80,17 @@
     max-width: 1320px;
     margin: 0 auto;
   }
-  .masthead h1 {
-    font-family: var(--serif);
-    font-weight: 900;
-    font-size: clamp(3.2rem, 10vw, 6rem);
-    letter-spacing: -0.04em;
-    line-height: 0.9;
-    color: var(--ink);
-  }
+	  .masthead h1 {
+	    font-family: var(--serif);
+	    font-weight: 900;
+	    font-size: 5rem;
+	    letter-spacing: -0.02em;
+	    line-height: 0.9;
+	    color: var(--ink);
+	  }
+	  @media (max-width: 720px) {
+	    .masthead h1 { font-size: 2.6rem; }
+	  }
   .masthead .tagline {
     font-family: var(--serif);
     font-style: italic;
@@ -434,7 +437,7 @@
 
 <div class="topbar">
   <div class="topbar-inner">
-    <span><span class="pulse"></span>LIVE · SIGNAL</span>
+    <span><span class="pulse"></span>LIVE · FIRST LIGHT AI</span>
     <span class="topbar-right">
       <span id="topbar-date">—</span>
       <a href="archive.html" id="archive-link-top" class="topbar-link">ARCHIVE →</a>
@@ -443,7 +446,7 @@
 </div>
 
 <header class="masthead">
-  <h1>SIGNAL</h1>
+  <h1>FIRST LIGHT AI</h1>
   <div class="tagline">The frontier in your feed.</div>
   <div class="meta">
     <span id="masthead-date">—</span>
@@ -457,7 +460,7 @@
 <div class="layout">
   <aside class="side side-left" id="side-left"></aside>
   <main class="center" id="center">
-    <div class="loading">Loading signal…</div>
+    <div class="loading">Loading first light…</div>
   </main>
   <aside class="side side-right" id="side-right"></aside>
 </div>
@@ -469,7 +472,7 @@
 <div class="reader" id="reader" role="dialog" aria-modal="true">
   <div class="reader-panel">
     <button class="reader-close" id="reader-close" aria-label="Close">×</button>
-    <div class="kicker">SIGNAL · FEATURE</div>
+    <div class="kicker">FIRST LIGHT AI · FEATURE</div>
     <h2 id="reader-title"></h2>
     <div class="byline" id="reader-byline"></div>
     <div class="body" id="reader-body"></div>
@@ -477,7 +480,7 @@
 </div>
 
 <footer class="footer">
-  <div><strong>SIGNAL</strong> · AI community intelligence</div>
+  <div><strong>First Light AI</strong> · AI community intelligence</div>
   <div id="footer-meta">—</div>
 </footer>
 
@@ -652,7 +655,7 @@
     const a = byId[id];
     if (!a) return;
     $('reader-title').textContent = a.headline;
-    $('reader-byline').textContent = `SIGNAL · ${fmtDate(a.placed_at || gen)}`;
+    $('reader-byline').textContent = `FIRST LIGHT AI · ${fmtDate(a.placed_at || gen)}`;
     $('reader-body').innerHTML = paragraphs(a.body).map(p => `<p>${esc(p)}</p>`).join('');
     reader.classList.add('open');
     document.body.style.overflow = 'hidden';

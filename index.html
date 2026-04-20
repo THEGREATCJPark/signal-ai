@@ -260,26 +260,30 @@
 
   /* ── Daily pull-ribbon ── */
   .daily-ribbon-stage {
-    max-width: 1320px;
-    margin: 0 auto;
-    padding: 0 24px;
-    border-bottom: 1px solid var(--rule-soft);
+    position: fixed;
+    top: 168px;
+    right: 18px;
+    width: 76px;
+    height: 312px;
+    margin: 0;
+    padding: 0;
+    z-index: 60;
+    pointer-events: none;
   }
   .daily-ribbon-stage[hidden] { display: none; }
   .summary-physics {
     position: relative;
-    min-height: 136px;
-    padding-top: 6px;
-    transition: min-height .55s cubic-bezier(.18,.72,.18,1);
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
   }
-  .summary-physics.open {
-    min-height: 610px;
-  }
+  .summary-physics.open {}
   .summary-strings {
     position: absolute;
-    inset: 0 0 auto;
+    top: 0;
+    right: 0;
     width: 100%;
-    height: 180px;
+    height: 222px;
     pointer-events: none;
     overflow: visible;
   }
@@ -302,83 +306,94 @@
   }
   .summary-ribbon-pull {
     --ribbon-x: 0px;
-    --ribbon-y: 30px;
+    --ribbon-y: 26px;
     --ribbon-tilt: 0deg;
     position: absolute;
     left: 50%;
     top: 0;
-    width: min(560px, calc(100vw - 48px));
-    min-height: 74px;
+    width: 46px;
+    min-height: 178px;
+    padding: 0;
     border: 1px solid var(--rule);
     border-radius: 6px;
     background:
-      linear-gradient(90deg, rgba(185,28,28,.12), transparent 18%, rgba(20,20,20,.05) 50%, transparent 82%, rgba(185,28,28,.12)),
-      repeating-linear-gradient(90deg, rgba(20,20,20,.035) 0 1px, transparent 1px 7px),
+      linear-gradient(180deg, rgba(185,28,28,.14), transparent 20%, rgba(20,20,20,.05) 50%, transparent 82%, rgba(185,28,28,.18)),
+      repeating-linear-gradient(180deg, rgba(20,20,20,.035) 0 1px, transparent 1px 7px),
       var(--paper);
     color: var(--ink);
     box-shadow: 0 18px 34px rgba(20,20,20,.12), inset 0 1px 0 rgba(255,255,255,.75);
     cursor: grab;
     touch-action: none;
     user-select: none;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transform: translate(calc(-50% + var(--ribbon-x)), var(--ribbon-y)) rotate(var(--ribbon-tilt));
-    transform-origin: 50% -54px;
-    z-index: 3;
+    transform-origin: 50% -40px;
+    z-index: 62;
   }
   .summary-ribbon-pull:active { cursor: grabbing; }
   .summary-ribbon-pull::before,
   .summary-ribbon-pull::after {
     content: '';
     position: absolute;
-    top: 10px;
-    width: 38px;
-    height: calc(100% - 20px);
-    border-top: 1px solid rgba(20,20,20,.28);
-    border-bottom: 1px solid rgba(20,20,20,.28);
   }
   .summary-ribbon-pull::before {
-    left: 12px;
-    border-left: 1px solid rgba(20,20,20,.18);
-    transform: skewY(-8deg);
+    inset: 12px 9px 38px;
+    border-left: 1px solid rgba(20,20,20,.22);
+    border-right: 1px solid rgba(20,20,20,.22);
   }
   .summary-ribbon-pull::after {
-    right: 12px;
-    border-right: 1px solid rgba(20,20,20,.18);
-    transform: skewY(8deg);
+    left: 10px;
+    right: 10px;
+    bottom: 16px;
+    height: 1px;
+    border-top: 1px solid rgba(20,20,20,.28);
   }
   .ribbon-title {
-    display: block;
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .16em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin: 13px 64px 4px;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .ribbon-line {
     display: block;
-    font-family: var(--serif);
-    font-size: clamp(1.2rem, 3vw, 1.72rem);
-    font-weight: 900;
-    line-height: 1.15;
-    letter-spacing: -0.01em;
-    margin: 0 64px 6px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-family: var(--mono);
+    font-size: .76rem;
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    line-height: 1;
+    color: var(--ink);
+    margin: 16px 0 42px;
+    position: relative;
+    z-index: 1;
   }
   .ribbon-meta {
     display: block;
+    position: absolute;
+    bottom: 42px;
+    left: 50%;
+    transform: translateX(-50%);
+    writing-mode: vertical-rl;
     font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: .12em;
+    font-size: 8px;
+    letter-spacing: .08em;
     color: var(--ink-4);
     text-transform: uppercase;
-    margin: 0 64px 13px;
+    white-space: nowrap;
   }
   .ribbon-handle {
     position: absolute;
     left: 50%;
-    bottom: -24px;
-    width: 78px;
-    height: 24px;
+    bottom: -26px;
+    width: 46px;
+    height: 26px;
     transform: translateX(-50%);
     border: 1px solid var(--rule);
     border-top: none;
@@ -395,26 +410,32 @@
   }
   .summary-physics.primed .ribbon-handle { background: var(--accent); }
   .summary-sheet {
-    max-width: 880px;
-    margin: 232px auto 0;
-    padding: 0;
-    border-top: 1px solid var(--rule);
-    border-bottom: 1px solid var(--rule);
-    max-height: 0;
+    position: fixed;
+    top: 128px;
+    right: 96px;
+    width: min(560px, calc(100vw - 132px));
+    max-height: calc(100vh - 152px);
+    margin: 0;
+    padding: 0 28px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--paper) 96%, white);
+    box-shadow: 0 24px 70px rgba(20,20,20,.18);
     opacity: 0;
-    overflow: hidden;
-    transform: translateY(-24px);
+    overflow: auto;
+    pointer-events: none;
+    transform: translateX(18px) translateY(-8px);
+    z-index: 58;
     transition:
-      max-height .65s cubic-bezier(.18,.72,.18,1),
       opacity .28s ease,
       transform .55s cubic-bezier(.18,.72,.18,1),
       padding .55s cubic-bezier(.18,.72,.18,1);
   }
   .summary-physics.open .summary-sheet {
-    max-height: 1500px;
     opacity: 1;
-    padding: 34px 0 38px;
-    transform: translateY(0);
+    padding: 28px;
+    pointer-events: auto;
+    transform: translateX(0) translateY(0);
   }
   .summary-sheet-head {
     display: flex;
@@ -475,22 +496,37 @@
     margin: 8px 10px 0 0;
   }
   @media (max-width: 720px) {
-    .daily-ribbon-stage { padding: 0 16px; }
-    .summary-physics { min-height: 126px; }
-    .summary-physics.open { min-height: 700px; }
-    .summary-ribbon-pull {
-      width: calc(100vw - 32px);
-      min-height: 78px;
+    .daily-ribbon-stage {
+      top: 146px;
+      right: -6px;
+      width: 56px;
+      height: 242px;
     }
-    .ribbon-title,
-    .ribbon-line,
-    .ribbon-meta {
-      margin-left: 44px;
-      margin-right: 44px;
+    .summary-strings {
+      height: 178px;
+    }
+    .summary-ribbon-pull {
+      width: 38px;
+      min-height: 144px;
+    }
+    .ribbon-line {
+      font-size: .68rem;
+      margin-bottom: 34px;
+    }
+    .ribbon-meta { display: none; }
+    .ribbon-handle {
+      width: 38px;
+      height: 24px;
+      bottom: -24px;
     }
     .summary-sheet {
-      margin-top: 218px;
+      top: 112px;
+      right: 12px;
+      width: calc(100vw - 24px);
+      max-height: calc(100vh - 132px);
+      padding: 0 20px;
     }
+    .summary-physics.open .summary-sheet { padding: 22px 20px 26px; }
     .summary-sheet-head {
       display: block;
     }
@@ -816,10 +852,10 @@
           <circle class="summary-bead" data-bead="1" r="4"></circle>
           <circle class="summary-bead" data-bead="2" r="4"></circle>
         </svg>
-        <button class="summary-ribbon-pull" id="summary-ribbon-pull" type="button" aria-expanded="false" aria-controls="summary-sheet">
+        <button class="summary-ribbon-pull" id="summary-ribbon-pull" type="button" aria-expanded="false" aria-controls="summary-sheet" aria-label="${esc(title)} 열기">
           <span class="ribbon-title">${esc(title)}</span>
-          <span class="ribbon-line">오늘의 모든 업데이트를 한 번에 읽기</span>
-          <span class="ribbon-meta">${esc(summary.date || '')} · ${esc(String(count))} UPDATES · PULL DOWN</span>
+          <span class="ribbon-line">Daily Summary</span>
+          <span class="ribbon-meta">${esc(String(count))} updates</span>
           <span class="ribbon-handle">PULL</span>
         </button>
         <article class="summary-sheet" id="summary-sheet" aria-hidden="true">
@@ -846,18 +882,18 @@
     const beads = [...svg.querySelectorAll('[data-bead]')];
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const state = {
-      x: 0, y: 30, vx: 0, vy: 0,
-      targetX: 0, targetY: 30,
+      x: 0, y: 26, vx: 0, vy: 0,
+      targetX: 0, targetY: 26,
       dragging: false,
       open: false,
       startX: 0, startY: 0,
       baseX: 0, baseY: 0,
       dragDistance: 0,
     };
-    const collapsedY = 30;
-    const openY = 118;
-    const pullLimit = 170;
-    const threshold = 96;
+    const collapsedY = 26;
+    const openY = 78;
+    const pullLimit = 132;
+    const threshold = 82;
 
     function setOpen(next) {
       state.open = next;
@@ -869,12 +905,12 @@
       sheet.setAttribute('aria-hidden', String(!next));
     }
     function draw() {
-      const width = Math.max(320, physics.clientWidth);
-      svg.setAttribute('viewBox', `0 0 ${width} 210`);
-      const anchors = [width * .22, width * .5, width * .78];
-      const offsets = [-190, 0, 190].map(v => clamp(v, -width * .28, width * .28));
-      const ribbonTop = 8 + state.y;
-      const ribbonY = ribbonTop + 15;
+      const width = Math.max(54, physics.clientWidth);
+      svg.setAttribute('viewBox', `0 0 ${width} 220`);
+      const anchors = [width * .28, width * .5, width * .72];
+      const offsets = [-18, 0, 18].map(v => clamp(v, -width * .3, width * .3));
+      const ribbonTop = 6 + state.y;
+      const ribbonY = ribbonTop + 12;
       cords.forEach((path, i) => {
         const idx = Number(path.dataset.cord);
         const ax = anchors[idx];
@@ -923,7 +959,7 @@
       const dx = e.clientX - state.startX;
       const dy = e.clientY - state.startY;
       state.dragDistance = Math.max(state.dragDistance, Math.hypot(dx, dy));
-      state.x = clamp(state.baseX + dx * .42, -90, 90);
+        state.x = clamp(state.baseX + dx * .42, -34, 34);
       state.y = clamp(state.baseY + dy, 8, pullLimit);
       state.vx = 0;
       state.vy = 0;

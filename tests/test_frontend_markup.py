@@ -60,18 +60,20 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("startPendulum", html)
         self.assertIn("setOpen(!state.open)", html)
 
-    def test_mobile_daily_summary_sheet_starts_at_top_and_covers_ribbon(self):
+    def test_mobile_daily_summary_sheet_starts_near_top_with_breathing_room(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]
         mobile_sheet = css_block(mobile, ".summary-sheet {")
+        mobile_open_sheet = css_block(mobile, ".summary-physics.open .summary-sheet {")
         title = css_block(html, ".summary-sheet-title {")
         self.assertIn("z-index: 88;", css_block(html, ".summary-sheet {"))
-        self.assertIn("top: 0;", mobile_sheet)
-        self.assertIn("right: 0;", mobile_sheet)
-        self.assertIn("left: 0;", mobile_sheet)
-        self.assertIn("width: 100vw;", mobile_sheet)
-        self.assertIn("max-height: 100vh;", mobile_sheet)
-        self.assertIn("border-radius: 0 0 6px 6px;", mobile_sheet)
+        self.assertIn("top: max(8px, env(safe-area-inset-top));", mobile_sheet)
+        self.assertIn("right: 8px;", mobile_sheet)
+        self.assertIn("left: 8px;", mobile_sheet)
+        self.assertIn("width: auto;", mobile_sheet)
+        self.assertIn("max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 16px);", mobile_sheet)
+        self.assertIn("border-radius: 6px;", mobile_sheet)
+        self.assertIn("padding: 18px 18px 34px;", mobile_open_sheet)
         self.assertIn("word-break: keep-all;", title)
         self.assertIn("overflow-wrap: break-word;", title)
         self.assertIn("text-wrap: balance;", title)

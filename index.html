@@ -518,17 +518,16 @@
       bottom: -24px;
     }
     .summary-sheet {
-      top: 0;
-      right: 0;
-      left: 0;
-      width: 100vw;
-      max-height: 100vh;
-      padding: 0 20px;
-      border-radius: 0 0 6px 6px;
+      top: max(8px, env(safe-area-inset-top));
+      right: 8px;
+      left: 8px;
+      width: auto;
+      max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 16px);
+      padding: 0 18px;
+      border-radius: 6px;
     }
     .summary-physics.open .summary-sheet {
-      padding: 18px 20px 26px;
-      padding-top: max(18px, env(safe-area-inset-top));
+      padding: 18px 18px 34px;
     }
     .summary-sheet-head {
       display: block;

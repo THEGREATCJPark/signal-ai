@@ -65,6 +65,24 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("startPendulum", html)
         self.assertIn("setOpen(!state.open)", html)
 
+    def test_daily_summary_ribbon_has_threejs_cloth_lab_variants(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("html { scroll-behavior: smooth; overflow-x: hidden; }", html)
+        self.assertRegex(html, r"body \{[^}]*overflow-x: hidden;")
+        self.assertIn('<canvas class="ribbon-cloth-canvas"', html)
+        self.assertIn('class="ribbon-mode-selector"', html)
+        self.assertGreaterEqual(html.count("data-ribbon-mode="), 4)
+        self.assertIn("await import('https://unpkg.com/three@", html)
+        self.assertIn("const RIBBON_MODES = {", html)
+        self.assertIn("function initRibbonClothLab", html)
+        self.assertIn("new THREE.BufferGeometry()", html)
+        self.assertIn("preserveDrawingBuffer: true", html)
+        self.assertIn("geometry.computeVertexNormals()", html)
+        self.assertIn("constraints.push", html)
+        self.assertIn("prevX", html)
+        self.assertIn("verlet", html.lower())
+        self.assertIn("ribbonLab.update(state)", html)
+
     def test_mobile_daily_summary_sheet_starts_near_top_with_breathing_room(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]

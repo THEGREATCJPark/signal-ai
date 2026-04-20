@@ -25,13 +25,14 @@
     --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; overflow-x: hidden; }
   body {
     font-family: var(--sans);
     background: var(--paper);
     color: var(--ink);
     -webkit-font-smoothing: antialiased;
     line-height: 1.6;
+    overflow-x: hidden;
   }
 
   /* ── Topbar ── */
@@ -340,10 +341,32 @@
     z-index: 62;
   }
   .summary-ribbon-pull:active { cursor: grabbing; }
+  .summary-ribbon-pull.webgl-ready {
+    background: transparent;
+    overflow: visible;
+  }
+  .summary-ribbon-pull.webgl-fallback .ribbon-cloth-canvas {
+    display: none;
+  }
+  .ribbon-cloth-canvas {
+    position: absolute;
+    inset: -14px -11px -34px -11px;
+    width: calc(100% + 22px);
+    height: calc(100% + 48px);
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 0;
+    opacity: .98;
+    filter: drop-shadow(0 18px 26px rgba(20,20,20,.18));
+  }
   .summary-ribbon-pull::before,
   .summary-ribbon-pull::after {
     content: '';
     position: absolute;
+  }
+  .summary-ribbon-pull.webgl-ready::before,
+  .summary-ribbon-pull.webgl-ready::after {
+    opacity: .34;
   }
   .summary-ribbon-pull::before {
     inset: 12px 9px 38px;
@@ -381,7 +404,8 @@
     color: var(--ink);
     margin: 16px 0 22px;
     position: relative;
-    z-index: 1;
+    z-index: 2;
+    text-shadow: 0 1px 0 rgba(250,248,243,.72), 0 10px 18px rgba(20,20,20,.18);
   }
   .ribbon-meta { display: none; }
   .ribbon-handle {
@@ -403,8 +427,39 @@
     align-items: center;
     justify-content: center;
     box-shadow: 0 12px 18px rgba(20,20,20,.14);
+    z-index: 3;
   }
   .summary-physics.primed .ribbon-handle { background: var(--accent); }
+  .ribbon-mode-selector {
+    position: absolute;
+    top: 226px;
+    right: -2px;
+    width: 82px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+    pointer-events: auto;
+    z-index: 64;
+  }
+  .ribbon-mode-selector button {
+    border: 1px solid var(--rule-soft);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--paper) 92%, white);
+    color: var(--ink-3);
+    font-family: var(--mono);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    line-height: 1;
+    padding: 5px 6px;
+    cursor: pointer;
+    box-shadow: 0 7px 14px rgba(20,20,20,.08);
+  }
+  .ribbon-mode-selector button[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
   .summary-sheet {
     position: fixed;
     top: 128px;
@@ -517,6 +572,20 @@
       width: 38px;
       height: 24px;
       bottom: -24px;
+    }
+    .ribbon-cloth-canvas {
+      inset: -12px -9px -30px -9px;
+      width: calc(100% + 18px);
+      height: calc(100% + 42px);
+    }
+    .ribbon-mode-selector {
+      top: 186px;
+      right: -18px;
+      width: 72px;
+    }
+    .ribbon-mode-selector button {
+      font-size: 7px;
+      padding: 4px 5px;
     }
     .summary-sheet {
       top: max(8px, env(safe-area-inset-top));
@@ -838,6 +907,244 @@
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
   }
+  const RIBBON_MODES = {
+    cloth: {
+      label: 'CLOTH', color: 0xb91c1c, roughness: .76, metalness: 0,
+      damping: .982, gravity: .0038, wind: .018, windSpeed: 1.7,
+      drag: .72, stretch: .82, bend: .24, wrinkle: .085, iterations: 5,
+    },
+    silk: {
+      label: 'SILK', color: 0x991b1b, roughness: .48, metalness: 0,
+      damping: .992, gravity: .0024, wind: .032, windSpeed: 2.45,
+      drag: .92, stretch: .66, bend: .12, wrinkle: .13, iterations: 4,
+    },
+    paper: {
+      label: 'PAPER', color: 0xd9d1bf, roughness: .86, metalness: 0,
+      damping: .975, gravity: .0012, wind: .006, windSpeed: .8,
+      drag: .46, stretch: .98, bend: .82, wrinkle: .045, iterations: 7,
+    },
+    elastic: {
+      label: 'ELASTIC', color: 0x171717, roughness: .68, metalness: 0,
+      damping: .973, gravity: .0048, wind: .024, windSpeed: 2.05,
+      drag: 1.16, stretch: .48, bend: .18, wrinkle: .11, iterations: 5,
+    },
+  };
+  let threeImportPromise = null;
+  async function loadThree() {
+    if (!threeImportPromise) {
+      threeImportPromise = (async () => await import('https://unpkg.com/three@0.164.1/build/three.module.js'))();
+    }
+    return threeImportPromise;
+  }
+  async function initRibbonClothLab({ canvas, physics, ribbon, selector, reduced }) {
+    const THREE = await loadThree();
+    const scene = new THREE.Scene();
+    const camera = new THREE.OrthographicCamera(-1.15, 1.15, 2.05, -2.55, .1, 12);
+    camera.position.set(0, 0, 5);
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      alpha: true,
+      antialias: true,
+      preserveDrawingBuffer: true,
+      powerPreference: 'high-performance',
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    if (THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const cols = 8;
+    const rows = 30;
+    const ribbonWidth = .72;
+    const ribbonHeight = 3.36;
+    const positions = new Float32Array((cols + 1) * (rows + 1) * 3);
+    const uvs = new Float32Array((cols + 1) * (rows + 1) * 2);
+    const indices = [];
+    const particles = [];
+    const constraints = [];
+    const topY = 1.58;
+
+    function vertexIndex(x, y) { return y * (cols + 1) + x; }
+    function addConstraint(a, b, kind) {
+      const pa = particles[a];
+      const pb = particles[b];
+      const dx = pa.restX - pb.restX;
+      const dy = pa.restY - pb.restY;
+      const dz = pa.restZ - pb.restZ;
+      constraints.push({ a, b, kind, rest: Math.hypot(dx, dy, dz) });
+    }
+
+    for (let y = 0; y <= rows; y++) {
+      const v = y / rows;
+      for (let x = 0; x <= cols; x++) {
+        const u = x / cols;
+        const idx = vertexIndex(x, y);
+        const restX = (u - .5) * ribbonWidth;
+        const restY = topY - v * ribbonHeight;
+        particles[idx] = {
+          x: restX, y: restY, z: 0,
+          prevX: restX, prevY: restY, prevZ: 0,
+          restX, restY, restZ: 0,
+          u, v, pinned: y === 0,
+        };
+        positions[idx * 3] = restX;
+        positions[idx * 3 + 1] = restY;
+        positions[idx * 3 + 2] = 0;
+        uvs[idx * 2] = u;
+        uvs[idx * 2 + 1] = v;
+      }
+    }
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const a = vertexIndex(x, y);
+        const b = vertexIndex(x + 1, y);
+        const c = vertexIndex(x, y + 1);
+        const d = vertexIndex(x + 1, y + 1);
+        indices.push(a, c, b, b, c, d);
+      }
+    }
+    for (let y = 0; y <= rows; y++) {
+      for (let x = 0; x <= cols; x++) {
+        const i = vertexIndex(x, y);
+        if (x < cols) addConstraint(i, vertexIndex(x + 1, y), 'stretch');
+        if (y < rows) addConstraint(i, vertexIndex(x, y + 1), 'stretch');
+        if (x < cols && y < rows) addConstraint(i, vertexIndex(x + 1, y + 1), 'shear');
+        if (x > 0 && y < rows) addConstraint(i, vertexIndex(x - 1, y + 1), 'shear');
+        if (x + 2 <= cols) addConstraint(i, vertexIndex(x + 2, y), 'bend');
+        if (y + 2 <= rows) addConstraint(i, vertexIndex(x, y + 2), 'bend');
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setIndex(indices);
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geometry.computeVertexNormals();
+    const material = new THREE.MeshPhysicalMaterial({
+      color: RIBBON_MODES.cloth.color,
+      roughness: RIBBON_MODES.cloth.roughness,
+      metalness: RIBBON_MODES.cloth.metalness,
+      clearcoat: .18,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: .96,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -.08;
+    scene.add(mesh);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.8));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.4);
+    keyLight.position.set(-1.2, 1.8, 3.4);
+    scene.add(keyLight);
+    const rimLight = new THREE.DirectionalLight(0xb91c1c, .9);
+    rimLight.position.set(1.2, -1.1, 2.6);
+    scene.add(rimLight);
+
+    let modeName = 'cloth';
+    let mode = RIBBON_MODES[modeName];
+    let lastTime = performance.now();
+    let elapsed = 0;
+
+    function resize() {
+      const w = Math.max(68, Math.round(canvas.clientWidth || 68));
+      const h = Math.max(220, Math.round(canvas.clientHeight || 220));
+      renderer.setSize(w, h, false);
+    }
+    function setMode(next) {
+      modeName = RIBBON_MODES[next] ? next : 'cloth';
+      mode = RIBBON_MODES[modeName];
+      physics.dataset.ribbonMode = modeName;
+      material.color.setHex(mode.color);
+      material.roughness = mode.roughness;
+      material.metalness = mode.metalness;
+      selector.querySelectorAll('[data-ribbon-mode]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.dataset.ribbonMode === modeName));
+      });
+    }
+    function solveConstraint(c) {
+      const a = particles[c.a];
+      const b = particles[c.b];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dz = b.z - a.z;
+      const dist = Math.hypot(dx, dy, dz) || .0001;
+      const stiffness = c.kind === 'bend' ? mode.bend : c.kind === 'shear' ? mode.stretch * .48 : mode.stretch;
+      const correction = (dist - c.rest) / dist * stiffness * .5;
+      const cx = dx * correction;
+      const cy = dy * correction;
+      const cz = dz * correction;
+      if (!a.pinned) { a.x += cx; a.y += cy; a.z += cz; }
+      if (!b.pinned) { b.x -= cx; b.y -= cy; b.z -= cz; }
+    }
+    function step(input) {
+      // Verlet integration keeps the cloth state stable without a heavier physics engine.
+      const now = performance.now();
+      const dt = Math.min(32, now - lastTime) / 16.6667;
+      lastTime = now;
+      elapsed += dt * .016;
+      const pullX = clamp(input.x / 44, -1.15, 1.15);
+      const pullY = clamp((input.y - 26) / 112, -.24, 1.08);
+      const velocityKick = clamp((input.vx || 0) / 24, -1, 1);
+      particles.forEach((p) => {
+        const falloff = p.v * p.v;
+        if (p.pinned) {
+          p.x = p.restX + pullX * .03;
+          p.y = p.restY;
+          p.z = Math.sin(elapsed * 2.2 + p.u * 4.8) * .006;
+          p.prevX = p.x;
+          p.prevY = p.y;
+          p.prevZ = p.z;
+          return;
+        }
+        const vx = (p.x - p.prevX) * mode.damping;
+        const vy = (p.y - p.prevY) * mode.damping;
+        const vz = (p.z - p.prevZ) * mode.damping;
+        p.prevX = p.x;
+        p.prevY = p.y;
+        p.prevZ = p.z;
+        const wave = Math.sin(elapsed * mode.windSpeed + p.v * 10.4 + p.u * 5.1);
+        const side = Math.sin((p.u - .5) * Math.PI);
+        p.x += vx + pullX * mode.drag * falloff * .024 + velocityKick * falloff * .01;
+        p.y += vy - mode.gravity * dt - pullY * falloff * .012;
+        p.z += vz + wave * mode.wind * falloff + side * pullX * mode.wrinkle * falloff;
+      });
+      for (let i = 0; i < mode.iterations; i++) {
+        constraints.forEach(solveConstraint);
+      }
+      particles.forEach((p, idx) => {
+        const crease = Math.sin(p.v * Math.PI * 7 + elapsed * mode.windSpeed) * Math.sin(p.u * Math.PI);
+        positions[idx * 3] = p.x;
+        positions[idx * 3 + 1] = p.y;
+        positions[idx * 3 + 2] = p.z + crease * mode.wrinkle * p.v * .38;
+      });
+      geometry.attributes.position.needsUpdate = true;
+      geometry.computeVertexNormals();
+      mesh.rotation.z = clamp(input.x * .0028, -.18, .18);
+      mesh.rotation.y = clamp(-input.x * .006, -.28, .28);
+      renderer.render(scene, camera);
+    }
+
+    selector.querySelectorAll('[data-ribbon-mode]').forEach((button) => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setMode(button.dataset.ribbonMode);
+      });
+    });
+    window.addEventListener('resize', resize);
+    resize();
+    setMode('cloth');
+    if (reduced) {
+      step({ x: 0, y: 26, vx: 0 });
+    }
+    return {
+      update(input) { if (!reduced) step(input); },
+      setMode,
+      dispose() {
+        renderer.dispose();
+        geometry.dispose();
+        material.dispose();
+      },
+    };
+  }
   function renderDailyRibbon(summary) {
     const stage = $('daily-summary-stage');
     if (!stage || !summary || !summary.body) return;
@@ -857,11 +1164,18 @@
           <circle class="summary-bead" data-bead="2" r="4"></circle>
         </svg>
         <button class="summary-ribbon-pull" id="summary-ribbon-pull" type="button" aria-expanded="false" aria-controls="summary-sheet" aria-label="Don't Die. 요약 열기">
+          <canvas class="ribbon-cloth-canvas" id="ribbon-cloth-canvas" aria-hidden="true"></canvas>
           <span class="ribbon-title">${esc(title)}</span>
           <span class="ribbon-line">Don't Die.</span>
           <span class="ribbon-meta" aria-hidden="true"></span>
           <span class="ribbon-handle">PULL</span>
         </button>
+        <div class="ribbon-mode-selector" id="ribbon-mode-selector" aria-label="Ribbon physics model">
+          <button type="button" data-ribbon-mode="cloth" aria-pressed="true">CLOTH</button>
+          <button type="button" data-ribbon-mode="silk" aria-pressed="false">SILK</button>
+          <button type="button" data-ribbon-mode="paper" aria-pressed="false">PAPER</button>
+          <button type="button" data-ribbon-mode="elastic" aria-pressed="false">ELASTIC</button>
+        </div>
         <article class="summary-sheet" id="summary-sheet" aria-hidden="true">
           <div class="summary-sheet-head">
             <div>
@@ -881,6 +1195,8 @@
     const ribbon = $('summary-ribbon-pull');
     const sheet = $('summary-sheet');
     const close = $('summary-close');
+    const canvas = $('ribbon-cloth-canvas');
+    const selector = $('ribbon-mode-selector');
     const svg = $('summary-strings');
     const cords = [...svg.querySelectorAll('[data-cord]')];
     const beads = [...svg.querySelectorAll('[data-bead]')];
@@ -902,6 +1218,17 @@
     const openY = 78;
     const pullLimit = 138;
     const toggleThreshold = 116;
+    let ribbonLab = null;
+    if (canvas && selector) {
+      initRibbonClothLab({ canvas, physics, ribbon, selector, reduced })
+        .then((lab) => {
+          ribbonLab = lab;
+          ribbon.classList.add('webgl-ready');
+        })
+        .catch(() => {
+          ribbon.classList.add('webgl-fallback');
+        });
+    }
 
     function setOpen(next) {
       state.open = next;
@@ -937,6 +1264,7 @@
       ribbon.style.setProperty('--ribbon-tilt', `${clamp(state.x * .08 + state.vx * .18, -12, 12).toFixed(2)}deg`);
       ribbon.style.setProperty('--ribbon-fold-x', `${clamp(state.y * .04 - 3, -3, 5).toFixed(2)}deg`);
       ribbon.style.setProperty('--ribbon-fold-y', `${clamp(-state.x * .12, -8, 8).toFixed(2)}deg`);
+      if (ribbonLab) ribbonLab.update(state);
     }
     function startPendulum(impulse) {
       if (reduced) return;

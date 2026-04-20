@@ -522,12 +522,15 @@
       right: 8px;
       left: 8px;
       width: auto;
-      max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 16px);
+      max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 48px);
+      max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - max(48px, env(safe-area-inset-bottom)));
       padding: 0 18px;
       border-radius: 6px;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
     .summary-physics.open .summary-sheet {
-      padding: 18px 18px 34px;
+      padding: 18px 18px max(56px, calc(34px + env(safe-area-inset-bottom)));
     }
     .summary-sheet-head {
       display: block;
@@ -1010,7 +1013,13 @@
       if (state.dragDistance > 6) return;
       setOpen(!state.open);
     });
-    close.addEventListener('click', () => setOpen(false));
+    function closeSummarySheet(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(false);
+    }
+    close.addEventListener('pointerdown', closeSummarySheet);
+    close.addEventListener('click', closeSummarySheet);
     window.addEventListener('resize', draw);
     draw();
     requestAnimationFrame(tick);

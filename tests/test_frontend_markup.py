@@ -71,12 +71,22 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("right: 8px;", mobile_sheet)
         self.assertIn("left: 8px;", mobile_sheet)
         self.assertIn("width: auto;", mobile_sheet)
-        self.assertIn("max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 16px);", mobile_sheet)
+        self.assertIn("max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 48px);", mobile_sheet)
+        self.assertIn("max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - max(48px, env(safe-area-inset-bottom)));", mobile_sheet)
+        self.assertIn("-webkit-overflow-scrolling: touch;", mobile_sheet)
         self.assertIn("border-radius: 6px;", mobile_sheet)
-        self.assertIn("padding: 18px 18px 34px;", mobile_open_sheet)
+        self.assertIn("padding: 18px 18px max(56px, calc(34px + env(safe-area-inset-bottom)));", mobile_open_sheet)
         self.assertIn("word-break: keep-all;", title)
         self.assertIn("overflow-wrap: break-word;", title)
         self.assertIn("text-wrap: balance;", title)
+
+    def test_daily_summary_close_uses_pointerdown_on_mobile(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("function closeSummarySheet(e)", html)
+        self.assertIn("e.preventDefault();", html)
+        self.assertIn("e.stopPropagation();", html)
+        self.assertIn("close.addEventListener('pointerdown', closeSummarySheet);", html)
+        self.assertIn("close.addEventListener('click', closeSummarySheet);", html)
 
 
 if __name__ == "__main__":

@@ -51,13 +51,30 @@ class FrontendMarkupTest(unittest.TestCase):
 
     def test_daily_summary_ribbon_uses_pendulum_toggle_and_3d_cloth(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-        self.assertIn("perspective:", css_block(html, ".daily-ribbon-stage {"))
+        self.assertNotIn("perspective:", css_block(html, ".daily-ribbon-stage {"))
+        self.assertIn("perspective(760px)", html)
         self.assertIn("rotateX(var(--ribbon-fold-x))", html)
         self.assertIn("linear-gradient(115deg", html)
         self.assertIn("swingAngle", html)
         self.assertIn("swingVelocity", html)
         self.assertIn("startPendulum", html)
         self.assertIn("setOpen(!state.open)", html)
+
+    def test_mobile_daily_summary_sheet_starts_at_top_and_covers_ribbon(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]
+        mobile_sheet = css_block(mobile, ".summary-sheet {")
+        title = css_block(html, ".summary-sheet-title {")
+        self.assertIn("z-index: 88;", css_block(html, ".summary-sheet {"))
+        self.assertIn("top: 0;", mobile_sheet)
+        self.assertIn("right: 0;", mobile_sheet)
+        self.assertIn("left: 0;", mobile_sheet)
+        self.assertIn("width: 100vw;", mobile_sheet)
+        self.assertIn("max-height: 100vh;", mobile_sheet)
+        self.assertIn("border-radius: 0 0 6px 6px;", mobile_sheet)
+        self.assertIn("word-break: keep-all;", title)
+        self.assertIn("overflow-wrap: break-word;", title)
+        self.assertIn("text-wrap: balance;", title)
 
 
 if __name__ == "__main__":

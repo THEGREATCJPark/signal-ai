@@ -462,6 +462,8 @@
     line-height: 1.9;
     color: var(--ink-2);
     margin-bottom: 18px;
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
   .summary-copy p:last-child { margin-bottom: 0; }
   .summary-copy p:first-of-type::first-letter {
@@ -639,7 +641,11 @@
     line-height: 1.85;
     color: var(--ink-2);
   }
-  .reader .body p { margin-bottom: 18px; }
+  .reader .body p {
+    margin-bottom: 18px;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
   .reader .body p:first-of-type::first-letter {
     font-size: 3.6rem;
     font-weight: 700;
@@ -778,6 +784,9 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
   }
+  function formatInlineText(s) {
+    return esc(s).replace(/([A-Za-z0-9])\/([A-Za-z0-9])/g, '$1&#8288;/&#8288;$2');
+  }
   function excerpt(s, n = 160) {
     const clean = String(s).replace(/^\*+\s*/, '').replace(/\*\*/g, '').split('\n')[0];
     return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
@@ -822,7 +831,7 @@
             <button class="summary-close" id="summary-close" type="button">접기</button>
           </div>
           <div class="summary-copy">
-            ${paragraphs(summary.body).map(p => `<p>${esc(p)}</p>`).join('')}
+            ${paragraphs(summary.body).map(p => `<p>${formatInlineText(p)}</p>`).join('')}
           </div>
         </article>
       </div>
@@ -996,8 +1005,8 @@
       <div class="section-label"><span>TOP STORY</span></div>
       <article class="hero" data-id="${esc(t.id)}">
         <div class="kicker">LEAD ${tagBadges(t)}</div>
-        <h2>${esc(t.headline)}</h2>
-        <p class="lede">${esc(excerpt(t.body, 240))}</p>
+        <h2>${formatInlineText(t.headline)}</h2>
+        <p class="lede">${formatInlineText(excerpt(t.body, 240))}</p>
         <div class="read-more">Read the full story</div>
       </article>
     `;
@@ -1008,8 +1017,8 @@
       html += `
         <article class="card" data-id="${esc(a.id)}">
           <div class="num">No. ${String(i + 1).padStart(2, '0')} ${tagBadges(a)}</div>
-          <h3>${esc(a.headline)}</h3>
-          <p>${esc(excerpt(a.body, 180))}</p>
+          <h3>${formatInlineText(a.headline)}</h3>
+          <p>${formatInlineText(excerpt(a.body, 180))}</p>
         </article>
       `;
     });
@@ -1022,11 +1031,11 @@
 
   // ── Sides render (split 3-way: left, center-extra, right) ──
   function sideCard(a, n, withSnip) {
-    const snip = withSnip ? `<div class="snip">${esc(excerpt(a.body, 120))}</div>` : '';
+    const snip = withSnip ? `<div class="snip">${formatInlineText(excerpt(a.body, 120))}</div>` : '';
     return `
       <div class="side-item" data-id="${esc(a.id)}">
         <div class="num">No. ${String(n).padStart(2, '0')} ${tagBadges(a)}</div>
-        <div class="t">${esc(a.headline)}</div>
+        <div class="t">${formatInlineText(a.headline)}</div>
         ${snip}
       </div>
     `;
@@ -1058,9 +1067,9 @@
   function openReader(id) {
     const a = byId[id];
     if (!a) return;
-    $('reader-title').textContent = a.headline;
+    $('reader-title').innerHTML = formatInlineText(a.headline);
     $('reader-byline').textContent = `FIRST LIGHT AI · ${fmtDate(a.placed_at || gen)}`;
-    $('reader-body').innerHTML = paragraphs(a.body).map(p => `<p>${esc(p)}</p>`).join('');
+    $('reader-body').innerHTML = paragraphs(a.body).map(p => `<p>${formatInlineText(p)}</p>`).join('');
     reader.classList.add('open');
     document.body.style.overflow = 'hidden';
   }

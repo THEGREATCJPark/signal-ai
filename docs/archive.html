@@ -144,6 +144,8 @@
     line-height: 1.3;
     letter-spacing: -0.01em;
     margin-bottom: 6px;
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
   .entry .content p {
     font-size: 0.9rem; line-height: 1.6;
@@ -152,6 +154,8 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
 
   /* ── Reader modal ── */
@@ -191,6 +195,8 @@
     font-size: clamp(1.7rem, 4vw, 2.4rem);
     font-weight: 700; line-height: 1.2;
     letter-spacing: -0.02em; margin-bottom: 20px;
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
   .reader .byline {
     font-family: var(--mono); font-size: 11px;
@@ -201,7 +207,11 @@
     margin-bottom: 28px;
   }
   .reader .body { font-family: var(--serif); font-size: 1.08rem; line-height: 1.85; color: var(--ink-2); }
-  .reader .body p { margin-bottom: 18px; }
+  .reader .body p {
+    margin-bottom: 18px;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
   .reader .body p:first-of-type::first-letter {
     font-size: 3.6rem; font-weight: 700; float: left;
     line-height: 0.9; margin: 6px 10px 0 0;
@@ -270,6 +280,9 @@
     if (el) el.href = wrapped;
   })();
   function esc(s) { return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function formatInlineText(s) {
+    return esc(s).replace(/([A-Za-z0-9])\/([A-Za-z0-9])/g, '$1&#8288;/&#8288;$2');
+  }
   function fmtDT(iso) {
     try {
       const d = new Date(iso);
@@ -334,8 +347,8 @@
         <div class="when">${fmtDT(a.created_at)}</div>
         <span class="badge ${esc(a.placement || 'side')}">${esc((a.placement || 'side').toUpperCase())}</span>
         <div class="content">
-          <h3>${esc(a.headline)} ${tags.join(' ')}</h3>
-          <p>${esc(excerpt(a.body))}</p>
+          <h3>${formatInlineText(a.headline)} ${tags.join(' ')}</h3>
+          <p>${formatInlineText(excerpt(a.body))}</p>
         </div>
       </article>`);
     });
@@ -358,9 +371,9 @@
   const reader = $('reader');
   function openReader(id) {
     const a = byId[id]; if (!a) return;
-    $('reader-title').textContent = a.headline;
+    $('reader-title').innerHTML = formatInlineText(a.headline);
     $('reader-byline').textContent = `FIRST LIGHT AI · ${fmtDT(a.created_at)} · ${(a.placement||'side').toUpperCase()}`;
-    $('reader-body').innerHTML = paragraphs(a.body).map(p => `<p>${esc(p)}</p>`).join('');
+    $('reader-body').innerHTML = paragraphs(a.body).map(p => `<p>${formatInlineText(p)}</p>`).join('');
     reader.classList.add('open');
     document.body.style.overflow = 'hidden';
   }

@@ -49,6 +49,11 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertNotIn("updates</span>", html)
         self.assertNotIn("오늘의 모든 업데이트를 한 번에 읽기", html)
 
+    def test_daily_summary_sheet_uses_left_aligned_editorial_text(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        sheet = css_block(html, ".summary-sheet {")
+        self.assertIn("text-align: left;", sheet)
+
     def test_daily_summary_ribbon_uses_pendulum_toggle_and_3d_cloth(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn("perspective:", css_block(html, ".daily-ribbon-stage {"))

@@ -306,21 +306,25 @@ def prompt_daily_summary(new_articles: list) -> str:
         return ""
     lines = []
     for i, a in enumerate(new_articles, 1):
-        body = (a.get("body") or "").replace("\n", " ")[:500]
+        body = (a.get("body") or "").strip()
         lines.append(
-            f"{i}. [{a.get('category','news')}/{a.get('trust','high')}] "
-            f"{a.get('headline','')} — {body}"
+            f"### {i}. {a.get('headline','')}\n"
+            f"- category: {a.get('category','news')}\n"
+            f"- trust: {a.get('trust','high')}\n"
+            f"- body:\n{body}"
         )
     return f"""역할: First Light AI 데일리 에디터.
-오늘 새로 업데이트된 전체 내용을 하나의 읽기 좋은 요약문으로 정리하세요.
+오늘 새로 업데이트된 청크 처리 결과의 기사 본문 전체를 읽고, 하나의 자세한 데일리 요약글로 다시 쓰세요.
 
 ## 제목
 {DAILY_SUMMARY_TITLE}
 
 ## 작성 규칙
-- 한국어 본문 450~900자.
-- 기사 나열이 아니라 하루 흐름을 하나의 글처럼 연결.
-- 중요한 축, 루머/낮은 신뢰 항목의 불확실성, 모델·제품·인프라 흐름을 함께 정리.
+- 한국어 본문 1200~2200자.
+- 입력된 각 기사 본문 전체를 근거로 사용하고, 중요한 디테일을 버리지 말 것.
+- 기사 목록식 요약이 아니라 하루 흐름을 하나의 긴 글처럼 연결.
+- 중요한 축, 루머/낮은 신뢰 항목의 불확실성, 모델·제품·인프라·보안·비즈니스 흐름을 함께 정리.
+- 같은 사건이 반복되면 하나로 묶되, 서로 다른 의미나 파급효과는 보존.
 - 입력에 없는 사실을 만들지 말 것.
 - 출력은 JSON 객체 하나만.
 
@@ -348,7 +352,7 @@ def generate_daily_summary(new_articles: list, run_at: datetime, sched) -> dict:
         return build_daily_summary_payload(fallback_daily_summary_body(new_articles), new_articles, run_at)
     prompt = prompt_daily_summary(new_articles)
     try:
-        raw = call_gemma(prompt, sched, max_tok=2048, temp=0.35, json_mode=True)
+        raw = call_gemma(prompt, sched, max_tok=4096, temp=0.35, json_mode=True)
         body = parse_daily_summary_body(raw)
         if len(body) < 40:
             body = fallback_daily_summary_body(new_articles)

@@ -258,34 +258,250 @@
   .hero .read-more::after { content: '→'; transition: transform .2s; }
   .hero:hover .read-more::after { transform: translateX(4px); }
 
-  .daily-summary {
-    padding: 28px 0 34px;
-    border-top: 1px solid var(--rule);
-    border-bottom: 1px solid var(--rule);
-    margin: 0 0 34px;
+  /* ── Daily pull-ribbon ── */
+  .daily-ribbon-stage {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--rule-soft);
   }
-  .daily-summary .summary-title {
+  .daily-ribbon-stage[hidden] { display: none; }
+  .summary-physics {
+    position: relative;
+    min-height: 136px;
+    padding-top: 6px;
+    transition: min-height .55s cubic-bezier(.18,.72,.18,1);
+  }
+  .summary-physics.open {
+    min-height: 610px;
+  }
+  .summary-strings {
+    position: absolute;
+    inset: 0 0 auto;
+    width: 100%;
+    height: 180px;
+    pointer-events: none;
+    overflow: visible;
+  }
+  .summary-string {
+    fill: none;
+    stroke: rgba(20,20,20,.68);
+    stroke-width: 1.15;
+    stroke-linecap: round;
+    filter: drop-shadow(0 1px 0 rgba(255,255,255,.55));
+  }
+  .summary-string.shadow {
+    stroke: rgba(185,28,28,.28);
+    stroke-width: .7;
+    stroke-dasharray: 2 6;
+  }
+  .summary-bead {
+    fill: var(--paper);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .summary-ribbon-pull {
+    --ribbon-x: 0px;
+    --ribbon-y: 30px;
+    --ribbon-tilt: 0deg;
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: min(560px, calc(100vw - 48px));
+    min-height: 74px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background:
+      linear-gradient(90deg, rgba(185,28,28,.12), transparent 18%, rgba(20,20,20,.05) 50%, transparent 82%, rgba(185,28,28,.12)),
+      repeating-linear-gradient(90deg, rgba(20,20,20,.035) 0 1px, transparent 1px 7px),
+      var(--paper);
+    color: var(--ink);
+    box-shadow: 0 18px 34px rgba(20,20,20,.12), inset 0 1px 0 rgba(255,255,255,.75);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    transform: translate(calc(-50% + var(--ribbon-x)), var(--ribbon-y)) rotate(var(--ribbon-tilt));
+    transform-origin: 50% -54px;
+    z-index: 3;
+  }
+  .summary-ribbon-pull:active { cursor: grabbing; }
+  .summary-ribbon-pull::before,
+  .summary-ribbon-pull::after {
+    content: '';
+    position: absolute;
+    top: 10px;
+    width: 38px;
+    height: calc(100% - 20px);
+    border-top: 1px solid rgba(20,20,20,.28);
+    border-bottom: 1px solid rgba(20,20,20,.28);
+  }
+  .summary-ribbon-pull::before {
+    left: 12px;
+    border-left: 1px solid rgba(20,20,20,.18);
+    transform: skewY(-8deg);
+  }
+  .summary-ribbon-pull::after {
+    right: 12px;
+    border-right: 1px solid rgba(20,20,20,.18);
+    transform: skewY(8deg);
+  }
+  .ribbon-title {
+    display: block;
     font-family: var(--mono);
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 0.18em;
+    letter-spacing: .16em;
     text-transform: uppercase;
     color: var(--accent);
-    margin-bottom: 14px;
+    margin: 13px 64px 4px;
   }
-  .daily-summary .summary-date {
+  .ribbon-line {
+    display: block;
+    font-family: var(--serif);
+    font-size: clamp(1.2rem, 3vw, 1.72rem);
+    font-weight: 900;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 64px 6px;
+  }
+  .ribbon-meta {
+    display: block;
     font-family: var(--mono);
     font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    letter-spacing: .12em;
     color: var(--ink-4);
-    margin-bottom: 16px;
+    text-transform: uppercase;
+    margin: 0 64px 13px;
   }
-  .daily-summary p {
+  .ribbon-handle {
+    position: absolute;
+    left: 50%;
+    bottom: -24px;
+    width: 78px;
+    height: 24px;
+    transform: translateX(-50%);
+    border: 1px solid var(--rule);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: .14em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12px 18px rgba(20,20,20,.14);
+  }
+  .summary-physics.primed .ribbon-handle { background: var(--accent); }
+  .summary-sheet {
+    max-width: 880px;
+    margin: 232px auto 0;
+    padding: 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transform: translateY(-24px);
+    transition:
+      max-height .65s cubic-bezier(.18,.72,.18,1),
+      opacity .28s ease,
+      transform .55s cubic-bezier(.18,.72,.18,1),
+      padding .55s cubic-bezier(.18,.72,.18,1);
+  }
+  .summary-physics.open .summary-sheet {
+    max-height: 1500px;
+    opacity: 1;
+    padding: 34px 0 38px;
+    transform: translateY(0);
+  }
+  .summary-sheet-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 18px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--rule-soft);
+    margin-bottom: 24px;
+  }
+  .summary-sheet-kicker {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .summary-sheet-title {
     font-family: var(--serif);
-    font-size: 1.04rem;
-    line-height: 1.82;
+    font-size: clamp(1.55rem, 3.2vw, 2.2rem);
+    line-height: 1.12;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+  .summary-close {
+    flex: 0 0 auto;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    padding: 9px 12px;
+    cursor: pointer;
+  }
+  .summary-close:hover { background: var(--ink); color: var(--paper); }
+  .summary-copy p {
+    font-family: var(--serif);
+    font-size: clamp(1.02rem, 2vw, 1.13rem);
+    line-height: 1.9;
     color: var(--ink-2);
+    margin-bottom: 18px;
+  }
+  .summary-copy p:last-child { margin-bottom: 0; }
+  .summary-copy p:first-of-type::first-letter {
+    font-size: 3.2rem;
+    line-height: .9;
+    float: left;
+    font-weight: 900;
+    color: var(--accent);
+    margin: 8px 10px 0 0;
+  }
+  @media (max-width: 720px) {
+    .daily-ribbon-stage { padding: 0 16px; }
+    .summary-physics { min-height: 126px; }
+    .summary-physics.open { min-height: 700px; }
+    .summary-ribbon-pull {
+      width: calc(100vw - 32px);
+      min-height: 78px;
+    }
+    .ribbon-title,
+    .ribbon-line,
+    .ribbon-meta {
+      margin-left: 44px;
+      margin-right: 44px;
+    }
+    .summary-sheet {
+      margin-top: 218px;
+    }
+    .summary-sheet-head {
+      display: block;
+    }
+    .summary-close {
+      margin-top: 16px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .summary-ribbon-pull,
+    .summary-sheet,
+    .summary-physics {
+      transition: none;
+    }
   }
 
   /* ── MAIN grid ── */
@@ -487,6 +703,8 @@
   </div>
 </header>
 
+<section class="daily-ribbon-stage" id="daily-summary-stage" hidden></section>
+
 <div class="layout">
   <aside class="side side-left" id="side-left"></aside>
   <main class="center" id="center">
@@ -567,6 +785,161 @@
   function paragraphs(body) {
     return String(body).replace(/\*\*/g, '').split(/\n{2,}|\n/).map(p => p.trim()).filter(Boolean);
   }
+  function clamp(n, min, max) {
+    return Math.max(min, Math.min(max, n));
+  }
+  function renderDailyRibbon(summary) {
+    const stage = $('daily-summary-stage');
+    if (!stage || !summary || !summary.body) return;
+    const title = summary.title || "Daily Don't Die Summary";
+    const count = Number(summary.article_count || 0);
+    stage.hidden = false;
+    stage.innerHTML = `
+      <div class="summary-physics" id="summary-physics">
+        <svg class="summary-strings" id="summary-strings" aria-hidden="true">
+          <path class="summary-string shadow" data-cord="0"></path>
+          <path class="summary-string" data-cord="0"></path>
+          <path class="summary-string shadow" data-cord="1"></path>
+          <path class="summary-string" data-cord="1"></path>
+          <path class="summary-string shadow" data-cord="2"></path>
+          <path class="summary-string" data-cord="2"></path>
+          <circle class="summary-bead" data-bead="0" r="4"></circle>
+          <circle class="summary-bead" data-bead="1" r="4"></circle>
+          <circle class="summary-bead" data-bead="2" r="4"></circle>
+        </svg>
+        <button class="summary-ribbon-pull" id="summary-ribbon-pull" type="button" aria-expanded="false" aria-controls="summary-sheet">
+          <span class="ribbon-title">${esc(title)}</span>
+          <span class="ribbon-line">오늘의 모든 업데이트를 한 번에 읽기</span>
+          <span class="ribbon-meta">${esc(summary.date || '')} · ${esc(String(count))} UPDATES · PULL DOWN</span>
+          <span class="ribbon-handle">PULL</span>
+        </button>
+        <article class="summary-sheet" id="summary-sheet" aria-hidden="true">
+          <div class="summary-sheet-head">
+            <div>
+              <div class="summary-sheet-kicker">${esc(title)} · ${esc(summary.date || '')}</div>
+              <h2 class="summary-sheet-title">오늘의 AI 흐름 전체 요약</h2>
+            </div>
+            <button class="summary-close" id="summary-close" type="button">접기</button>
+          </div>
+          <div class="summary-copy">
+            ${paragraphs(summary.body).map(p => `<p>${esc(p)}</p>`).join('')}
+          </div>
+        </article>
+      </div>
+    `;
+
+    const physics = $('summary-physics');
+    const ribbon = $('summary-ribbon-pull');
+    const sheet = $('summary-sheet');
+    const close = $('summary-close');
+    const svg = $('summary-strings');
+    const cords = [...svg.querySelectorAll('[data-cord]')];
+    const beads = [...svg.querySelectorAll('[data-bead]')];
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const state = {
+      x: 0, y: 30, vx: 0, vy: 0,
+      targetX: 0, targetY: 30,
+      dragging: false,
+      open: false,
+      startX: 0, startY: 0,
+      baseX: 0, baseY: 0,
+      dragDistance: 0,
+    };
+    const collapsedY = 30;
+    const openY = 118;
+    const pullLimit = 170;
+    const threshold = 96;
+
+    function setOpen(next) {
+      state.open = next;
+      state.targetY = next ? openY : collapsedY;
+      state.targetX = 0;
+      physics.classList.toggle('open', next);
+      physics.classList.remove('primed');
+      ribbon.setAttribute('aria-expanded', String(next));
+      sheet.setAttribute('aria-hidden', String(!next));
+    }
+    function draw() {
+      const width = Math.max(320, physics.clientWidth);
+      svg.setAttribute('viewBox', `0 0 ${width} 210`);
+      const anchors = [width * .22, width * .5, width * .78];
+      const offsets = [-190, 0, 190].map(v => clamp(v, -width * .28, width * .28));
+      const ribbonTop = 8 + state.y;
+      const ribbonY = ribbonTop + 15;
+      cords.forEach((path, i) => {
+        const idx = Number(path.dataset.cord);
+        const ax = anchors[idx];
+        const tx = width * .5 + offsets[idx] + state.x;
+        const midY = 16 + state.y * .52;
+        const sway = state.x * (idx - 1) * .18;
+        const d = `M ${ax} 0 C ${ax + sway} ${midY * .34}, ${tx - sway} ${midY}, ${tx} ${ribbonY}`;
+        path.setAttribute('d', d);
+      });
+      beads.forEach((bead) => {
+        const idx = Number(bead.dataset.bead);
+        bead.setAttribute('cx', String(width * .5 + offsets[idx] + state.x));
+        bead.setAttribute('cy', String(ribbonY));
+      });
+      ribbon.style.setProperty('--ribbon-x', `${state.x.toFixed(2)}px`);
+      ribbon.style.setProperty('--ribbon-y', `${state.y.toFixed(2)}px`);
+      ribbon.style.setProperty('--ribbon-tilt', `${clamp(state.x * .035 + state.vy * .08, -7, 7).toFixed(2)}deg`);
+    }
+    function tick() {
+      if (!state.dragging && !reduced) {
+        state.vy += (state.targetY - state.y) * .115;
+        state.vx += (state.targetX - state.x) * .09;
+        state.vy *= .74;
+        state.vx *= .76;
+        state.y += state.vy;
+        state.x += state.vx;
+      } else if (reduced) {
+        state.y = state.targetY;
+        state.x = state.targetX;
+      }
+      draw();
+      requestAnimationFrame(tick);
+    }
+
+    ribbon.addEventListener('pointerdown', (e) => {
+      state.dragging = true;
+      state.startX = e.clientX;
+      state.startY = e.clientY;
+      state.baseX = state.x;
+      state.baseY = state.y;
+      state.dragDistance = 0;
+      ribbon.setPointerCapture(e.pointerId);
+    });
+    ribbon.addEventListener('pointermove', (e) => {
+      if (!state.dragging) return;
+      const dx = e.clientX - state.startX;
+      const dy = e.clientY - state.startY;
+      state.dragDistance = Math.max(state.dragDistance, Math.hypot(dx, dy));
+      state.x = clamp(state.baseX + dx * .42, -90, 90);
+      state.y = clamp(state.baseY + dy, 8, pullLimit);
+      state.vx = 0;
+      state.vy = 0;
+      physics.classList.toggle('primed', !state.open && state.y > threshold);
+      draw();
+    });
+    function endDrag(e) {
+      if (!state.dragging) return;
+      state.dragging = false;
+      if (ribbon.hasPointerCapture(e.pointerId)) ribbon.releasePointerCapture(e.pointerId);
+      if (!state.open && state.y > threshold) setOpen(true);
+      else if (state.open && state.y < 70) setOpen(false);
+      else setOpen(state.open);
+    }
+    ribbon.addEventListener('pointerup', endDrag);
+    ribbon.addEventListener('pointercancel', endDrag);
+    ribbon.addEventListener('click', () => {
+      if (state.dragDistance > 6) return;
+      setOpen(!state.open);
+    });
+    close.addEventListener('click', () => setOpen(false));
+    window.addEventListener('resize', draw);
+    draw();
+    requestAnimationFrame(tick);
+  }
 
   let data;
   const inlineEl = document.getElementById('articles-data');
@@ -592,6 +965,7 @@
   $('masthead-date').textContent = fmtDate(gen, { weekday: true });
   $('masthead-source').textContent = `${all.length} STORIES · UPDATED ${fmtTime(gen)}`;
   $('footer-meta').textContent = `GENERATED ${fmtTime(gen)}`;
+  renderDailyRibbon(data.daily_summary);
 
   if (!all.length) {
     $('center').innerHTML = `<div class="empty">표시할 기사가 없습니다.</div>`;
@@ -626,16 +1000,6 @@
         <p class="lede">${esc(excerpt(t.body, 240))}</p>
         <div class="read-more">Read the full story</div>
       </article>
-    `;
-  }
-  const dailySummary = data.daily_summary;
-  if (dailySummary && dailySummary.body) {
-    html += `
-      <section class="daily-summary" aria-label="${esc(dailySummary.title || "Daily Don't Die Summary")}">
-        <div class="summary-title">${esc(dailySummary.title || "Daily Don't Die Summary")}</div>
-        <div class="summary-date">${esc(dailySummary.date || '')} · ${esc(String(dailySummary.article_count || 0))} UPDATES</div>
-        ${paragraphs(dailySummary.body).map(p => `<p>${esc(p)}</p>`).join('')}
-      </section>
     `;
   }
   if (main.length) {

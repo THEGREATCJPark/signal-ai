@@ -23,6 +23,21 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(payload["article_count"], 2)
         self.assertEqual(payload["body"], "오늘의 AI 흐름입니다.")
 
+    def test_prompt_daily_summary_uses_full_article_bodies_for_detailed_summary(self):
+        long_body = "앞부분 " + ("세부정보 " * 140) + "끝부분-반드시-포함"
+        prompt = run_hourly.prompt_daily_summary([
+            {
+                "headline": "긴 본문 기사",
+                "body": long_body,
+                "category": "news",
+                "trust": "high",
+            }
+        ])
+
+        self.assertIn("1200~2200자", prompt)
+        self.assertIn(long_body, prompt)
+        self.assertIn("끝부분-반드시-포함", prompt)
+
     def test_write_daily_new_articles_export_uses_date_folder_and_metadata(self):
         run_at = datetime(2026, 4, 20, 12, 0, tzinfo=KST)
         articles = [

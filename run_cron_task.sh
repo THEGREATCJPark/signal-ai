@@ -1,16 +1,7 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 
-LOG_FILE="/tmp/signal_daily.log"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-main() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] task wrapper start"
-  cd "$SCRIPT_DIR"
-  ./run_cron.sh
-  local rc=$?
-  echo "[$(date '+%Y-%m-%d %H:%M:%S %Z')] task wrapper exit=$rc"
-  return "$rc"
-}
-
-main >> "$LOG_FILE" 2>&1
+cd "$SCRIPT_DIR"
+exec /home/pineapple/miniconda3/bin/python3 scripts/automation_gate.py -- ./run_cron.sh

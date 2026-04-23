@@ -9,6 +9,7 @@ tasks/
 discord_3day_export.txt
 *.raw.txt
 backups/
+logs/
 
 # State files
 digest_state.json
@@ -27,5 +28,6 @@ venv/
 data/crawled/
 data/*.json
 data/*.txt
+data/*.lock
 data/signal.db
 data/signal.db-*

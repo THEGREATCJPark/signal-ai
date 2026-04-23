@@ -20,7 +20,7 @@
       "category": "rumor",
       "trust": "low",
       "created_at": "2026-04-24T08:00:02.809613+09:00",
-      "placement": "side",
+      "placement": "main",
       "placed_at": "2026-04-24T08:00:02.809613+09:00"
     },
     {
@@ -30,7 +30,7 @@
       "category": "rumor",
       "trust": "low",
       "created_at": "2026-04-24T08:00:02.809613+09:00",
-      "placement": "side",
+      "placement": "main",
       "placed_at": "2026-04-24T08:00:02.809613+09:00"
     },
     {
@@ -40,7 +40,7 @@
       "category": "news",
       "trust": "high",
       "created_at": "2026-04-24T08:00:02.809613+09:00",
-      "placement": "side",
+      "placement": "main",
       "placed_at": "2026-04-24T08:00:02.809613+09:00"
     },
     {
@@ -50,7 +50,7 @@
       "category": "news",
       "trust": "high",
       "created_at": "2026-04-24T08:00:02.809613+09:00",
-      "placement": "side",
+      "placement": "main",
       "placed_at": "2026-04-24T08:00:02.809613+09:00"
     },
     {
@@ -60,7 +60,7 @@
       "category": "news",
       "trust": "high",
       "created_at": "2026-04-24T08:00:02.809613+09:00",
-      "placement": "side",
+      "placement": "main",
       "placed_at": "2026-04-24T08:00:02.809613+09:00"
     },
     {
@@ -70,7 +70,7 @@
       "category": "news",
       "trust": "high",
       "created_at": "2026-04-24T08:00:02.809613+09:00",
-      "placement": "main",
+      "placement": "top",
       "placed_at": "2026-04-24T08:00:02.809613+09:00"
     },
     {
@@ -80,7 +80,7 @@
       "category": "news",
       "trust": "high",
       "created_at": "2026-04-24T08:00:02.809613+09:00",
-      "placement": "side",
+      "placement": "main",
       "placed_at": "2026-04-24T08:00:02.809613+09:00"
     },
     {

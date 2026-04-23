@@ -34,6 +34,7 @@ CHANNEL_ID = "1365049274068631644"
 
 CHUNK_MAX_CHARS = 80_000
 MAX_MAIN = 6
+FRONT_PAGE_SLOTS = 1 + MAX_MAIN
 DECISION_LOG_HOURS = 3
 TITLES_FOR_DEDUP = 20
 KEY_MIN_GAP_S = 3.0
@@ -516,7 +517,8 @@ def prompt_classify(active: list, new: list, decision_log: list) -> tuple[str, d
 - MAIN: 최대 {MAX_MAIN}개. 중요하지만 TOP은 아닌 것.
 - SIDE: 무제한. 그 외 전부.
 - **모든 활성 기사가 정확히 한 분류를 받아야 함** (기존 + 새 기사 합쳐서).
-- 기존 TOP/MAIN이 새 기사보다 신선·중대하면 유지. 교체 애매하면 새 기사는 SIDE로 밀어넣기.
+- 이번 배치 새 기사는 프론트 후보로 우선 검토. 교체가 애매하면 새 기사 쪽을 더 위에 둔다.
+- 새 기사가 7개 미만이면 남는 TOP/MAIN 칸은 기존 중요 기사로 채운다.
 - 시간별 잡스러운 소식이 큰 발표(신모델 공개, 메이저 업데이트 등)를 밀어내지 않도록 보수적 판단.
 - placed_at이 오래되고 새 기사가 명백히 더 중대하면 교체 가능.
 
@@ -572,6 +574,44 @@ def validate_placement(p: dict, valid_shorts: set) -> str | None:
     if missing:
         p["side"] = p["side"] + sorted(missing)
     return None
+
+
+def _created_at_sort_value(article: dict) -> float:
+    try:
+        return datetime.fromisoformat(article.get("created_at", "")).timestamp()
+    except Exception:
+        return 0.0
+
+
+def prioritize_new_articles_for_front_page(all_articles: list, new_articles: list, placement_map: dict) -> tuple[dict, list]:
+    """Force the front page to show fresh updates first while preserving archive dates."""
+    if not new_articles:
+        return placement_map, all_articles
+
+    original_index = {a["id"]: i for i, a in enumerate(all_articles)}
+    new_ids = {a["id"] for a in new_articles}
+    placement_rank = {"top": 0, "main": 1, "side": 2}
+
+    def editorial_rank(article):
+        return (
+            placement_rank.get(placement_map.get(article["id"], "side"), 2),
+            original_index.get(article["id"], 10**9),
+        )
+
+    ranked_new = sorted((a for a in all_articles if a["id"] in new_ids), key=editorial_rank)
+    ranked_existing = sorted((a for a in all_articles if a["id"] not in new_ids), key=editorial_rank)
+    front = (ranked_new + ranked_existing)[:FRONT_PAGE_SLOTS]
+    front_ids = {a["id"] for a in front}
+
+    final_map = {a["id"]: "side" for a in all_articles}
+    if front:
+        final_map[front[0]["id"]] = "top"
+        for article in front[1:FRONT_PAGE_SLOTS]:
+            final_map[article["id"]] = "main"
+
+    side = [a for a in all_articles if a["id"] not in front_ids]
+    side.sort(key=lambda a: (-_created_at_sort_value(a), original_index.get(a["id"], 10**9)))
+    return final_map, front + side
 
 
 # ── Main ────────────────────────────────────────────────────────
@@ -1110,7 +1150,11 @@ def _classify_and_save(state, new_articles, now, sched):
                         placement_map_real[a["id"]] = "side"
                     break
 
-        all_articles = state["articles"] + new_articles
+        placement_map_real, all_articles = prioritize_new_articles_for_front_page(
+            state["articles"] + new_articles,
+            new_articles,
+            placement_map_real,
+        )
         for a in all_articles:
             new_p = placement_map_real.get(a["id"], "side")
             if a.get("placement") != new_p:

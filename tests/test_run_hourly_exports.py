@@ -243,6 +243,107 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(state["daily_summary"]["title"], "새 모델 공개가 중심이 된 하루")
         self.assertEqual(state["daily_summary"]["body"], "오늘은 새 모델 공개가 중심입니다.")
 
+    def test_classify_and_save_promotes_new_articles_to_front_page_first(self):
+        run_at = datetime(2026, 4, 24, 8, 0, tzinfo=KST)
+        old_articles = [
+            {
+                "id": f"old-{i}",
+                "headline": f"과거 중요 기사 {i}",
+                "body": "과거 기사 본문",
+                "created_at": (run_at - timedelta(days=i)).isoformat(),
+                "placement": "top" if i == 1 else "main",
+                "placed_at": (run_at - timedelta(days=i)).isoformat(),
+            }
+            for i in range(1, 8)
+        ]
+        new_articles = [
+            {
+                "id": f"new-{i}",
+                "headline": f"신규 기사 {i}",
+                "body": "새로 들어온 기사 본문",
+                "category": "news",
+                "trust": "high",
+                "created_at": run_at.isoformat(),
+                "placement": "side",
+                "placed_at": run_at.isoformat(),
+            }
+            for i in range(1, 4)
+        ]
+        state = {
+            "schema_version": 2,
+            "last_run_at": (run_at - timedelta(days=1)).isoformat(),
+            "generated_at": (run_at - timedelta(days=1)).isoformat(),
+            "journal": "First Light AI",
+            "model": run_hourly.MODEL,
+            "articles": old_articles,
+            "decision_log": [],
+        }
+        summary = run_hourly.build_daily_summary_payload("신규 요약", new_articles, run_at, title="신규 중심")
+
+        # The LLM tries to preserve yesterday's front page and sends new articles to side.
+        llm_keeps_old_front = '{"top":"1","main":["2","3","4","5","6","7"],"side":["8","9","10"]}'
+
+        with tempfile.TemporaryDirectory() as td:
+            with (
+                patch.object(run_hourly, "EXPORTS_ARTICLES_DIR", Path(td)),
+                patch.object(run_hourly, "save_state"),
+                patch.object(run_hourly, "generate_daily_summary", return_value=summary),
+                patch.object(run_hourly, "call_gemma", return_value=llm_keeps_old_front),
+                patch.object(run_hourly.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="gist ok\n", stderr="")),
+            ):
+                run_hourly._classify_and_save(state, new_articles, run_at, sched=None)
+
+        front = [a for a in state["articles"] if a["placement"] in ("top", "main")]
+        by_id = {a["id"]: a for a in state["articles"]}
+        self.assertEqual([a["id"] for a in front[:3]], ["new-1", "new-2", "new-3"])
+        self.assertEqual(by_id["new-1"]["placement"], "top")
+        self.assertEqual(by_id["new-2"]["placement"], "main")
+        self.assertEqual(by_id["new-3"]["placement"], "main")
+        self.assertEqual(sum(1 for a in state["articles"] if a["placement"] == "top"), 1)
+        self.assertEqual(sum(1 for a in state["articles"] if a["placement"] == "main"), 6)
+
+    def test_classify_and_save_caps_front_page_at_seven_new_articles(self):
+        run_at = datetime(2026, 4, 24, 8, 0, tzinfo=KST)
+        state = {
+            "schema_version": 2,
+            "last_run_at": (run_at - timedelta(days=1)).isoformat(),
+            "generated_at": (run_at - timedelta(days=1)).isoformat(),
+            "journal": "First Light AI",
+            "model": run_hourly.MODEL,
+            "articles": [],
+            "decision_log": [],
+        }
+        new_articles = [
+            {
+                "id": f"new-{i}",
+                "headline": f"신규 기사 {i}",
+                "body": "새로 들어온 기사 본문",
+                "category": "news",
+                "trust": "high",
+                "created_at": run_at.isoformat(),
+                "placement": None,
+                "placed_at": run_at.isoformat(),
+            }
+            for i in range(1, 10)
+        ]
+        side_ids = [str(i) for i in range(1, 10)]
+        llm_sends_all_to_side = json.dumps({"top": None, "main": [], "side": side_ids})
+        summary = run_hourly.build_daily_summary_payload("신규 요약", new_articles, run_at, title="신규 중심")
+
+        with tempfile.TemporaryDirectory() as td:
+            with (
+                patch.object(run_hourly, "EXPORTS_ARTICLES_DIR", Path(td)),
+                patch.object(run_hourly, "save_state"),
+                patch.object(run_hourly, "generate_daily_summary", return_value=summary),
+                patch.object(run_hourly, "call_gemma", return_value=llm_sends_all_to_side),
+                patch.object(run_hourly.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="gist ok\n", stderr="")),
+            ):
+                run_hourly._classify_and_save(state, new_articles, run_at, sched=None)
+
+        front_ids = [a["id"] for a in state["articles"] if a["placement"] in ("top", "main")]
+        self.assertEqual(front_ids, [f"new-{i}" for i in range(1, 8)])
+        self.assertEqual([a["placement"] for a in state["articles"][:9]], ["top", "main", "main", "main", "main", "main", "main", "side", "side"])
+
 
 if __name__ == "__main__":
     unittest.main()

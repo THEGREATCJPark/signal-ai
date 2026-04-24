@@ -23,6 +23,16 @@ class IngestAutomationTest(unittest.TestCase):
 
         self.assertFalse(workflow.exists())
 
+    def test_pages_workflow_deploys_dev_publish_commits_only(self):
+        workflow = ROOT / ".github" / "workflows" / "deploy-pages.yml"
+        text = workflow.read_text(encoding="utf-8")
+
+        self.assertIn("branches: [dev]", text)
+        self.assertIn("startsWith(github.event.head_commit.message, 'chore: publish First Light AI')", text)
+        self.assertIn("mkdir -p _site", text)
+        self.assertIn("cp index.html archive.html articles.json .nojekyll _site/", text)
+        self.assertIn("cp -R exports _site/exports", text)
+
     def test_local_all_source_ingest_refuses_github_actions(self):
         mod = importlib.import_module("scripts.local_crawl_ingest")
 

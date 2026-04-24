@@ -2,8 +2,13 @@ name: Deploy Digest to GitHub Pages
 
 on:
   push:
-    branches: [feat/discord-digest-demo, main]
-    paths: [docs/**]
+    branches: [dev]
+    paths:
+      - index.html
+      - archive.html
+      - articles.json
+      - exports/articles/**
+      - .github/workflows/deploy-pages.yml
   workflow_dispatch:
 
 permissions:
@@ -17,6 +22,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: publish First Light AI')
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -24,8 +30,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Build static artifact
+        run: |
+          mkdir -p _site
+          cp index.html archive.html articles.json .nojekyll _site/
+          if [ -d exports ]; then cp -R exports _site/exports; fi
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

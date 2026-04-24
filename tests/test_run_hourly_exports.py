@@ -52,6 +52,44 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(parsed["title"], "모델 경쟁과 보안 경보가 겹친 하루")
         self.assertEqual(parsed["body"], "오늘은 보안 이슈와 모델 루머가 함께 움직였습니다.")
 
+    def test_parse_chunk_articles_downgrades_unsourced_model_launch_claim(self):
+        raw = json.dumps({
+            "articles": [
+                {
+                    "headline": "Google, 차세대 Gemini 3.1 및 3.5 모델 공개 소식",
+                    "body": "Google이 자사의 가장 진보된 AI 모델인 Gemini 3.1과 3.5를 출시했다는 소식이 전해졌습니다. 이번 업데이트는 사용자 경험을 혁신할 것으로 보입니다.",
+                    "category": "news",
+                    "trust": "high",
+                }
+            ]
+        }, ensure_ascii=False)
+
+        parsed = run_hourly.parse_chunk_articles(raw)
+
+        self.assertEqual(len(parsed), 1)
+        self.assertEqual(parsed[0]["category"], "rumor")
+        self.assertEqual(parsed[0]["trust"], "low")
+        self.assertTrue(parsed[0]["headline"].startswith("미확인: "))
+        self.assertIn("공식 출처가 확인되지 않은", parsed[0]["body"])
+
+    def test_parse_chunk_articles_keeps_official_model_launch_claim_high_trust(self):
+        raw = json.dumps({
+            "articles": [
+                {
+                    "headline": "Google, Gemini 3 Pro 공식 블로그 공개",
+                    "body": "Google 공식 블로그(blog.google)에 따르면 Gemini 3 Pro Preview가 AI Studio와 Vertex AI에 공개됐다는 소식입니다. 공식 모델 카드와 API 문서도 함께 안내됐습니다.",
+                    "category": "news",
+                    "trust": "high",
+                }
+            ]
+        }, ensure_ascii=False)
+
+        parsed = run_hourly.parse_chunk_articles(raw)
+
+        self.assertEqual(parsed[0]["category"], "news")
+        self.assertEqual(parsed[0]["trust"], "high")
+        self.assertFalse(parsed[0]["headline"].startswith("미확인: "))
+
     def test_write_daily_new_articles_export_uses_date_folder_and_metadata(self):
         run_at = datetime(2026, 4, 20, 12, 0, tzinfo=KST)
         articles = [
@@ -301,6 +339,59 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(by_id["new-3"]["placement"], "main")
         self.assertEqual(sum(1 for a in state["articles"] if a["placement"] == "top"), 1)
         self.assertEqual(sum(1 for a in state["articles"] if a["placement"] == "main"), 6)
+
+    def test_classify_and_save_keeps_low_trust_rumor_behind_credible_front_candidates(self):
+        run_at = datetime(2026, 4, 24, 8, 0, tzinfo=KST)
+        old_articles = [
+            {
+                "id": f"old-{i}",
+                "headline": f"기존 신뢰 기사 {i}",
+                "body": "공식 출처로 확인된 기존 기사 본문",
+                "category": "news",
+                "trust": "high",
+                "created_at": (run_at - timedelta(days=i)).isoformat(),
+                "placement": "top" if i == 1 else "main",
+                "placed_at": (run_at - timedelta(days=i)).isoformat(),
+            }
+            for i in range(1, 8)
+        ]
+        new_articles = [
+            {
+                "id": "new-rumor",
+                "headline": "미확인: Gemini 3.5 출시 주장",
+                "body": "공식 출처가 확인되지 않은 채팅 기반 주장입니다.",
+                "category": "rumor",
+                "trust": "low",
+                "created_at": run_at.isoformat(),
+                "placement": "side",
+                "placed_at": run_at.isoformat(),
+            }
+        ]
+        state = {
+            "schema_version": 2,
+            "last_run_at": (run_at - timedelta(days=1)).isoformat(),
+            "generated_at": (run_at - timedelta(days=1)).isoformat(),
+            "journal": "First Light AI",
+            "model": run_hourly.MODEL,
+            "articles": old_articles,
+            "decision_log": [],
+        }
+        llm_promotes_rumor = json.dumps({"top": "8", "main": ["1", "2", "3", "4", "5", "6"], "side": ["7"]})
+        summary = run_hourly.build_daily_summary_payload("루머 요약", new_articles, run_at, title="루머 중심")
+
+        with tempfile.TemporaryDirectory() as td:
+            with (
+                patch.object(run_hourly, "EXPORTS_ARTICLES_DIR", Path(td)),
+                patch.object(run_hourly, "save_state"),
+                patch.object(run_hourly, "generate_daily_summary", return_value=summary),
+                patch.object(run_hourly, "call_gemma", return_value=llm_promotes_rumor),
+                patch.object(run_hourly.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="gist ok\n", stderr="")),
+            ):
+                run_hourly._classify_and_save(state, new_articles, run_at, sched=None)
+
+        by_id = {a["id"]: a for a in state["articles"]}
+        self.assertEqual(by_id["new-rumor"]["placement"], "side")
+        self.assertEqual([a["id"] for a in state["articles"][:7]], [f"old-{i}" for i in range(1, 8)])
 
     def test_classify_and_save_caps_front_page_at_seven_new_articles(self):
         run_at = datetime(2026, 4, 24, 8, 0, tzinfo=KST)

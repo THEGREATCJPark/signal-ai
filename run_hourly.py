@@ -113,6 +113,75 @@ def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False):
 
 # ── Parsers ─────────────────────────────────────────────────────
 
+MODEL_NAME_RE = re.compile(
+    r"(?:\b(?:GPT|ChatGPT|Claude|Opus|Sonnet|Haiku|Gemini|Gemma|DeepSeek|Qwen|Kimi|Grok|Llama|Mistral|Mixtral|Sora|Veo|Imagen)\b|"
+    r"제미니|클로드|딥시크|그록|라마)",
+    re.I,
+)
+MODEL_LAUNCH_RE = re.compile(
+    r"(출시|공개|발표|런칭|배포|릴리스|등장|나왔다|"
+    r"released|launched|announced|unveiled|introduced|rolled\s*out|available)",
+    re.I,
+)
+OFFICIAL_SOURCE_RE = re.compile(
+    r"(blog\.google|ai\.google\.dev|developers\.googleblog\.com|openai\.com/(?:blog|index)|"
+    r"anthropic\.com/(?:news|research)|deepmind\.google|model\s*card|release\s*notes|changelog|"
+    r"공식\s*(?:블로그|문서|API|모델\s*카드|릴리스\s*노트|발표문)|"
+    r"(?:모델\s*카드|릴리스\s*노트|API\s*문서|개발자\s*문서))",
+    re.I,
+)
+
+
+def _is_unsourced_model_launch_claim(headline: str, body: str) -> bool:
+    text = f"{headline}\n{body}"
+    if not MODEL_NAME_RE.search(text):
+        return False
+    if not MODEL_LAUNCH_RE.search(text):
+        return False
+    return not OFFICIAL_SOURCE_RE.search(text)
+
+
+def _soften_launch_headline(headline: str) -> str:
+    softened = re.sub(r"(공식\s*)?(출시|공개|발표)\s*소식", r"\2 주장", headline)
+    softened = re.sub(r"(공식\s*)?(출시|공개|발표)(?=$|\s|,)", r"\2 주장", softened)
+    if not softened.startswith(("미확인:", "루머:")):
+        softened = f"미확인: {softened}"
+    return softened
+
+
+def _soften_launch_body(body: str) -> str:
+    softened = body
+    replacements = [
+        (r"출시했다는 소식", "출시했다는 주장이"),
+        (r"공개했다는 소식", "공개했다는 주장이"),
+        (r"발표했다는 소식", "발표했다는 주장이"),
+        (r"출시했습니다", "출시했다는 주장이 나왔습니다"),
+        (r"공개했습니다", "공개했다는 주장이 나왔습니다"),
+        (r"발표했습니다", "발표했다는 주장이 나왔습니다"),
+        (r"출시했다", "출시했다는 주장이 나왔다"),
+        (r"공개했다", "공개했다는 주장이 나왔다"),
+        (r"발표했다", "발표했다는 주장이 나왔다"),
+    ]
+    for pattern, repl in replacements:
+        softened = re.sub(pattern, repl, softened)
+    prefix = "공식 출처가 확인되지 않은 채팅 기반 주장으로, 농담이나 루머일 가능성이 있어 미확인 소식으로 분류합니다. "
+    if not softened.startswith(prefix):
+        softened = prefix + softened
+    return softened
+
+
+def sanitize_scan_article(article: dict) -> dict:
+    sanitized = dict(article)
+    headline = str(sanitized.get("headline", "")).strip()
+    body = str(sanitized.get("body", "")).strip()
+    if _is_unsourced_model_launch_claim(headline, body):
+        sanitized["headline"] = _soften_launch_headline(headline)
+        sanitized["body"] = _soften_launch_body(body)
+        sanitized["category"] = "rumor"
+        sanitized["trust"] = "low"
+    return sanitized
+
+
 def parse_envelope(text):
     w = re.search(r'<\s*data\s*>([\s\S]*?)<\s*/\s*data\s*>', text, re.I)
     if not w: raise ValueError("no <data> wrapper")
@@ -162,7 +231,7 @@ def parse_chunk_articles(text):
                 if cat not in ("news", "rumor"): cat = "rumor"
                 trust = str(a.get("trust", "")).strip().lower()
                 if trust not in ("high", "low"): trust = "low"
-                out.append({"headline": hl, "body": bd, "category": cat, "trust": trust})
+                out.append(sanitize_scan_article({"headline": hl, "body": bd, "category": cat, "trust": trust}))
             return out
     return []
 
@@ -474,6 +543,8 @@ def prompt_scan_chunk(chunk: str, titles: list[str]) -> str:
 - 새 소식 없으면: {{"articles": []}}
 - '이미 다룬 기사 제목'에 있는 소식은 재작성 금지
 - **찌라시도 빠짐없이 출력** (category=rumor 로 태그 붙여서)
+- 신모델/제품의 "출시·공개·발표" 주장은 공식 블로그·공식 문서·모델 카드·API 문서·릴리스 노트 같은 출처가 본문에 확인될 때만 news/high.
+- 공식 출처가 없는 모델 출시설, 농담, 밈, 패러디성 선언은 절대 확정 기사처럼 쓰지 말고 category=rumor, trust=low, 제목에 "미확인" 또는 "루머"를 넣기.
 - 본문: 한국어 300~600자. 단정보단 "~라는 소식", "~라고 알려졌다" 같은 전언 형태 선호 (특히 rumor)
 - 유저이름·닉네임 언급 금지. 채팅에 실제 나온 내용만.
 
@@ -583,6 +654,10 @@ def _created_at_sort_value(article: dict) -> float:
         return 0.0
 
 
+def _is_low_trust_rumor(article: dict) -> bool:
+    return article.get("category") == "rumor" and article.get("trust") == "low"
+
+
 def prioritize_new_articles_for_front_page(all_articles: list, new_articles: list, placement_map: dict) -> tuple[dict, list]:
     """Force the front page to show fresh updates first while preserving archive dates."""
     if not new_articles:
@@ -598,9 +673,20 @@ def prioritize_new_articles_for_front_page(all_articles: list, new_articles: lis
             original_index.get(article["id"], 10**9),
         )
 
-    ranked_new = sorted((a for a in all_articles if a["id"] in new_ids), key=editorial_rank)
-    ranked_existing = sorted((a for a in all_articles if a["id"] not in new_ids), key=editorial_rank)
-    front = (ranked_new + ranked_existing)[:FRONT_PAGE_SLOTS]
+    def front_rank(article):
+        is_new = article["id"] in new_ids
+        weak = _is_low_trust_rumor(article)
+        if is_new and not weak:
+            bucket = 0
+        elif not is_new and not weak:
+            bucket = 1
+        elif is_new:
+            bucket = 2
+        else:
+            bucket = 3
+        return (bucket, *editorial_rank(article))
+
+    front = sorted(all_articles, key=front_rank)[:FRONT_PAGE_SLOTS]
     front_ids = {a["id"] for a in front}
 
     final_map = {a["id"]: "side" for a in all_articles}

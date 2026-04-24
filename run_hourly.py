@@ -182,6 +182,68 @@ def sanitize_scan_article(article: dict) -> dict:
     return sanitized
 
 
+PRODUCT_STORY_PATTERNS = {
+    "gpt-image-2": re.compile(
+        r"(?:\bGPT[-\s]?Image[-\s]?2\b|ChatGPT\s+Images\s+2(?:\.0)?|"
+        r"\bImages\s+2\.0\b|\bImage\s+2\b)",
+        re.I,
+    ),
+}
+PRODUCT_FOLLOWUP_RE = re.compile(
+    r"(리더보드|벤치마크|성능|점수|기반\s*모델|메타데이터|C2PA|시스템\s*카드|"
+    r"안전|검열|거부|가격|토큰|스냅샷|레이트\s*리밋|Heavy\s*Thinking|Thinking\s*모드|"
+    r"leaderboard|benchmark|system\s*card|metadata|snapshot|rate\s*limit|pricing|safety)",
+    re.I,
+)
+
+
+def _article_text(article: dict) -> str:
+    return f"{article.get('headline', '')}\n{article.get('body', '')}"
+
+
+def _product_story_keys(article: dict) -> set[str]:
+    text = _article_text(article)
+    return {key for key, pattern in PRODUCT_STORY_PATTERNS.items() if pattern.search(text)}
+
+
+def _is_product_release_coverage(article: dict) -> bool:
+    text = _article_text(article)
+    if _is_low_trust_rumor(article):
+        return False
+    return bool(MODEL_LAUNCH_RE.search(text))
+
+
+def _is_distinct_product_followup(article: dict) -> bool:
+    return bool(PRODUCT_FOLLOWUP_RE.search(_article_text(article)))
+
+
+def apply_product_story_guard(new_articles: list, existing_articles: list) -> tuple[list, list]:
+    """Drop repeated product release stories, but keep clearly new follow-up details."""
+    existing_release_keys = set()
+    for article in existing_articles:
+        if _is_product_release_coverage(article):
+            existing_release_keys.update(_product_story_keys(article))
+
+    if not existing_release_keys:
+        return list(new_articles), []
+
+    kept, dropped = [], []
+    for article in new_articles:
+        keys = _product_story_keys(article)
+        has_existing_release = bool(keys & existing_release_keys)
+        is_release_claim = bool(MODEL_LAUNCH_RE.search(_article_text(article)))
+        is_followup = _is_distinct_product_followup(article)
+        if has_existing_release and is_release_claim and not is_followup:
+            dropped.append(article["id"])
+            continue
+
+        item = dict(article)
+        if has_existing_release and not item.get("headline", "").startswith("후속: "):
+            item["headline"] = f"후속: {item.get('headline', '')}"
+        kept.append(item)
+    return kept, dropped
+
+
 def parse_envelope(text):
     w = re.search(r'<\s*data\s*>([\s\S]*?)<\s*/\s*data\s*>', text, re.I)
     if not w: raise ValueError("no <data> wrapper")
@@ -1174,6 +1236,14 @@ def main():
         deduped_exact.append(a)
     new_articles = dedup_articles(deduped_exact, threshold=0.4)
     LOG(f"new articles: {len(deduped_exact)} exact-dedup → {len(new_articles)} jaccard-dedup")
+
+    if new_articles and state.get("articles"):
+        before_story_guard = len(new_articles)
+        new_articles, story_drops = apply_product_story_guard(new_articles, state["articles"])
+        if story_drops:
+            LOG(f"product story guard: dropped {len(story_drops)} stale release duplicates")
+        if len(new_articles) != before_story_guard:
+            LOG(f"  → {len(new_articles)} after product story guard")
 
     # cache raw deduped (pre-merge) for debug
     cache_path = ROOT / "data" / "new_articles_cache.json"

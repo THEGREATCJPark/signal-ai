@@ -90,6 +90,58 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(parsed[0]["trust"], "high")
         self.assertFalse(parsed[0]["headline"].startswith("미확인: "))
 
+    def test_story_guard_drops_repeated_gpt_image_2_release_claim(self):
+        existing = [
+            {
+                "id": "old-release",
+                "headline": "OpenAI, 차세대 이미지 생성 모델 'GPT Image 2' 순차적 배포 시작",
+                "body": "OpenAI 개발자 문서와 시스템 카드에 GPT Image 2가 올라오며 순차적 배포가 시작됐다는 소식입니다.",
+                "category": "news",
+                "trust": "high",
+            }
+        ]
+        new = [
+            {
+                "id": "new-release",
+                "headline": "OpenAI, 이미지 생성 모델 GPT Image 2 출시",
+                "body": "OpenAI가 GPT Image 2를 출시했다는 소식입니다. 이미지 생성과 편집 품질이 개선됐다고 알려졌습니다.",
+                "category": "news",
+                "trust": "high",
+            }
+        ]
+
+        kept, dropped = run_hourly.apply_product_story_guard(new, existing)
+
+        self.assertEqual(kept, [])
+        self.assertEqual(dropped, ["new-release"])
+
+    def test_story_guard_keeps_gpt_image_2_followup_but_labels_it(self):
+        existing = [
+            {
+                "id": "old-release",
+                "headline": "OpenAI, 차세대 이미지 생성 모델 'GPT Image 2' 순차적 배포 시작",
+                "body": "OpenAI 개발자 문서와 시스템 카드에 GPT Image 2가 올라오며 순차적 배포가 시작됐다는 소식입니다.",
+                "category": "news",
+                "trust": "high",
+            }
+        ]
+        new = [
+            {
+                "id": "new-benchmark",
+                "headline": "GPT Image 2, 이미지 생성 리더보드 1위 등극",
+                "body": "GPT Image 2가 Artificial Analysis 텍스트-이미지 리더보드에서 1위를 기록했다는 후속 소식입니다.",
+                "category": "news",
+                "trust": "high",
+            }
+        ]
+
+        kept, dropped = run_hourly.apply_product_story_guard(new, existing)
+
+        self.assertEqual(dropped, [])
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(kept[0]["id"], "new-benchmark")
+        self.assertTrue(kept[0]["headline"].startswith("후속: "))
+
     def test_write_daily_new_articles_export_uses_date_folder_and_metadata(self):
         run_at = datetime(2026, 4, 20, 12, 0, tzinfo=KST)
         articles = [

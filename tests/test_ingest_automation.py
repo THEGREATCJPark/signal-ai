@@ -18,18 +18,32 @@ class IngestAutomationTest(unittest.TestCase):
         self.assertNotIn("discord.py", run_public.PUBLIC_CRAWLERS)
         self.assertNotIn("discord", " ".join(run_public.PUBLIC_CRAWLERS).lower())
 
-    def test_crawl_workflow_runs_public_ingest_at_0700_kst(self):
+    def test_github_actions_has_no_crawl_workflow(self):
         workflow = ROOT / ".github" / "workflows" / "crawl.yml"
 
-        self.assertTrue(workflow.exists())
-        text = workflow.read_text(encoding="utf-8")
+        self.assertFalse(workflow.exists())
 
-        self.assertIn("cron: '0 22 * * *'", text)
-        self.assertIn("python3 crawlers/run_public.py", text)
-        self.assertIn("python3 db/supabase_ingest.py data/crawled/*.jsonl", text)
-        self.assertIn("SUPABASE_SERVICE_ROLE_KEY", text)
-        self.assertNotIn("DISCORD_TOKEN", text)
-        self.assertNotIn("discord.py", text)
+    def test_local_all_source_ingest_refuses_github_actions(self):
+        mod = importlib.import_module("scripts.local_crawl_ingest")
+
+        old_value = os.environ.get("GITHUB_ACTIONS")
+        os.environ["GITHUB_ACTIONS"] = "true"
+        try:
+            with self.assertRaises(SystemExit) as raised:
+                mod.ensure_local_only()
+        finally:
+            if old_value is None:
+                os.environ.pop("GITHUB_ACTIONS", None)
+            else:
+                os.environ["GITHUB_ACTIONS"] = old_value
+
+        self.assertNotEqual(0, raised.exception.code)
+
+    def test_local_all_source_ingest_includes_public_and_discord_crawlers(self):
+        mod = importlib.import_module("scripts.local_crawl_ingest")
+
+        self.assertIn("crawlers/run_public.py", mod.CRAWLER_COMMANDS)
+        self.assertIn("crawlers/discord.py", mod.CRAWLER_COMMANDS)
 
     def test_local_discord_ingest_refuses_github_actions(self):
         mod = importlib.import_module("scripts.local_discord_ingest")

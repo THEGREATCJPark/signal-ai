@@ -142,21 +142,20 @@ python3 db/supabase_ingest.py data/crawled/*.jsonl
 Both read JSONL files with the fields above and upsert via
 `db/posts.py:upsert_posts(rows)`. No write path should bypass this module.
 
-GitHub Actions runs public-source crawlers only:
+All crawling runs locally from WSL:
 
 ```bash
-python3 crawlers/run_public.py
+python3 scripts/local_crawl_ingest.py
+```
+
+To upload already generated JSONL files:
+
+```bash
 python3 db/supabase_ingest.py data/crawled/*.jsonl
 ```
 
-Discord is local-only. Run it from WSL and upload the normalized JSONL result:
-
-```bash
-python3 scripts/local_discord_ingest.py
-```
-
-Do not add `DISCORD_TOKEN` to GitHub Secrets and do not run the Discord crawler
-inside GitHub Actions.
+Do not add `DISCORD_TOKEN` to GitHub Secrets and do not run any crawler inside
+GitHub Actions.
 
 ## Adding a new field to a source
 

@@ -71,3 +71,27 @@ Never commit:
 - generated DB backups
 
 The old planning document from the previous repository direction is preserved at `docs/legacy/chanjoon-original-plan.md`.
+
+## Supabase Ingest Path (new — cloud-ready)
+
+A parallel path to the local SQLite flow lets crawlers push raw posts to
+Supabase so that scheduling can move to GitHub Actions later without changing
+the JSONL contract.
+
+- Schema: `migrations/001..012/*.sql` — already applied live on project
+  `qyckjkidscpiyrdzqxoc`. Supabase migrations track records each one.
+- Tables: `posts` (raw, service_role only), `articles` (public read),
+  `publish_log`, `pipeline_state` (service_role), `ingest_runs` (observability).
+- Keepalive: pg_cron `signal_keepalive_daily` at 03:17 UTC prevents free-tier
+  auto-pause.
+- Write contract: `docs/ingest-spec.md` — required fields, scoring keys,
+  RLS matrix, and the upsert rule.
+- Two entrypoints read the same JSONL:
+  - `db/supabase_ingest.py` → Supabase `posts` (needs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`)
+  - `db/ingest.py` → local SQLite (unchanged; existing cron keeps working)
+- One-time backfill: `scripts/backfill_sqlite_to_supabase.py --db data/signal.db`
+  (moves `.db` → `.bak` on success).
+
+GitHub Secrets already registered on this repo: `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`. Additional Telegram/X/LLM
+secrets can be added when the corresponding workflows land.

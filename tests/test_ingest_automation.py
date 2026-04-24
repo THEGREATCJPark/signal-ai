@@ -29,6 +29,7 @@ class IngestAutomationTest(unittest.TestCase):
 
         self.assertIn("branches: [dev]", text)
         self.assertIn("startsWith(github.event.head_commit.message, 'chore: publish First Light AI')", text)
+        self.assertNotIn("environment:", text)
         self.assertIn("mkdir -p _site", text)
         self.assertIn("cp index.html archive.html articles.json .nojekyll _site/", text)
         self.assertIn("cp -R exports _site/exports", text)

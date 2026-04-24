@@ -14,9 +14,12 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from db.posts import upsert_posts
 
-ROOT = Path(__file__).resolve().parents[1]
 CRAWLED_DIR = ROOT / "data" / "crawled"
 REQUIRED_FIELDS = ("source", "source_id", "content", "timestamp")
 

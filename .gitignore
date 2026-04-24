@@ -3,6 +3,8 @@
 !.env.example
 discord_export_config.env
 .mcp.json
+memory/
+tasks/
 
 # Large exports
 discord_3day_export.txt
@@ -35,8 +37,12 @@ data/crawled/
 data/signal.db
 data/signal.db-*
 data/*.csv
+data/*.json
+data/*.txt
+data/*.lock
 logs/
 *.log
+*.bak
 
 # 기타
 node_modules/

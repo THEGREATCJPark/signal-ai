@@ -27,6 +27,14 @@ SCORE_THRESHOLDS = {
 DEFAULT_THRESHOLD = 200
 
 
+def ensure_not_github_actions():
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        raise SystemExit(
+            "crawlers/run_all.py includes the local-only Discord crawler. "
+            "Use crawlers/run_public.py on GitHub Actions."
+        )
+
+
 def run(script):
     t0 = time.time()
     try:
@@ -109,6 +117,7 @@ def trigger_publish(articles: list[dict]):
 
 
 def main():
+    ensure_not_github_actions()
     print(f"Running {len(CRAWLERS)} crawlers in parallel...", flush=True)
     results = []
     with ThreadPoolExecutor(max_workers=len(CRAWLERS)) as pool:

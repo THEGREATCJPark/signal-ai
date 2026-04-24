@@ -1,3 +1,1 @@
-from db.client import get_client
-
-__all__ = ["get_client"]
+"""Database helpers for First Light AI."""

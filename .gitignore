@@ -2,6 +2,7 @@
 .env
 !.env.example
 discord_export_config.env
+.mcp.json
 
 # Large exports
 discord_3day_export.txt

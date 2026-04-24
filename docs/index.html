@@ -1058,7 +1058,7 @@
   }
 
   const byPlacement = (p) => all.filter(a => a.placement === p)
-    .sort((a,b) => (b.placed_at || '').localeCompare(a.placed_at || ''));
+    .sort((a,b) => (b.created_at || b.placed_at || '').localeCompare(a.created_at || a.placed_at || ''));
   const top = byPlacement('top');
   const main = byPlacement('main');
   const side = byPlacement('side');
@@ -1144,7 +1144,7 @@
     const a = byId[id];
     if (!a) return;
     $('reader-title').innerHTML = formatInlineText(a.headline);
-    $('reader-byline').textContent = `FIRST LIGHT AI · ${fmtDate(a.placed_at || gen)}`;
+    $('reader-byline').textContent = `FIRST LIGHT AI · ${fmtDate(a.created_at || a.placed_at || gen)}`;
     $('reader-body').innerHTML = paragraphs(a.body).map(p => `<p>${formatInlineText(p)}</p>`).join('');
     reader.classList.add('open');
     document.body.style.overflow = 'hidden';

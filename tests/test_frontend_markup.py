@@ -93,6 +93,12 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("close.addEventListener('pointerdown', closeSummarySheet);", html)
         self.assertIn("close.addEventListener('click', closeSummarySheet);", html)
 
+    def test_index_uses_created_at_for_article_dates_and_side_order(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        self.assertIn(".sort((a,b) => (b.created_at || b.placed_at || '').localeCompare(a.created_at || a.placed_at || ''))", html)
+        self.assertIn("fmtDate(a.created_at || a.placed_at || gen)", html)
+        self.assertNotIn("fmtDate(a.placed_at || gen)", html)
+
 
 if __name__ == "__main__":
     unittest.main()

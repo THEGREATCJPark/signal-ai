@@ -2,6 +2,7 @@
 discord_export_config.env
 *.env
 !.env.example
+.mcp.json
 memory/
 tasks/
 

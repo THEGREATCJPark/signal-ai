@@ -1,0 +1,5 @@
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Supabase (optional — only needed for db/supabase_ingest.py and publish-to-DB path)
+supabase>=2.0.0

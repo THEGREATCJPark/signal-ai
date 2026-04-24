@@ -23,7 +23,11 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'chore: publish First Light AI')
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        startsWith(github.event.head_commit.message, 'chore: publish First Light AI')
+      }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

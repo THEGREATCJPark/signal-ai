@@ -95,3 +95,19 @@ the JSONL contract.
 GitHub Secrets already registered on this repo: `SUPABASE_URL`,
 `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`. Additional Telegram/X/LLM
 secrets can be added when the corresponding workflows land.
+
+## Daily Schedule (KST, provisional)
+
+| 시간 | 무엇 | 담당 | 트리거 |
+|---|---|---|---|
+| 07:00 KST | 크롤 → Supabase `posts` 적재 | HB | GitHub Actions (`on: schedule`) |
+| 08:00 KST | Supabase `articles` → Telegram + X 발행 | CJ | GitHub Actions (`daily_publish.yml`) |
+
+두 시간 모두 임시. 적재/발행 품질 지켜보면서 최적 시간은 추후 조정.
+
+## 협업 룰
+
+- **출시 전 (현재)**: `main`에 직접 push해서 빠르게 이터레이션. 자동 발행 커밋(`chore: publish First Light AI ...`)과 사람 작업 모두 main 직행 OK.
+- **출시 후**: 모든 **사람 작업(크롤러 변경, 워크플로우 추가/수정, 스키마 변경, 발행 포맷 수정 등)**은 먼저 `dev`에 푸시 → dev에서 돌려보고 문제 없으면 `main`으로 PR/머지. 로컬 cron/스케줄이 만들어내는 **자동 발행 커밋은 계속 `main` 직행**.
+
+즉, 출시 이후에는 사람 손이 닿는 변경만 `dev → main` 게이트를 통과.

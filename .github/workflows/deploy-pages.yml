@@ -1,4 +1,5 @@
 name: Deploy Digest to GitHub Pages
+# Deploys dev publish commits without writing generated artifacts to main.
 
 on:
   push:

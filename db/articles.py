@@ -92,6 +92,67 @@ def load_pipeline_state(key: str) -> dict[str, Any] | None:
     return value
 
 
+def fetch_recent_articles(
+    since_hours: int = 24,
+    placements: list[str] | None = None,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """Load recent articles for publishers.
+
+    Args:
+        since_hours: Only return rows whose generated_at (fallback created_at)
+            is within this window. Use 0 to disable the time filter.
+        placements: Optional allow-list on the ``placement`` column (e.g.
+            ``["top", "main"]``). None means no placement filter.
+        limit: Cap on returned rows.
+
+    Each returned dict carries the full articles row plus any fields stored in
+    ``raw_json`` so the existing bot/formatter logic (which reads
+    title/url/score/comments/summary/media) keeps working unchanged.
+    """
+    query = (
+        get_client(service=True)
+        .table("articles")
+        .select("*")
+        .order("generated_at", desc=True)
+        .limit(limit)
+    )
+    if since_hours > 0:
+        cutoff = (datetime.now(timezone.utc)).isoformat()
+        # Supabase client has no relative-time helper; do filter client-side after fetch.
+    if placements:
+        query = query.in_("placement", list(placements))
+    res = query.execute()
+    rows = list(getattr(res, "data", None) or [])
+
+    if since_hours > 0:
+        from datetime import timedelta
+
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+        def _is_recent(row: dict[str, Any]) -> bool:
+            ts = row.get("generated_at") or row.get("created_at")
+            if not ts:
+                return False
+            try:
+                return datetime.fromisoformat(str(ts).replace("Z", "+00:00")) >= cutoff_dt
+            except ValueError:
+                return False
+        rows = [r for r in rows if _is_recent(r)]
+
+    merged: list[dict[str, Any]] = []
+    for row in rows:
+        raw = row.get("raw_json") or {}
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError:
+                raw = {}
+        flat = {**(raw if isinstance(raw, dict) else {}), **row}
+        flat.pop("raw_json", None)
+        merged.append(flat)
+    return merged
+
+
 def save_public_state(state: dict[str, Any]) -> None:
     generated_at = state.get("generated_at")
     save_pipeline_state(PUBLIC_STATE_KEY, state)

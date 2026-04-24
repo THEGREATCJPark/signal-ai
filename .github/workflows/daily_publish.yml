@@ -1,0 +1,89 @@
+name: Daily First Light AI Publish
+
+on:
+  schedule:
+    # 08:00 KST = 23:00 UTC (전날)
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '미리보기만 (실발행 안 함)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      platform:
+        description: '발행 플랫폼'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - telegram
+          - x
+      since_hours:
+        description: '최근 N시간 내 기사만 대상 (0=무제한)'
+        required: false
+        default: '24'
+      placements:
+        description: 'placement 화이트리스트 (콤마 구분)'
+        required: false
+        default: 'top,main'
+      force:
+        description: '이미 발행된 기사도 재발행'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      limit:
+        description: '발행 기사 수 제한 (0=무제한)'
+        required: false
+        default: '0'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run publish
+        env:
+          USE_DB: 'true'
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
+          X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+          X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
+        run: |
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          PLATFORM="${{ github.event.inputs.platform || 'both' }}"
+          SINCE_HOURS="${{ github.event.inputs.since_hours || '24' }}"
+          PLACEMENTS="${{ github.event.inputs.placements || 'top,main' }}"
+          FORCE="${{ github.event.inputs.force || 'false' }}"
+          LIMIT="${{ github.event.inputs.limit || '0' }}"
+
+          ARGS="--source supabase --platform $PLATFORM --since-hours $SINCE_HOURS --placements $PLACEMENTS"
+          [ "$DRY_RUN" = "true" ] && ARGS="$ARGS --dry-run"
+          [ "$FORCE" = "true" ] && ARGS="$ARGS --force"
+          [ "$LIMIT" != "0" ] && ARGS="$ARGS --limit $LIMIT"
+
+          python scripts/run_publish.py $ARGS

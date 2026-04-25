@@ -174,7 +174,7 @@ def set_repo_secret(repo: str, name: str, value: str) -> None:
     )
 
 
-def trigger_secret_push(repo: str, ref: str, bundle_url: str, batch_size: int) -> None:
+def trigger_secret_push(repo: str, ref: str, bundle_url: str, batch_size: int) -> str:
     set_repo_secret(repo, BUNDLE_URL_SECRET, bundle_url)
     set_repo_secret(repo, BATCH_SIZE_SECRET, str(batch_size))
     subprocess.run(
@@ -182,7 +182,15 @@ def trigger_secret_push(repo: str, ref: str, bundle_url: str, batch_size: int) -
         cwd=ROOT,
         check=True,
     )
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     subprocess.run(["git", "push", "origin", f"HEAD:{ref}"], cwd=ROOT, check=True)
+    return sha
 
 
 def trigger_workflow(
@@ -192,17 +200,17 @@ def trigger_workflow(
     bundle_url: str,
     batch_size: int,
     mode: str = DEFAULT_TRIGGER_MODE,
-) -> str:
+) -> tuple[str, str | None]:
     if mode == "workflow-dispatch":
         trigger_workflow_dispatch(repo, ref, workflow, bundle_url, batch_size)
-        return "workflow_dispatch"
+        return "workflow_dispatch", None
     if mode == "secret-push":
-        trigger_secret_push(repo, ref, bundle_url, batch_size)
-        return "push"
+        sha = trigger_secret_push(repo, ref, bundle_url, batch_size)
+        return "push", sha
     raise ValueError(f"Unknown trigger mode: {mode}")
 
 
-def latest_run(repo: str, ref: str, workflow: str, event: str) -> dict[str, Any]:
+def latest_run(repo: str, ref: str, workflow: str, event: str, head_sha: str | None = None) -> dict[str, Any]:
     for _ in range(40):
         result = subprocess.run(
             [
@@ -218,9 +226,9 @@ def latest_run(repo: str, ref: str, workflow: str, event: str) -> dict[str, Any]
                 "--event",
                 event,
                 "--limit",
-                "1",
+                "10",
                 "--json",
-                "databaseId,status,conclusion,url,createdAt",
+                "databaseId,status,conclusion,url,createdAt,headSha",
             ],
             cwd=ROOT,
             check=True,
@@ -230,8 +238,9 @@ def latest_run(repo: str, ref: str, workflow: str, event: str) -> dict[str, Any]
         import json
 
         runs = json.loads(result.stdout)
-        if runs:
-            return runs[0]
+        for run in runs:
+            if head_sha is None or run.get("headSha") == head_sha:
+                return run
         time.sleep(3)
     raise RuntimeError("No workflow_dispatch run appeared after trigger")
 
@@ -279,7 +288,7 @@ def main() -> None:
         try:
             tunnel_proc, tunnel_url = start_cloudflared(port)
             bundle_url = f"{tunnel_url}/bundle/{token}.tar.gz"
-            event = trigger_workflow(
+            event, head_sha = trigger_workflow(
                 args.repo,
                 args.ref,
                 args.workflow,
@@ -288,7 +297,7 @@ def main() -> None:
                 mode=args.trigger_mode,
             )
             if not args.no_wait:
-                run = latest_run(args.repo, args.ref, args.workflow, event)
+                run = latest_run(args.repo, args.ref, args.workflow, event, head_sha=head_sha)
                 print(f"Watching workflow run: {run['url']}")
                 watch_run(args.repo, int(run["databaseId"]))
         finally:

@@ -1,0 +1,87 @@
+name: Daily First Light AI Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (미리보기만, Telegram/X 발행 안 함)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      source:
+        description: '기사 입력 소스'
+        required: false
+        default: 'supabase'
+        type: choice
+        options:
+          - supabase
+          - file
+      platform:
+        description: '발행 플랫폼'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - telegram
+          - x
+      force:
+        description: '강제 재발행'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      limit:
+        description: '발행 기사 수 제한 (0=무제한)'
+        required: false
+        default: '0'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      USE_DB: "true"
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+      X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
+      X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+      X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate articles
+        run: python scripts/validate_articles.py
+
+      - name: Sync generated articles to Supabase
+        if: ${{ github.event.inputs.source == 'supabase' || github.event.inputs.source == '' }}
+        run: python scripts/sync_articles_to_supabase.py --input docs/articles.json
+
+      - name: Run publish preview or manual publish
+        run: |
+          ARGS="--source ${{ github.event.inputs.source || 'supabase' }} --platform ${{ github.event.inputs.platform || 'both' }}"
+          if [ "${{ github.event.inputs.dry_run || 'true' }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          if [ "${{ github.event.inputs.force || 'false' }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          LIMIT="${{ github.event.inputs.limit || '0' }}"
+          if [ "$LIMIT" != "0" ]; then ARGS="$ARGS --limit $LIMIT"; fi
+          python scripts/run_publish.py $ARGS

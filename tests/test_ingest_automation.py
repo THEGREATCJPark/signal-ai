@@ -113,8 +113,11 @@ class IngestAutomationTest(unittest.TestCase):
         workflow = ROOT / ".github" / "workflows" / "local-crawl-handoff.yml"
         text = workflow.read_text(encoding="utf-8")
 
+        self.assertIn("branches: [dev]", text)
+        self.assertIn("startsWith(github.event.head_commit.message, 'chore: trigger local crawl handoff')", text)
         self.assertIn("workflow_dispatch:", text)
         self.assertIn("bundle_url:", text)
+        self.assertIn("LOCAL_CRAWL_BUNDLE_URL", text)
         self.assertIn("curl", text)
         self.assertIn("python3 db/supabase_ingest.py", text)
         self.assertIn("data/crawled/*.jsonl", text)
@@ -132,6 +135,8 @@ class IngestAutomationTest(unittest.TestCase):
         self.assertEqual("local-crawl-handoff.yml", mod.DEFAULT_WORKFLOW)
         self.assertEqual("THEGREATCJPark/signal-ai", mod.DEFAULT_REPO)
         self.assertEqual("dev", mod.DEFAULT_REF)
+        self.assertEqual("secret-push", mod.DEFAULT_TRIGGER_MODE)
+        self.assertEqual("LOCAL_CRAWL_BUNDLE_URL", mod.BUNDLE_URL_SECRET)
         self.assertEqual("https://example.trycloudflare.com", mod.parse_tunnel_url(
             "2026 INF TryCloudflare: https://example.trycloudflare.com"
         ))

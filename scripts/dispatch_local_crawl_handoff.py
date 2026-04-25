@@ -31,6 +31,9 @@ CRAWLER_COMMANDS = (
 DEFAULT_REPO = "THEGREATCJPark/signal-ai"
 DEFAULT_REF = "dev"
 DEFAULT_WORKFLOW = "local-crawl-handoff.yml"
+DEFAULT_TRIGGER_MODE = "secret-push"
+BUNDLE_URL_SECRET = "LOCAL_CRAWL_BUNDLE_URL"
+BATCH_SIZE_SECRET = "LOCAL_CRAWL_BATCH_SIZE"
 TUNNEL_RE = re.compile(r"https://[-a-zA-Z0-9.]+\.trycloudflare\.com")
 
 
@@ -142,7 +145,7 @@ def start_cloudflared(port: int, timeout_s: int = 45) -> tuple[subprocess.Popen[
     raise RuntimeError("cloudflared did not produce a tunnel URL:\n" + "".join(lines[-20:]))
 
 
-def trigger_workflow(repo: str, ref: str, workflow: str, bundle_url: str, batch_size: int) -> None:
+def trigger_workflow_dispatch(repo: str, ref: str, workflow: str, bundle_url: str, batch_size: int) -> None:
     subprocess.run(
         [
             "gh",
@@ -163,7 +166,43 @@ def trigger_workflow(repo: str, ref: str, workflow: str, bundle_url: str, batch_
     )
 
 
-def latest_run(repo: str, ref: str, workflow: str) -> dict[str, Any]:
+def set_repo_secret(repo: str, name: str, value: str) -> None:
+    subprocess.run(
+        ["gh", "secret", "set", name, "--repo", repo, "--body", value],
+        cwd=ROOT,
+        check=True,
+    )
+
+
+def trigger_secret_push(repo: str, ref: str, bundle_url: str, batch_size: int) -> None:
+    set_repo_secret(repo, BUNDLE_URL_SECRET, bundle_url)
+    set_repo_secret(repo, BATCH_SIZE_SECRET, str(batch_size))
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "chore: trigger local crawl handoff"],
+        cwd=ROOT,
+        check=True,
+    )
+    subprocess.run(["git", "push", "origin", f"HEAD:{ref}"], cwd=ROOT, check=True)
+
+
+def trigger_workflow(
+    repo: str,
+    ref: str,
+    workflow: str,
+    bundle_url: str,
+    batch_size: int,
+    mode: str = DEFAULT_TRIGGER_MODE,
+) -> str:
+    if mode == "workflow-dispatch":
+        trigger_workflow_dispatch(repo, ref, workflow, bundle_url, batch_size)
+        return "workflow_dispatch"
+    if mode == "secret-push":
+        trigger_secret_push(repo, ref, bundle_url, batch_size)
+        return "push"
+    raise ValueError(f"Unknown trigger mode: {mode}")
+
+
+def latest_run(repo: str, ref: str, workflow: str, event: str) -> dict[str, Any]:
     for _ in range(40):
         result = subprocess.run(
             [
@@ -177,7 +216,7 @@ def latest_run(repo: str, ref: str, workflow: str) -> dict[str, Any]:
                 "--branch",
                 ref,
                 "--event",
-                "workflow_dispatch",
+                event,
                 "--limit",
                 "1",
                 "--json",
@@ -212,6 +251,12 @@ def main() -> None:
     parser.add_argument("--repo", default=DEFAULT_REPO)
     parser.add_argument("--ref", default=DEFAULT_REF)
     parser.add_argument("--workflow", default=DEFAULT_WORKFLOW)
+    parser.add_argument(
+        "--trigger-mode",
+        choices=("secret-push", "workflow-dispatch"),
+        default=DEFAULT_TRIGGER_MODE,
+        help="secret-push works while the workflow lives on dev only",
+    )
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--no-wait", action="store_true", help="Trigger workflow and exit immediately")
@@ -234,9 +279,16 @@ def main() -> None:
         try:
             tunnel_proc, tunnel_url = start_cloudflared(port)
             bundle_url = f"{tunnel_url}/bundle/{token}.tar.gz"
-            trigger_workflow(args.repo, args.ref, args.workflow, bundle_url, args.batch_size)
+            event = trigger_workflow(
+                args.repo,
+                args.ref,
+                args.workflow,
+                bundle_url,
+                args.batch_size,
+                mode=args.trigger_mode,
+            )
             if not args.no_wait:
-                run = latest_run(args.repo, args.ref, args.workflow)
+                run = latest_run(args.repo, args.ref, args.workflow, event)
                 print(f"Watching workflow run: {run['url']}")
                 watch_run(args.repo, int(run["databaseId"]))
         finally:

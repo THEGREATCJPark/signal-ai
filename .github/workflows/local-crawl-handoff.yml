@@ -1,6 +1,8 @@
 name: Ingest Local Crawl Handoff
 
 on:
+  push:
+    branches: [dev]
   workflow_dispatch:
     inputs:
       bundle_url:
@@ -20,6 +22,11 @@ concurrency:
 
 jobs:
   ingest:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        startsWith(github.event.head_commit.message, 'chore: trigger local crawl handoff')
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -36,7 +43,12 @@ jobs:
 
       - name: Download local crawl bundle
         env:
-          BUNDLE_URL: ${{ inputs.bundle_url }}
+          BUNDLE_URL: >-
+            ${{
+              github.event_name == 'workflow_dispatch' &&
+              inputs.bundle_url ||
+              secrets.LOCAL_CRAWL_BUNDLE_URL
+            }}
         run: |
           test -n "$BUNDLE_URL"
           curl --fail --show-error --location --retry 5 --retry-all-errors --max-time 600 \
@@ -73,7 +85,13 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          BATCH_SIZE: ${{ inputs.batch_size }}
+          BATCH_SIZE: >-
+            ${{
+              github.event_name == 'workflow_dispatch' &&
+              inputs.batch_size ||
+              secrets.LOCAL_CRAWL_BATCH_SIZE ||
+              '500'
+            }}
         run: |
           shopt -s nullglob
           files=(data/crawled/*.jsonl)

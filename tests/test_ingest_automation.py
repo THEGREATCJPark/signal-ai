@@ -109,6 +109,44 @@ class IngestAutomationTest(unittest.TestCase):
         self.assertIn("환경변수 `SUPABASE_URL`이 실제 적재 프로젝트를 결정", text)
         self.assertIn("service_role key의 소유 Supabase 계정/조직 권한", text)
 
+    def test_local_handoff_workflow_ingests_bundle_without_crawling(self):
+        workflow = ROOT / ".github" / "workflows" / "local-crawl-handoff.yml"
+        text = workflow.read_text(encoding="utf-8")
+
+        self.assertIn("workflow_dispatch:", text)
+        self.assertIn("bundle_url:", text)
+        self.assertIn("curl", text)
+        self.assertIn("python3 db/supabase_ingest.py", text)
+        self.assertIn("data/crawled/*.jsonl", text)
+        self.assertIn("SUPABASE_URL: ${{ secrets.SUPABASE_URL }}", text)
+        self.assertIn("SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}", text)
+        self.assertNotIn("crawlers/run_all.py", text)
+        self.assertNotIn("crawlers/discord.py", text)
+        self.assertNotIn("DISCORD_TOKEN", text)
+
+    def test_local_handoff_dispatcher_contract(self):
+        mod = importlib.import_module("scripts.dispatch_local_crawl_handoff")
+
+        self.assertIn("crawlers/run_public.py", mod.CRAWLER_COMMANDS)
+        self.assertIn("crawlers/discord.py", mod.CRAWLER_COMMANDS)
+        self.assertEqual("local-crawl-handoff.yml", mod.DEFAULT_WORKFLOW)
+        self.assertEqual("THEGREATCJPark/signal-ai", mod.DEFAULT_REPO)
+        self.assertEqual("dev", mod.DEFAULT_REF)
+        self.assertEqual("https://example.trycloudflare.com", mod.parse_tunnel_url(
+            "2026 INF TryCloudflare: https://example.trycloudflare.com"
+        ))
+
+        old_value = os.environ.get("GITHUB_ACTIONS")
+        os.environ["GITHUB_ACTIONS"] = "true"
+        try:
+            with self.assertRaises(SystemExit):
+                mod.ensure_local_only()
+        finally:
+            if old_value is None:
+                os.environ.pop("GITHUB_ACTIONS", None)
+            else:
+                os.environ["GITHUB_ACTIONS"] = old_value
+
 
 if __name__ == "__main__":
     unittest.main()

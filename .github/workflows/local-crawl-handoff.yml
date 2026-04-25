@@ -1,0 +1,84 @@
+name: Ingest Local Crawl Handoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_url:
+        description: "One-time HTTPS URL for a tar.gz bundle of crawler JSONL files"
+        required: true
+      batch_size:
+        description: "Supabase upsert batch size"
+        required: false
+        default: "500"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: local-crawl-handoff
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download local crawl bundle
+        env:
+          BUNDLE_URL: ${{ inputs.bundle_url }}
+        run: |
+          test -n "$BUNDLE_URL"
+          curl --fail --show-error --location --retry 5 --retry-all-errors --max-time 600 \
+            "$BUNDLE_URL" --output /tmp/local-crawl.tar.gz
+
+      - name: Extract bundle safely
+        run: |
+          mkdir -p data/crawled
+          python3 - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import tarfile
+
+          dest = Path("data/crawled")
+          count = 0
+          with tarfile.open("/tmp/local-crawl.tar.gz", "r:gz") as archive:
+              for member in archive.getmembers():
+                  name = PurePosixPath(member.name)
+                  if member.isdir():
+                      continue
+                  if name.is_absolute() or ".." in name.parts:
+                      raise SystemExit(f"Unsafe archive member: {member.name}")
+                  if not name.name.endswith(".jsonl"):
+                      raise SystemExit(f"Unexpected archive member: {member.name}")
+                  member.name = name.name
+                  archive.extract(member, dest)
+                  count += 1
+          if count == 0:
+              raise SystemExit("No JSONL files in local crawl bundle")
+          print(f"Extracted {count} JSONL file(s)")
+          PY
+
+      - name: Ingest to Supabase posts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          BATCH_SIZE: ${{ inputs.batch_size }}
+        run: |
+          shopt -s nullglob
+          files=(data/crawled/*.jsonl)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No JSONL files found after extraction"
+            exit 1
+          fi
+          python3 db/supabase_ingest.py --batch-size "$BATCH_SIZE" "${files[@]}"

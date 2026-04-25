@@ -34,6 +34,7 @@ DEFAULT_WORKFLOW = "local-crawl-handoff.yml"
 DEFAULT_TRIGGER_MODE = "secret-push"
 BUNDLE_URL_SECRET = "LOCAL_CRAWL_BUNDLE_URL"
 BATCH_SIZE_SECRET = "LOCAL_CRAWL_BATCH_SIZE"
+TRIGGER_FILE = ROOT / ".github" / "local-crawl-handoff-trigger"
 TUNNEL_RE = re.compile(r"https://[-a-zA-Z0-9.]+\.trycloudflare\.com")
 
 
@@ -177,8 +178,10 @@ def set_repo_secret(repo: str, name: str, value: str) -> None:
 def trigger_secret_push(repo: str, ref: str, bundle_url: str, batch_size: int) -> str:
     set_repo_secret(repo, BUNDLE_URL_SECRET, bundle_url)
     set_repo_secret(repo, BATCH_SIZE_SECRET, str(batch_size))
+    TRIGGER_FILE.write_text(f"{time.strftime('%Y-%m-%dT%H:%M:%S%z')}\n", encoding="utf-8")
+    subprocess.run(["git", "add", str(TRIGGER_FILE.relative_to(ROOT))], cwd=ROOT, check=True)
     subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", "chore: trigger local crawl handoff"],
+        ["git", "commit", "-m", "chore: trigger local crawl handoff"],
         cwd=ROOT,
         check=True,
     )

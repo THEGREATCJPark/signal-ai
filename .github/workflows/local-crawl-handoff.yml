@@ -3,6 +3,8 @@ name: Ingest Local Crawl Handoff
 on:
   push:
     branches: [dev]
+    paths:
+      - .github/local-crawl-handoff-trigger
   workflow_dispatch:
     inputs:
       bundle_url:

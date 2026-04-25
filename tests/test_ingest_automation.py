@@ -114,6 +114,7 @@ class IngestAutomationTest(unittest.TestCase):
         text = workflow.read_text(encoding="utf-8")
 
         self.assertIn("branches: [dev]", text)
+        self.assertIn(".github/local-crawl-handoff-trigger", text)
         self.assertIn("startsWith(github.event.head_commit.message, 'chore: trigger local crawl handoff')", text)
         self.assertIn("workflow_dispatch:", text)
         self.assertIn("bundle_url:", text)
@@ -137,6 +138,7 @@ class IngestAutomationTest(unittest.TestCase):
         self.assertEqual("dev", mod.DEFAULT_REF)
         self.assertEqual("secret-push", mod.DEFAULT_TRIGGER_MODE)
         self.assertEqual("LOCAL_CRAWL_BUNDLE_URL", mod.BUNDLE_URL_SECRET)
+        self.assertEqual(ROOT / ".github" / "local-crawl-handoff-trigger", mod.TRIGGER_FILE)
         self.assertEqual("https://example.trycloudflare.com", mod.parse_tunnel_url(
             "2026 INF TryCloudflare: https://example.trycloudflare.com"
         ))

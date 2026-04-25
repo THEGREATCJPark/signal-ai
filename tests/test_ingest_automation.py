@@ -100,6 +100,15 @@ class IngestAutomationTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("usage:", result.stdout.lower())
 
+    def test_readme_names_supabase_ingest_destination(self):
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("## Supabase 적재 대상", text)
+        self.assertIn("Project ref: `qyckjkidscpiyrdzqxoc`", text)
+        self.assertIn("Table: `public.posts`", text)
+        self.assertIn("환경변수 `SUPABASE_URL`이 실제 적재 프로젝트를 결정", text)
+        self.assertIn("service_role key의 소유 Supabase 계정/조직 권한", text)
+
 
 if __name__ == "__main__":
     unittest.main()

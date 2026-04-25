@@ -4,7 +4,7 @@ import glob as glob_module
 
 from bot.telegram_bot import send_daily_digest
 from bot.x_poster import post_daily_summary
-from publisher.state import PublishedState, article_key
+from publisher.state import article_key, get_state
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
@@ -77,7 +77,7 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
     articles.sort(key=lambda x: x.get("score", 0), reverse=True)
     top_articles = articles[:10]
 
-    state = PublishedState()
+    state = get_state()
     platforms = ["telegram", "x"] if platform == "both" else [platform]
 
     for plat in platforms:

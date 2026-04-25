@@ -15,11 +15,34 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 DEFAULT_INPUT = os.path.join(ROOT, "docs", "articles.json")
+DEFAULT_SOURCE = os.getenv("FIRST_LIGHT_PUBLISH_SOURCE", "file").strip().lower() or "file"
+
+
+def load_raw_articles(source: str, input_path: str | os.PathLike) -> dict | list:
+    """Load generated articles from a local JSON file or Supabase public state."""
+    source = source.strip().lower()
+    if source == "file":
+        path = Path(input_path)
+        if not path.exists():
+            raise FileNotFoundError(f"입력 파일을 찾을 수 없습니다: {path}")
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+
+    if source == "supabase":
+        from db.articles import load_public_state
+
+        state = load_public_state()
+        if not state:
+            raise RuntimeError("Supabase public_state가 비어 있습니다. 먼저 scripts/sync_articles_to_supabase.py를 실행하세요.")
+        return state
+
+    raise ValueError(f"지원하지 않는 소스입니다: {source}")
 
 
 def normalize_articles(raw) -> list[dict]:
@@ -68,6 +91,8 @@ def normalize_articles(raw) -> list[dict]:
 
 def main():
     parser = argparse.ArgumentParser(description="First Light AI 발행")
+    parser.add_argument("--source", choices=["file", "supabase"], default=DEFAULT_SOURCE,
+                        help="기사 입력 소스 (기본: FIRST_LIGHT_PUBLISH_SOURCE 또는 file)")
     parser.add_argument("--input", default=DEFAULT_INPUT,
                         help="입력 JSON 파일 경로 (기본: docs/articles.json)")
     parser.add_argument("--dry-run", action="store_true",
@@ -80,14 +105,12 @@ def main():
                         help="발행할 최대 기사 수 (0=무제한)")
     args = parser.parse_args()
 
-    # 입력 파일 확인
-    if not os.path.exists(args.input):
-        print(f"오류: 입력 파일을 찾을 수 없습니다: {args.input}")
-        sys.exit(1)
-
     # JSON 로드
-    with open(args.input, "r", encoding="utf-8") as f:
-        raw = json.load(f)
+    try:
+        raw = load_raw_articles(args.source, args.input)
+    except Exception as exc:
+        print(f"오류: {exc}")
+        sys.exit(1)
 
     # 정규화
     articles = normalize_articles(raw)
@@ -95,7 +118,8 @@ def main():
         print("발행할 기사가 없습니다.")
         return
 
-    print(f"로드된 기사: {len(articles)}개 (소스: {args.input})")
+    source_label = args.input if args.source == "file" else "supabase:public_state"
+    print(f"로드된 기사: {len(articles)}개 (소스: {source_label})")
 
     # 발행
     from bot.scheduler import publish

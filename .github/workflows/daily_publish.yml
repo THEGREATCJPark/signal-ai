@@ -1,19 +1,24 @@
 name: Daily First Light AI Publish
 
 on:
-  schedule:
-    # 매일 08:00 KST (= 23:00 UTC 전날)
-    - cron: '0 23 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run (미리보기만)'
+        description: 'Dry run (미리보기만, Telegram/X 발행 안 함)'
         required: false
-        default: 'false'
+        default: 'true'
         type: choice
         options:
-          - 'false'
           - 'true'
+          - 'false'
+      source:
+        description: '기사 입력 소스'
+        required: false
+        default: 'supabase'
+        type: choice
+        options:
+          - supabase
+          - file
       platform:
         description: '발행 플랫폼'
         required: false
@@ -37,11 +42,21 @@ on:
         default: '0'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      USE_DB: "true"
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+      X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
+      X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+      X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
 
     steps:
       - name: Checkout
@@ -58,26 +73,15 @@ jobs:
       - name: Validate articles
         run: python scripts/validate_articles.py
 
-      - name: Run publish
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
-          X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
-          X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
-          X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
+      - name: Sync generated articles to Supabase
+        if: ${{ github.event.inputs.source == 'supabase' || github.event.inputs.source == '' }}
+        run: python scripts/sync_articles_to_supabase.py --input docs/articles.json
+
+      - name: Run publish preview or manual publish
         run: |
-          ARGS="--platform ${{ github.event.inputs.platform || 'both' }}"
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
-          if [ "${{ github.event.inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          ARGS="--source ${{ github.event.inputs.source || 'supabase' }} --platform ${{ github.event.inputs.platform || 'both' }}"
+          if [ "${{ github.event.inputs.dry_run || 'true' }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          if [ "${{ github.event.inputs.force || 'false' }}" = "true" ]; then ARGS="$ARGS --force"; fi
           LIMIT="${{ github.event.inputs.limit || '0' }}"
           if [ "$LIMIT" != "0" ]; then ARGS="$ARGS --limit $LIMIT"; fi
           python scripts/run_publish.py $ARGS
-
-      - name: Commit published state
-        if: github.event.inputs.dry_run != 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/published.json
-          git diff --staged --quiet || git commit -m "chore: 발행 상태 업데이트 [skip ci]"
-          git push

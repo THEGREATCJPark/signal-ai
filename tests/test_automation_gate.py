@@ -19,6 +19,16 @@ def load_gate():
     return module
 
 
+def load_handoff_gate():
+    spec = importlib.util.spec_from_file_location(
+        "local_crawl_handoff_gate",
+        ROOT / "scripts" / "local_crawl_handoff_gate.py",
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class AutomationGateTest(unittest.TestCase):
     def setUp(self):
         self.gate = load_gate()
@@ -112,6 +122,54 @@ class AutomationGateTest(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(calls, [])
+
+
+class LocalCrawlHandoffGateTest(unittest.TestCase):
+    def setUp(self):
+        self.gate = load_handoff_gate()
+
+    def test_successful_handoff_updates_own_state_and_prevents_double_run(self):
+        calls = []
+        now = datetime(2026, 4, 25, 7, 30, tzinfo=KST)
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            state = root / "data" / "local_crawl_handoff_state.json"
+            log = root / "logs" / "local_crawl_handoff.log"
+            lock = root / "data" / "local_crawl_handoff.lock"
+
+            rc = self.gate.run_command_if_due(
+                root=root,
+                state_path=state,
+                log_path=log,
+                lock_path=lock,
+                now=now,
+                command=["echo", "handoff"],
+                runner=lambda cmd, **kwargs: calls.append(cmd) or 0,
+            )
+            rc2 = self.gate.run_command_if_due(
+                root=root,
+                state_path=state,
+                log_path=log,
+                lock_path=lock,
+                now=now.replace(hour=9),
+                command=["echo", "handoff"],
+                runner=lambda cmd, **kwargs: calls.append(cmd) or 0,
+            )
+            text = state.read_text(encoding="utf-8")
+
+        self.assertEqual(0, rc)
+        self.assertEqual(0, rc2)
+        self.assertEqual([["echo", "handoff"]], calls)
+        self.assertIn("last_run_at", text)
+        self.assertIn("2026-04-25T07:30:00+09:00", text)
+
+    def test_handoff_task_wrapper_uses_gate_and_dispatcher(self):
+        wrapper = ROOT / "run_local_crawl_handoff_task.sh"
+        text = wrapper.read_text(encoding="utf-8")
+
+        self.assertIn("scripts/local_crawl_handoff_gate.py", text)
+        self.assertIn("scripts/dispatch_local_crawl_handoff.py", text)
 
 
 if __name__ == "__main__":

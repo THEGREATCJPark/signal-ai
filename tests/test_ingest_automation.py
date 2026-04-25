@@ -1,9 +1,12 @@
 import importlib
+import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -153,6 +156,48 @@ class IngestAutomationTest(unittest.TestCase):
                 os.environ.pop("GITHUB_ACTIONS", None)
             else:
                 os.environ["GITHUB_ACTIONS"] = old_value
+
+    def test_supabase_ingest_deduplicates_conflicts_within_batch(self):
+        ingest = importlib.import_module("db.ingest")
+
+        rows = [
+            {
+                "source": "discord",
+                "source_id": "same-id",
+                "content": "old",
+                "timestamp": "2026-04-25T00:00:00+00:00",
+            },
+            {
+                "source": "discord",
+                "source_id": "same-id",
+                "content": "new",
+                "timestamp": "2026-04-25T00:01:00+00:00",
+            },
+            {
+                "source": "hackernews",
+                "source_id": "hn-1",
+                "content": "hn",
+                "timestamp": "2026-04-25T00:02:00+00:00",
+            },
+        ]
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "posts.jsonl"
+            path.write_text(
+                "\n".join(json.dumps(row) for row in rows) + "\n",
+                encoding="utf-8",
+            )
+            flushed = []
+
+            with patch.object(ingest, "upsert_posts", side_effect=lambda batch: flushed.append(batch) or len(batch)):
+                result = ingest.ingest_paths([path], batch_size=500)
+
+        self.assertEqual(2, result["inserted"])
+        self.assertEqual({"discord": 1, "hackernews": 1}, result["by_source"])
+        self.assertEqual(1, len(flushed))
+        self.assertEqual(2, len(flushed[0]))
+        discord_row = next(row for row in flushed[0] if row["source"] == "discord")
+        self.assertEqual("new", discord_row["content"])
 
 
 if __name__ == "__main__":

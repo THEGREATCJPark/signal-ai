@@ -69,10 +69,10 @@ def normalize_articles(raw) -> list[dict]:
         if not aid:
             aid = hashlib.sha256(title.encode()).hexdigest()[:12]
 
-        body = a.get("body", a.get("summary", ""))
-        summary = body[:200] + "..." if len(body) > 200 else body
-        if not summary:
-            summary = "요약 없음"
+        # 발행용 요약: summary 우선, 없으면 body 전체. 길이 절단 없음 — 채널 메시지는
+        # bot/scheduler.py가 기사별로 한 메시지씩 보내므로 텔레그램 4096자 제한
+        # 안에서 충분히 들어간다. (본문 평균 ~340자, 최대 ~1100자.)
+        summary = (a.get("summary") or "").strip() or (a.get("body") or "").strip() or "요약 없음"
 
         normalized.append({
             "id": aid,

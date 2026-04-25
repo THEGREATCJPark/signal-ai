@@ -1,10 +1,14 @@
 import json
 import os
+import time
 import glob as glob_module
 
-from bot.telegram_bot import send_daily_digest
+from bot.telegram_bot import send_article, send_daily_digest, send_digest_header
 from bot.x_poster import post_daily_summary
 from publisher.state import article_key, get_state
+
+# Telegram 메시지 사이 대기 (Bot API 권장: 채널당 ~20msg/min, 보수적으로 1초)
+TELEGRAM_PER_MESSAGE_DELAY = float(os.getenv("TELEGRAM_PER_MESSAGE_DELAY", "1.2"))
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
@@ -102,10 +106,19 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
         # 실제 발행
         if plat == "telegram":
             try:
-                send_daily_digest(to_publish)
+                # 헤더 1개 + 기사별 메시지 N개. 본문 잘림 없이 가독성 확보.
+                send_digest_header(len(to_publish))
+                time.sleep(TELEGRAM_PER_MESSAGE_DELAY)
+                sent = 0
                 for a in to_publish:
-                    state.mark_published(article_key(a), "telegram")
-                print(f"[telegram] {len(to_publish)}개 기사 발행 완료")
+                    try:
+                        send_article(a)
+                        state.mark_published(article_key(a), "telegram")
+                        sent += 1
+                    except Exception as inner:
+                        print(f"[telegram] 개별 발행 실패: {a.get('title','?')[:40]} — {inner}")
+                    time.sleep(TELEGRAM_PER_MESSAGE_DELAY)
+                print(f"[telegram] {sent}/{len(to_publish)}개 기사 발행 완료")
             except Exception as e:
                 print(f"[telegram] 발행 실패: {e}")
 

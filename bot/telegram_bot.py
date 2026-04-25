@@ -59,9 +59,23 @@ def send_article(article: dict) -> dict:
 
 
 def send_daily_digest(articles: list[dict]) -> dict:
-    """일일 다이제스트를 텔레그램 채널에 발행"""
+    """일일 다이제스트(헤더 + 인덱스)를 한 메시지로 발행. 본문 잘림 가능성 있어서
+    기본 발행 경로(scheduler.publish)는 send_digest_header + send_article 루프를 사용."""
     message = format_daily_digest(articles)
     return _send_message(message, disable_preview=True)
+
+
+def send_digest_header(count: int) -> dict:
+    """기사별 메시지를 보내기 전, 짧은 헤더를 먼저 발행."""
+    from datetime import datetime
+
+    today = datetime.now().strftime("%Y년 %m월 %d일")
+    text = (
+        f"📡 <b>First Light AI — {today} 브리핑</b>\n"
+        f"오늘 {count}건의 소식을 공유합니다.\n"
+        + ("━" * 20)
+    )
+    return _send_message(text, disable_preview=True)
 
 
 def send_test_message() -> dict:

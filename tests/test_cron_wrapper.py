@@ -16,6 +16,14 @@ class CronWrapperTest(unittest.TestCase):
         self.assertIn("./run_cron.sh", text)
         self.assertNotIn("/tmp/signal_daily.log", text)
 
+    def test_local_handoff_task_wrapper_exposes_local_bin_for_cloudflared(self):
+        text = Path("run_local_crawl_handoff_task.sh").read_text(encoding="utf-8")
+
+        self.assertIn("/home/pineapple/bin", text)
+        self.assertIn("PATH=", text)
+        self.assertIn("scripts/local_crawl_handoff_gate.py", text)
+        self.assertIn("scripts/dispatch_local_crawl_handoff.py", text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 cd "$SCRIPT_DIR"
+export PATH="/home/pineapple/bin:/home/pineapple/.local/bin:/home/pineapple/.dotnet:/home/pineapple/.dotnet/tools:/usr/local/bin:/usr/bin:/bin:$PATH"
 DEFAULT_PYTHON="/home/pineapple/miniconda3/bin/python3"
 if [ -z "${FIRST_LIGHT_PYTHON:-}" ]; then
   if [ -x "$DEFAULT_PYTHON" ]; then

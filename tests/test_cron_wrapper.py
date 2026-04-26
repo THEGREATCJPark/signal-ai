@@ -18,13 +18,18 @@ class CronWrapperTest(unittest.TestCase):
         text = Path("run_cron_task.sh").read_text(encoding="utf-8")
         self.assertIn("scripts/automation_gate.py", text)
         self.assertIn("./run_cron.sh", text)
+        self.assertIn("/home/pineapple/bin", text)
+        self.assertIn("/home/pineapple/.local/bin", text)
+        self.assertIn("/home/pineapple/.dotnet/tools", text)
         self.assertIn("FIRST_LIGHT_PYTHON", text)
         self.assertNotIn("/tmp/signal_daily.log", text)
 
-    def test_local_handoff_task_wrapper_exposes_local_bin_for_cloudflared(self):
+    def test_local_handoff_task_wrapper_exposes_user_bins(self):
         text = Path("run_local_crawl_handoff_task.sh").read_text(encoding="utf-8")
 
         self.assertIn("/home/pineapple/bin", text)
+        self.assertIn("/home/pineapple/.local/bin", text)
+        self.assertIn("/home/pineapple/.dotnet/tools", text)
         self.assertIn("PATH=", text)
         self.assertIn("FIRST_LIGHT_PYTHON", text)
         self.assertIn("scripts/local_crawl_handoff_gate.py", text)

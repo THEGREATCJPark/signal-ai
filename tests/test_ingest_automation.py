@@ -75,6 +75,31 @@ class IngestAutomationTest(unittest.TestCase):
         self.assertIn("--channel", cmd)
         self.assertIn("--after-kst", cmd)
 
+    def test_linux_discord_exporter_passes_after_as_local_kst(self):
+        mod = importlib.import_module("discord_export_linux")
+
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "discord.txt"
+            captured = {}
+
+            def fake_run(cmd, **kwargs):
+                captured["cmd"] = cmd
+                out.write_text("ok", encoding="utf-8")
+                return subprocess.CompletedProcess(cmd, 0, "", "")
+
+            with patch.dict(os.environ, {"DCE_BIN": "/tmp/dce"}), patch.object(mod.subprocess, "run", side_effect=fake_run):
+                mod.run_dce_export(
+                    "channel-id",
+                    mod.parse_kst("2026-04-27 02:36:00"),
+                    "token-value",
+                    out,
+                )
+
+        cmd = captured["cmd"]
+        after_idx = cmd.index("--after")
+        self.assertEqual("2026-04-27 02:36", cmd[after_idx + 1])
+        self.assertNotIn("--utc", cmd)
+
     def test_local_discord_ingest_refuses_github_actions(self):
         mod = importlib.import_module("scripts.local_discord_ingest")
 

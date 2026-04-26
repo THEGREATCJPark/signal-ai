@@ -67,9 +67,11 @@ def parse_kst(s: str) -> datetime:
     return dt.replace(tzinfo=KST) if dt.tzinfo is None else dt.astimezone(KST)
 
 
-def run_dce_export(channel: str, after_utc: datetime, token: str, out_txt: Path) -> None:
+def run_dce_export(channel: str, after_kst: datetime, token: str, out_txt: Path) -> None:
     """DiscordChatExporter.Cli export 실행."""
-    after_str = after_utc.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    # DCE interprets --after as local time. Passing a pre-converted UTC string
+    # makes Linux exports include extra old messages when the host timezone is KST.
+    after_str = after_kst.astimezone(KST).strftime("%Y-%m-%d %H:%M")
     cmd = dce_cmd() + [
         "export",
         "-t", token,
@@ -78,7 +80,6 @@ def run_dce_export(channel: str, after_utc: datetime, token: str, out_txt: Path)
         "--format", "PlainText",
         "--locale", "ko-KR",
         "-o", str(out_txt),
-        "--utc",
     ]
     print(f"[dce] running: {' '.join(c if c != token else 'TOKEN' for c in cmd)}", file=sys.stderr)
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)

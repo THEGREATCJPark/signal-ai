@@ -59,6 +59,22 @@ class IngestAutomationTest(unittest.TestCase):
         self.assertIn("crawlers/run_public.py", mod.CRAWLER_COMMANDS)
         self.assertIn("crawlers/discord.py", mod.CRAWLER_COMMANDS)
 
+    def test_discord_crawler_uses_linux_exporter_when_powershell_is_unavailable(self):
+        mod = importlib.import_module("crawlers.discord")
+
+        with patch.object(
+            mod.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(["which", "powershell.exe"], 1, "", ""),
+        ):
+            cmd = mod.export_command("2026-04-27 00:00:00")
+
+        self.assertIn("discord_export_linux.py", cmd[1])
+        self.assertNotIn("discord_export_text_only.py", " ".join(cmd))
+        self.assertNotIn("--no-upload", cmd)
+        self.assertIn("--channel", cmd)
+        self.assertIn("--after-kst", cmd)
+
     def test_local_discord_ingest_refuses_github_actions(self):
         mod = importlib.import_module("scripts.local_discord_ingest")
 

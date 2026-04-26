@@ -3,9 +3,13 @@
 import sys, os, subprocess, re, hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from _common import post, save
 
 ROOT = Path(__file__).parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from crawlers._common import post, save
+
 CHANNEL_ID = "1365049274068631644"  # Dev Mode / general
 GUILD = "Dev Mode"
 CHANNEL = "general"
@@ -20,17 +24,35 @@ def parse_kst(y, mo, d, ampm, h, mi):
     if ampm == "오전" and hour == 12: hour = 0
     return datetime(int(y), int(mo), int(d), hour, int(mi), tzinfo=KST)
 
+
+def use_linux_exporter() -> bool:
+    return subprocess.run(["which", "powershell.exe"], capture_output=True).returncode != 0
+
+
+def export_command(after: str) -> list[str]:
+    if use_linux_exporter():
+        script = ROOT / "discord_export_linux.py"
+        return [
+            "python3", str(script),
+            "--channel", CHANNEL_ID,
+            "--after-kst", after,
+        ]
+    else:
+        script = ROOT / "discord_export_text_only.py"
+        return [
+            "python3", str(script),
+            "--channel", CHANNEL_ID,
+            "--after-kst", after,
+            "--no-upload",
+        ]
+
+
 def run_export():
     """Run discord_export_text_only.py for last N days. Returns path to export file."""
     after = (datetime.now(KST) - timedelta(days=DAYS_BACK)).strftime("%Y-%m-%d 00:00:00")
     print(f"[discord] exporting --after-kst '{after}' (channel {CHANNEL_ID})", file=sys.stderr)
 
-    r = subprocess.run([
-        "python3", str(ROOT / "discord_export_text_only.py"),
-        "--channel", CHANNEL_ID,
-        "--after-kst", after,
-        "--no-upload",
-    ], capture_output=True, timeout=1800)
+    r = subprocess.run(export_command(after), capture_output=True, timeout=1800)
     # Decode with replacement (powershell sometimes outputs cp949 banner chars)
     stdout = r.stdout.decode("utf-8", errors="replace") if r.stdout else ""
     stderr = r.stderr.decode("utf-8", errors="replace") if r.stderr else ""

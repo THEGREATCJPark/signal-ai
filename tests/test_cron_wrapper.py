@@ -35,6 +35,15 @@ class CronWrapperTest(unittest.TestCase):
         self.assertIn("scripts/local_crawl_handoff_gate.py", text)
         self.assertIn("scripts/dispatch_local_crawl_handoff.py", text)
 
+    def test_local_handoff_task_wrapper_loads_discord_token(self):
+        text = Path("run_local_crawl_handoff_task.sh").read_text(encoding="utf-8")
+
+        self.assertIn("discord_export_config.env", text)
+        self.assertIn("DISCORD_EXPORT_CONFIG", text)
+        self.assertIn("DISCORD_TOKEN", text)
+        self.assertIn("set -a", text)
+        self.assertIn("set +a", text)
+
 
 if __name__ == "__main__":
     unittest.main()

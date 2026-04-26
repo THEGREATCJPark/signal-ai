@@ -13,5 +13,13 @@ if [ -z "${FIRST_LIGHT_PYTHON:-}" ]; then
     FIRST_LIGHT_PYTHON="$(command -v python3)"
   fi
 fi
+
+CONFIG="${DISCORD_EXPORT_CONFIG:-$SCRIPT_DIR/discord_export_config.env}"
+if [ -f "$CONFIG" ]; then
+  set -a
+  . <(grep -E '^DISCORD_TOKEN=' "$CONFIG")
+  set +a
+fi
+
 exec "$FIRST_LIGHT_PYTHON" scripts/local_crawl_handoff_gate.py -- \
   "$FIRST_LIGHT_PYTHON" scripts/dispatch_local_crawl_handoff.py

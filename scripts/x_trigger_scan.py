@@ -66,14 +66,16 @@ def normalize_account(account: dict[str, Any] | str) -> dict[str, str]:
         username = account
         category = "watch"
         group = "관심 계정"
+        tier = "manual"
     else:
         username = str(account.get("username") or account.get("handle") or "")
         category = str(account.get("category") or "watch")
         group = str(account.get("group") or "관심 계정")
+        tier = str(account.get("tier") or "manual")
     username = username.strip().lstrip("@")
     if not username:
         raise ValueError("watched account is missing username")
-    return {"username": username, "category": category, "group": group, "key": account_key(username)}
+    return {"username": username, "category": category, "group": group, "tier": tier, "key": account_key(username)}
 
 
 def load_accounts(path: str | os.PathLike | None = None) -> list[dict[str, str]]:
@@ -82,6 +84,23 @@ def load_accounts(path: str | os.PathLike | None = None) -> list[dict[str, str]]
     else:
         raw = DEFAULT_ACCOUNTS
     return [normalize_account(account) for account in raw]
+
+
+SCOPE_TIERS = {
+    "auto": {"auto"},
+    "core": {"auto", "core"},
+    "fast": {"auto", "core", "fast"},
+    "scoop": {"auto", "core", "scoop"},
+    "oss": {"auto", "core", "oss"},
+    "all": {"auto", "core", "fast", "scoop", "oss", "manual"},
+}
+
+
+def filter_accounts_for_scope(accounts: list[dict[str, str]], scope: str) -> list[dict[str, str]]:
+    allowed = SCOPE_TIERS.get(scope)
+    if allowed is None:
+        raise ValueError(f"unsupported trigger account scope: {scope}")
+    return [account for account in accounts if account.get("tier", "manual") in allowed]
 
 
 def _tweet_id_int(tweet_id: str) -> int:
@@ -94,8 +113,40 @@ def _tweet_id_int(tweet_id: str) -> int:
 def _copy_state(state: dict[str, Any] | None) -> dict[str, Any]:
     out = deepcopy(state or {})
     out.setdefault("last_seen_ids", {})
+    out.setdefault("user_ids", {})
     out.setdefault("updated_at", None)
     return out
+
+
+def resolve_account_users(
+    accounts: list[dict[str, str]],
+    state: dict[str, Any] | None,
+    lookup_users: Callable[[list[str]], dict[str, dict[str, Any]]],
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    next_state = _copy_state(state)
+    cached_ids = next_state["user_ids"]
+    users: dict[str, dict[str, Any]] = {}
+    missing: list[str] = []
+
+    for account in accounts:
+        key = account["key"]
+        cached_id = str(cached_ids.get(key) or "").strip()
+        if cached_id:
+            users[key] = {"id": cached_id, "username": account["username"]}
+        else:
+            missing.append(account["username"])
+
+    if missing:
+        looked_up = lookup_users(missing)
+        for username, user in looked_up.items():
+            key = account_key(username)
+            if not user.get("id"):
+                continue
+            users[key] = user
+            cached_ids[key] = str(user["id"])
+
+    next_state["updated_at"] = datetime.now(timezone.utc).isoformat()
+    return users, next_state
 
 
 def detect_new_tweets(
@@ -279,21 +330,26 @@ class XClient:
             raise RuntimeError(f"X API {path} {response.status_code}: {response.text[:300]}")
         return response.json()
 
+    def lookup_users(self, usernames: list[str]) -> dict[str, dict[str, Any]]:
+        if not usernames:
+            return {}
+        users = self._get(
+            "/users/by",
+            {"usernames": ",".join(usernames), "user.fields": "username,name,verified"},
+        ).get("data", [])
+        return {account_key(user["username"]): user for user in users}
+
     def fetch_recent_by_accounts(
         self,
         accounts: list[dict[str, str]],
         *,
         max_results: int = 5,
-    ) -> dict[str, list[dict[str, Any]]]:
-        usernames = [account["username"] for account in accounts]
-        users = self._get(
-            "/users/by",
-            {"usernames": ",".join(usernames), "user.fields": "username,name,verified"},
-        ).get("data", [])
-        by_username = {account_key(user["username"]): user for user in users}
+        state: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+        users_by_key, next_state = resolve_account_users(accounts, state, self.lookup_users)
         result: dict[str, list[dict[str, Any]]] = {}
         for account in accounts:
-            user = by_username.get(account["key"])
+            user = users_by_key.get(account["key"])
             if not user:
                 print(f"[trigger] X user not found: @{account['username']}", file=sys.stderr)
                 result[account["username"]] = []
@@ -308,9 +364,9 @@ class XClient:
             )
             tweets = payload.get("data", []) or []
             for tweet in tweets:
-                tweet["url"] = f"https://x.com/{user['username']}/status/{tweet['id']}"
-            result[user["username"]] = tweets
-        return result
+                tweet["url"] = f"https://x.com/{account['username']}/status/{tweet['id']}"
+            result[account["username"]] = tweets
+        return result, next_state
 
 
 def candidate_id(tweet_id: str) -> str:
@@ -477,13 +533,17 @@ def maybe_notify_telegram(candidate: dict[str, Any], issue_url: str) -> None:
 
 
 def run_scan(args: argparse.Namespace) -> int:
-    accounts = load_accounts(args.accounts)
+    accounts = filter_accounts_for_scope(load_accounts(args.accounts), args.scope)
     by_key = {account["key"]: account for account in accounts}
-    tweets_by_account = XClient().fetch_recent_by_accounts(accounts, max_results=args.max_results)
     previous_state = load_trigger_state(args.state)
+    tweets_by_account, lookup_state = XClient().fetch_recent_by_accounts(
+        accounts,
+        max_results=args.max_results,
+        state=previous_state,
+    )
     raw_candidates, next_state = detect_new_tweets(
         tweets_by_account,
-        previous_state,
+        lookup_state,
         bootstrap=args.backfill,
     )
     if not raw_candidates:
@@ -512,7 +572,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Scan watched X accounts and queue trigger reviews")
     parser.add_argument("--accounts", help="JSON account config path")
     parser.add_argument("--state", help="Local state path override for tests/manual runs")
-    parser.add_argument("--max-results", type=int, default=5)
+    parser.add_argument("--scope", choices=sorted(SCOPE_TIERS), default=os.getenv("TRIGGER_SCAN_SCOPE", "auto"),
+                        help="Account tier scope to scan. Defaults to low-cost auto.")
+    parser.add_argument("--max-results", type=int, default=int(os.getenv("TRIGGER_SCAN_MAX_RESULTS", "1")))
     parser.add_argument("--backfill", action="store_true", help="Create candidates even for accounts without cursors")
     parser.add_argument("--dry-run", action="store_true")
     return parser

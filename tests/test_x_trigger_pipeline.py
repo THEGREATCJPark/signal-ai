@@ -4,6 +4,49 @@ from datetime import datetime, timezone
 
 
 class XTriggerScanTest(unittest.TestCase):
+    def test_filter_accounts_for_auto_and_manual_scopes(self):
+        from scripts.x_trigger_scan import filter_accounts_for_scope, normalize_account
+
+        accounts = [
+            normalize_account({"username": "OpenAI", "tier": "auto"}),
+            normalize_account({"username": "testingcatalog", "tier": "core"}),
+            normalize_account({"username": "steph_palazzolo", "tier": "scoop"}),
+        ]
+
+        self.assertEqual(
+            [account["username"] for account in filter_accounts_for_scope(accounts, "auto")],
+            ["OpenAI"],
+        )
+        self.assertEqual(
+            [account["username"] for account in filter_accounts_for_scope(accounts, "core")],
+            ["OpenAI", "testingcatalog"],
+        )
+        self.assertEqual(
+            [account["username"] for account in filter_accounts_for_scope(accounts, "all")],
+            ["OpenAI", "testingcatalog", "steph_palazzolo"],
+        )
+
+    def test_resolve_user_ids_reuses_cached_ids_and_marks_new_users(self):
+        from scripts.x_trigger_scan import normalize_account, resolve_account_users
+
+        accounts = [
+            normalize_account({"username": "OpenAI", "tier": "auto"}),
+            normalize_account({"username": "sama", "tier": "core"}),
+        ]
+        state = {"user_ids": {"openai": "42"}}
+        lookups = []
+
+        def fake_lookup(usernames):
+            lookups.append(usernames)
+            return {"sama": {"id": "99", "username": "sama"}}
+
+        users, next_state = resolve_account_users(accounts, state, fake_lookup)
+
+        self.assertEqual(users["openai"]["id"], "42")
+        self.assertEqual(users["sama"]["id"], "99")
+        self.assertEqual(lookups, [["sama"]])
+        self.assertEqual(next_state["user_ids"]["sama"], "99")
+
     def test_bootstrap_accounts_records_latest_without_candidates(self):
         from scripts.x_trigger_scan import account_key, detect_new_tweets
 

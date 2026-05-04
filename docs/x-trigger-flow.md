@@ -4,17 +4,43 @@ First Light AI keeps the daily digest on the existing schedule and adds a fast p
 
 ## Flow
 
-1. `X Trigger Scan` runs every hour at `:17` and `:47`, or manually through `workflow_dispatch`.
-2. `scripts/x_trigger_scan.py` reads `config/x_trigger_accounts.json`, fetches recent original posts from X, and stores per-account cursors in Supabase `pipeline_state` under `x_trigger_state`.
-3. On first run for an account, the scanner records the latest tweet as the baseline and does not create review issues. Manual `backfill=true` creates cards for the latest posts.
-4. For each new post, the scanner summarizes it with the same Google/Gemma style API used by the article pipeline. If the model key is missing or fails, it falls back to a literal summary from the tweet text.
-5. The scanner opens a GitHub Issue labeled `x-trigger` and `needs-review`. The issue body contains the review summary, source URL, original tweet text, and a hidden payload used by the approval workflow.
-6. CJ or HB reviews the issue. Comment `/approve-trigger`, `yes`, or `예` to publish. Comment `/reject-trigger`, `no`, or `아니오` to reject.
-7. `X Trigger Review` handles the issue comment. One approved comment from an allowed reviewer publishes the single trigger article through GitHub Actions and closes the issue.
+1. Free/low-cost sources remain the main early-warning system: official blogs, changelogs, RSS feeds, HN, Reddit, arXiv, HuggingFace, GeekNews, and Discord ingest.
+2. `X Trigger Scan` is only the premium sensor. The scheduled run checks the tiny `auto` tier every 4 hours with `max_results=1`.
+3. Manual `workflow_dispatch` can scan broader scopes: `core`, `fast`, `scoop`, `oss`, or `all`.
+4. `scripts/x_trigger_scan.py` reads `config/x_trigger_accounts.json`, fetches recent original posts from X, and stores cursors in Supabase `pipeline_state` under `x_trigger_state`.
+5. X user ids are cached in the same state under `user_ids`, so repeated runs avoid paying user lookup costs unless a new account is added.
+6. On first run for an account, the scanner records the latest tweet as the baseline and does not create review issues. Manual `backfill=true` creates cards for the latest posts.
+7. For each new post, the scanner summarizes it with the same Google/Gemma style API used by the article pipeline. If the model key is missing or fails, it falls back to a literal summary from the tweet text.
+8. The scanner opens a GitHub Issue labeled `x-trigger` and `needs-review`. The issue body contains the review summary, source URL, original tweet text, and a hidden payload used by the approval workflow.
+9. CJ or HB reviews the issue. Comment `/approve-trigger`, `yes`, or `예` to publish. Comment `/reject-trigger`, `no`, or `아니오` to reject.
+10. `X Trigger Review` handles the issue comment. One approved comment from an allowed reviewer publishes the single trigger article through GitHub Actions and closes the issue.
 
 ## Review Platform Choice
 
 GitHub Issues is the source of truth for approval. Telegram inline buttons would require a public webhook or polling service to receive callback queries, while GitHub issue comments are already a native Actions trigger. The scanner can still send an optional Telegram notification with the issue link by setting `TRIGGER_REVIEW_TELEGRAM_CHAT_ID`.
+
+## Cost Guardrails
+
+The default scheduled X scan is intentionally small:
+
+- Scope: `auto`
+- Accounts: `OpenAI`, `OpenAIDevs`, `AnthropicAI`, `GoogleDeepMind`
+- Schedule: every 4 hours
+- Results: `max_results=1`
+- User lookup: cached after the first successful run
+
+This keeps X as a fast but bounded signal. Broader account groups are manual by default:
+
+| Scope | Included tiers | Use case |
+| --- | --- | --- |
+| `auto` | `auto` | Always-on low-cost official sensor |
+| `core` | `auto`, `core` | Priority model labs, benchmark, and practitioner accounts |
+| `fast` | `auto`, `core`, `fast` | Early community signal sweep |
+| `scoop` | `auto`, `core`, `scoop` | Company/internal reporting sweep |
+| `oss` | `auto`, `core`, `oss` | Open-source/local-model sweep |
+| `all` | every tier | Manual broad scan only |
+
+Do not raise the scheduled scope or `max_results` without setting a spending limit in the X Developer Console. X API reads are pay-per-use, so repeated broad polling can become expensive quickly.
 
 ## Required Settings
 
@@ -42,13 +68,25 @@ Optional secret:
 Dry-run scan without saving state:
 
 ```bash
-python scripts/x_trigger_scan.py --accounts config/x_trigger_accounts.json --dry-run
+python scripts/x_trigger_scan.py --accounts config/x_trigger_accounts.json --scope auto --dry-run
+```
+
+Manual priority sweep:
+
+```bash
+python scripts/x_trigger_scan.py --accounts config/x_trigger_accounts.json --scope core --max-results 1
+```
+
+Manual broad sweep:
+
+```bash
+python scripts/x_trigger_scan.py --accounts config/x_trigger_accounts.json --scope all --max-results 1
 ```
 
 Create review issues for the latest visible posts even if cursors are empty:
 
 ```bash
-python scripts/x_trigger_scan.py --accounts config/x_trigger_accounts.json --backfill
+python scripts/x_trigger_scan.py --accounts config/x_trigger_accounts.json --scope core --max-results 1 --backfill
 ```
 
 Approve from a GitHub Issue comment:

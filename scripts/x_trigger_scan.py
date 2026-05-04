@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 STATE_KEY = "x_trigger_state"
 LOCAL_STATE_PATH = ROOT / "data" / "x_trigger_state.json"
 ISSUE_LABELS = ["x-trigger", "needs-review"]

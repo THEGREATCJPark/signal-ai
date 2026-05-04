@@ -254,3 +254,29 @@ JSONL을 만들고 Supabase `posts`로 upsert한다.
 ## 라이선스
 
 Private repo.
+
+---
+
+## X 계정 트리거 검수 플로우
+
+데일리 요약 발행은 그대로 유지하고, 관심 등록한 X 계정의 새 게시글만 빠르게 검수/발행하는 트리거 플로우를 추가했다.
+
+- 계정 목록: `config/x_trigger_accounts.json`
+- 스캔: `.github/workflows/x-trigger-scan.yml`
+- 검수/승인: `.github/workflows/x-trigger-review.yml`
+- 구현: `scripts/x_trigger_scan.py`, `scripts/x_trigger_review.py`
+- 운영 문서: `docs/x-trigger-flow.md`
+
+흐름은 다음과 같다.
+
+1. 공식 RSS/changelog, HN, Reddit, arXiv, HuggingFace, GeekNews, Discord ingest를 기본 저비용 레이더로 유지한다.
+2. X 계정은 공식 X API가 아니라 RSSHub 호환 무료 feed bridge로만 확인한다.
+3. 전체 관심 계정은 `config/x_trigger_accounts.json`에 `auto`, `core`, `fast`, `scoop`, `oss` tier로 나누어 둔다.
+4. 수동 실행 시 `scope=core|fast|scoop|oss|all`을 골라 넓게 훑는다.
+5. 최초 실행 계정은 최신 tweet id만 기준선으로 저장해 과거 게시글 폭탄을 막는다.
+6. 새 게시글이 감지되면 기존 Google/Gemma 계열 요약 API로 한국어 검수 요약을 만든다.
+7. GitHub Issue에 `x-trigger`, `needs-review` 라벨을 붙여 검수 카드를 만든다.
+8. CJ 또는 HB가 issue 댓글에 `/approve-trigger` 또는 `예`를 남기면 GitHub Actions가 해당 단건을 Telegram/X로 발행한다.
+9. `/reject-trigger` 또는 `아니오`를 남기면 발행하지 않고 issue를 닫는다.
+
+크롤링에는 X API secret이 필요 없다. 선택적으로 `X_TRIGGER_FEED_BASE_URLS` repository variable에 RSSHub 호환 base URL을 콤마로 넣을 수 있다. 비워두면 public instance 후보를 순서대로 시도한다. 승인자는 `TRIGGER_REVIEWERS` repository variable로 제한할 수 있고, 비워두면 GitHub `OWNER`/`MEMBER`/`COLLABORATOR` 권한의 댓글을 승인으로 인정한다.

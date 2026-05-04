@@ -1,0 +1,70 @@
+name: X Trigger Scan
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "Create review issues for the latest posts even without existing cursors"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      dry_run:
+        description: "Print candidates without creating issues or saving state"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+      max_results:
+        description: "Tweets to inspect per watched account"
+        required: false
+        default: "5"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: x-trigger-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      USE_DB: "true"
+      X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GOOGLE_API_KEYS: ${{ secrets.GOOGLE_API_KEYS }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TRIGGER_REVIEW_TELEGRAM_CHAT_ID: ${{ secrets.TRIGGER_REVIEW_TELEGRAM_CHAT_ID }}
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scan watched X accounts
+        run: |
+          ARGS="--accounts config/x_trigger_accounts.json --max-results ${{ github.event.inputs.max_results || '5' }}"
+          if [ "${{ github.event.inputs.backfill || 'false' }}" = "true" ]; then ARGS="$ARGS --backfill"; fi
+          if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          python scripts/x_trigger_scan.py $ARGS

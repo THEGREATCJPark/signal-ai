@@ -1,0 +1,23 @@
+[
+  {"username": "OpenAI", "category": "official", "group": "공식 발표"},
+  {"username": "OpenAIDevs", "category": "official", "group": "공식 발표"},
+  {"username": "AnthropicAI", "category": "official", "group": "공식 발표"},
+  {"username": "claudeai", "category": "official", "group": "공식 발표"},
+  {"username": "ClaudeDevs", "category": "official", "group": "공식 발표"},
+  {"username": "GoogleDeepMind", "category": "official", "group": "공식 발표"},
+  {"username": "GoogleAI", "category": "official", "group": "공식 발표"},
+  {"username": "xai", "category": "official", "group": "공식 발표"},
+  {"username": "testingcatalog", "category": "rumor", "group": "선행 루머/탐지"},
+  {"username": "btibor91", "category": "rumor", "group": "선행 루머/탐지"},
+  {"username": "arena", "category": "rumor", "group": "선행 루머/탐지"},
+  {"username": "ArtificialAnlys", "category": "rumor", "group": "선행 루머/탐지"},
+  {"username": "sama", "category": "person", "group": "핵심 인물"},
+  {"username": "karpathy", "category": "person", "group": "핵심 인물"},
+  {"username": "demishassabis", "category": "person", "group": "핵심 인물"},
+  {"username": "gdb", "category": "person", "group": "핵심 인물"},
+  {"username": "polynoamial", "category": "person", "group": "핵심 인물"},
+  {"username": "OfficialLoganK", "category": "person", "group": "핵심 인물"},
+  {"username": "steph_palazzolo", "category": "scoop", "group": "회사 내부/스쿱"},
+  {"username": "alexeheath", "category": "scoop", "group": "회사 내부/스쿱"},
+  {"username": "aaronpholmes", "category": "scoop", "group": "회사 내부/스쿱"}
+]

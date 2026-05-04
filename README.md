@@ -270,13 +270,13 @@ Private repo.
 흐름은 다음과 같다.
 
 1. 공식 RSS/changelog, HN, Reddit, arXiv, HuggingFace, GeekNews, Discord ingest를 기본 저비용 레이더로 유지한다.
-2. X는 비싼 프리미엄 센서로 보고, 자동 스캔은 `auto` tier만 4시간마다 `max_results=1`로 제한한다.
+2. X 계정은 공식 X API가 아니라 RSSHub 호환 무료 feed bridge로만 확인한다.
 3. 전체 관심 계정은 `config/x_trigger_accounts.json`에 `auto`, `core`, `fast`, `scoop`, `oss` tier로 나누어 둔다.
 4. 수동 실행 시 `scope=core|fast|scoop|oss|all`을 골라 넓게 훑는다.
-5. 최초 실행 계정은 최신 tweet id만 기준선으로 저장해 과거 게시글 폭탄을 막고, X user id도 캐시해 반복 lookup 비용을 줄인다.
+5. 최초 실행 계정은 최신 tweet id만 기준선으로 저장해 과거 게시글 폭탄을 막는다.
 6. 새 게시글이 감지되면 기존 Google/Gemma 계열 요약 API로 한국어 검수 요약을 만든다.
 7. GitHub Issue에 `x-trigger`, `needs-review` 라벨을 붙여 검수 카드를 만든다.
 8. CJ 또는 HB가 issue 댓글에 `/approve-trigger` 또는 `예`를 남기면 GitHub Actions가 해당 단건을 Telegram/X로 발행한다.
 9. `/reject-trigger` 또는 `아니오`를 남기면 발행하지 않고 issue를 닫는다.
 
-필수 추가 설정은 `X_BEARER_TOKEN` secret이다. 선택적으로 `TRIGGER_REVIEWERS` repository variable에 승인 가능한 GitHub username을 콤마로 넣을 수 있다. 비워두면 GitHub `OWNER`/`MEMBER`/`COLLABORATOR` 권한의 댓글을 승인으로 인정한다.
+크롤링에는 X API secret이 필요 없다. 선택적으로 `X_TRIGGER_FEED_BASE_URLS` repository variable에 RSSHub 호환 base URL을 콤마로 넣을 수 있다. 비워두면 public instance 후보를 순서대로 시도한다. 승인자는 `TRIGGER_REVIEWERS` repository variable로 제한할 수 있고, 비워두면 GitHub `OWNER`/`MEMBER`/`COLLABORATOR` 권한의 댓글을 승인으로 인정한다.

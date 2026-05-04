@@ -8,8 +8,10 @@ import json
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 from copy import deepcopy
 from datetime import datetime, timezone
+from html import unescape
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote
@@ -28,7 +30,12 @@ ISSUE_LABEL_COLORS = {
     "needs-review": "fbca04",
 }
 ISSUE_PAYLOAD_PREFIX = "x-trigger-payload:"
-X_API_BASE = "https://api.x.com/2"
+DEFAULT_FREE_FEED_BASE_URLS = [
+    "https://rsshub.app",
+    "https://rss.detools.dev",
+    "https://rsshub.rssforever.com",
+    "https://rsshub.pseudoyu.com",
+]
 GEMINI_MODEL = os.getenv("TRIGGER_SUMMARY_MODEL", "gemma-4-26b-a4b-it")
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -79,10 +86,9 @@ def normalize_account(account: dict[str, Any] | str) -> dict[str, str]:
 
 
 def load_accounts(path: str | os.PathLike | None = None) -> list[dict[str, str]]:
-    if path:
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
-    else:
-        raw = DEFAULT_ACCOUNTS
+    if path is None and (ROOT / "config" / "x_trigger_accounts.json").exists():
+        path = ROOT / "config" / "x_trigger_accounts.json"
+    raw = json.loads(Path(path).read_text(encoding="utf-8")) if path else DEFAULT_ACCOUNTS
     return [normalize_account(account) for account in raw]
 
 
@@ -113,40 +119,8 @@ def _tweet_id_int(tweet_id: str) -> int:
 def _copy_state(state: dict[str, Any] | None) -> dict[str, Any]:
     out = deepcopy(state or {})
     out.setdefault("last_seen_ids", {})
-    out.setdefault("user_ids", {})
     out.setdefault("updated_at", None)
     return out
-
-
-def resolve_account_users(
-    accounts: list[dict[str, str]],
-    state: dict[str, Any] | None,
-    lookup_users: Callable[[list[str]], dict[str, dict[str, Any]]],
-) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
-    next_state = _copy_state(state)
-    cached_ids = next_state["user_ids"]
-    users: dict[str, dict[str, Any]] = {}
-    missing: list[str] = []
-
-    for account in accounts:
-        key = account["key"]
-        cached_id = str(cached_ids.get(key) or "").strip()
-        if cached_id:
-            users[key] = {"id": cached_id, "username": account["username"]}
-        else:
-            missing.append(account["username"])
-
-    if missing:
-        looked_up = lookup_users(missing)
-        for username, user in looked_up.items():
-            key = account_key(username)
-            if not user.get("id"):
-                continue
-            users[key] = user
-            cached_ids[key] = str(user["id"])
-
-    next_state["updated_at"] = datetime.now(timezone.utc).isoformat()
-    return users, next_state
 
 
 def detect_new_tweets(
@@ -188,6 +162,70 @@ def detect_new_tweets(
 
     state["updated_at"] = datetime.now(timezone.utc).isoformat()
     return candidates, state
+
+
+def configured_free_feed_base_urls() -> list[str]:
+    raw = os.getenv("X_TRIGGER_FEED_BASE_URLS") or os.getenv("RSSHUB_BASE_URLS")
+    if raw:
+        return [item.strip().rstrip("/") for item in raw.split(",") if item.strip()]
+    return DEFAULT_FREE_FEED_BASE_URLS
+
+
+def build_free_feed_url(base_url: str, username: str, max_results: int = 1) -> str:
+    base = base_url.rstrip("/")
+    handle = quote(username.strip().lstrip("@"), safe="")
+    limit = max(1, int(max_results or 1))
+    return f"{base}/twitter/user/{handle}/excludeReplies=1&includeRts=0?limit={limit}"
+
+
+def _first_text(element: ET.Element, names: list[str]) -> str:
+    for name in names:
+        found = element.find(name)
+        if found is not None and found.text:
+            return found.text.strip()
+    return ""
+
+
+def _clean_feed_text(text: str) -> str:
+    text = unescape(text or "")
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _status_id_from_url(url: str) -> str:
+    match = re.search(r"/status(?:es)?/(\d+)", url or "")
+    return match.group(1) if match else ""
+
+
+def parse_feed_tweets(feed_xml: str, username: str) -> list[dict[str, Any]]:
+    root = ET.fromstring(feed_xml)
+    items = root.findall(".//item")
+    if not items:
+        items = root.findall(".//{http://www.w3.org/2005/Atom}entry")
+    tweets: list[dict[str, Any]] = []
+    for item in items:
+        link = _first_text(item, ["link"])
+        if not link:
+            atom_link = item.find("{http://www.w3.org/2005/Atom}link")
+            if atom_link is not None:
+                link = str(atom_link.attrib.get("href") or "")
+        guid = _first_text(item, ["guid", "id"])
+        tweet_id = _status_id_from_url(link) or _status_id_from_url(guid)
+        if not tweet_id:
+            continue
+        description = _first_text(item, ["description", "summary", "content"])
+        title = _first_text(item, ["title"])
+        text = _clean_feed_text(description) or _clean_feed_text(title)
+        tweets.append({
+            "id": tweet_id,
+            "text": text,
+            "url": link or f"https://x.com/{username}/status/{tweet_id}",
+            "created_at": _first_text(item, ["pubDate", "published", "updated"]),
+            "public_metrics": {},
+            "free_source": "rsshub",
+        })
+    return tweets
 
 
 def _safe_json_from_text(text: str) -> dict[str, Any]:
@@ -313,31 +351,33 @@ def call_google_model(prompt: str, json_mode: bool = False) -> str:
     raise last_error or RuntimeError("model endpoint returned no text")
 
 
-class XClient:
-    def __init__(self, bearer_token: str | None = None):
-        self.bearer_token = bearer_token or os.getenv("X_BEARER_TOKEN")
-        if not self.bearer_token:
-            raise RuntimeError("X_BEARER_TOKEN is required for trigger scanning")
+class FreeXFeedClient:
+    def __init__(self, base_urls: list[str] | None = None):
+        self.base_urls = [url.rstrip("/") for url in (base_urls or configured_free_feed_base_urls())]
+        if not self.base_urls:
+            raise RuntimeError("No free X feed base URLs configured")
 
-    def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
-        response = requests.get(
-            f"{X_API_BASE}{path}",
-            headers={"Authorization": f"Bearer {self.bearer_token}"},
-            params=params,
-            timeout=45,
-        )
-        if not response.ok:
-            raise RuntimeError(f"X API {path} {response.status_code}: {response.text[:300]}")
-        return response.json()
-
-    def lookup_users(self, usernames: list[str]) -> dict[str, dict[str, Any]]:
-        if not usernames:
-            return {}
-        users = self._get(
-            "/users/by",
-            {"usernames": ",".join(usernames), "user.fields": "username,name,verified"},
-        ).get("data", [])
-        return {account_key(user["username"]): user for user in users}
+    def fetch_account_tweets(self, account: dict[str, str], max_results: int = 1) -> list[dict[str, Any]]:
+        errors = []
+        for base_url in self.base_urls:
+            feed_url = build_free_feed_url(base_url, account["username"], max_results=max_results)
+            try:
+                response = requests.get(
+                    feed_url,
+                    timeout=45,
+                    headers={"User-Agent": "FirstLightAI/1.0 (+https://github.com/THEGREATCJPark/signal-ai)"},
+                )
+                if not response.ok:
+                    errors.append(f"{base_url}: {response.status_code}")
+                    continue
+                tweets = parse_feed_tweets(response.text, account["username"])
+                if tweets:
+                    return tweets[:max(1, int(max_results or 1))]
+                errors.append(f"{base_url}: empty feed")
+            except Exception as exc:
+                errors.append(f"{base_url}: {exc}")
+        print(f"[trigger] free feed failed for @{account['username']}: {'; '.join(errors)}", file=sys.stderr)
+        return []
 
     def fetch_recent_by_accounts(
         self,
@@ -346,26 +386,11 @@ class XClient:
         max_results: int = 5,
         state: dict[str, Any] | None = None,
     ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
-        users_by_key, next_state = resolve_account_users(accounts, state, self.lookup_users)
+        next_state = _copy_state(state)
         result: dict[str, list[dict[str, Any]]] = {}
         for account in accounts:
-            user = users_by_key.get(account["key"])
-            if not user:
-                print(f"[trigger] X user not found: @{account['username']}", file=sys.stderr)
-                result[account["username"]] = []
-                continue
-            payload = self._get(
-                f"/users/{user['id']}/tweets",
-                {
-                    "max_results": max(5, min(max_results, 100)),
-                    "exclude": "retweets,replies",
-                    "tweet.fields": "created_at,conversation_id,public_metrics,entities,referenced_tweets",
-                },
-            )
-            tweets = payload.get("data", []) or []
-            for tweet in tweets:
-                tweet["url"] = f"https://x.com/{account['username']}/status/{tweet['id']}"
-            result[account["username"]] = tweets
+            result[account["username"]] = self.fetch_account_tweets(account, max_results=max_results)
+        next_state["updated_at"] = datetime.now(timezone.utc).isoformat()
         return result, next_state
 
 
@@ -536,7 +561,7 @@ def run_scan(args: argparse.Namespace) -> int:
     accounts = filter_accounts_for_scope(load_accounts(args.accounts), args.scope)
     by_key = {account["key"]: account for account in accounts}
     previous_state = load_trigger_state(args.state)
-    tweets_by_account, lookup_state = XClient().fetch_recent_by_accounts(
+    tweets_by_account, lookup_state = FreeXFeedClient().fetch_recent_by_accounts(
         accounts,
         max_results=args.max_results,
         state=previous_state,

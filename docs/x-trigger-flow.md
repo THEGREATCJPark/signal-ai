@@ -5,29 +5,27 @@ First Light AI keeps the daily digest on the existing schedule and adds a fast p
 ## Flow
 
 1. Free/low-cost sources remain the main early-warning system: official blogs, changelogs, RSS feeds, HN, Reddit, arXiv, HuggingFace, GeekNews, and Discord ingest.
-2. `X Trigger Scan` is only the premium sensor. The scheduled run checks the tiny `auto` tier every 4 hours with `max_results=1`.
+2. `X Trigger Scan` uses free RSSHub-compatible X account feeds only. It does not call the official X API and does not require `X_BEARER_TOKEN`.
 3. Manual `workflow_dispatch` can scan broader scopes: `core`, `fast`, `scoop`, `oss`, or `all`.
-4. `scripts/x_trigger_scan.py` reads `config/x_trigger_accounts.json`, fetches recent original posts from X, and stores cursors in Supabase `pipeline_state` under `x_trigger_state`.
-5. X user ids are cached in the same state under `user_ids`, so repeated runs avoid paying user lookup costs unless a new account is added.
-6. On first run for an account, the scanner records the latest tweet as the baseline and does not create review issues. Manual `backfill=true` creates cards for the latest posts.
-7. For each new post, the scanner summarizes it with the same Google/Gemma style API used by the article pipeline. If the model key is missing or fails, it falls back to a literal summary from the tweet text.
-8. The scanner opens a GitHub Issue labeled `x-trigger` and `needs-review`. The issue body contains the review summary, source URL, original tweet text, and a hidden payload used by the approval workflow.
-9. CJ or HB reviews the issue. Comment `/approve-trigger`, `yes`, or `예` to publish. Comment `/reject-trigger`, `no`, or `아니오` to reject.
-10. `X Trigger Review` handles the issue comment. One approved comment from an allowed reviewer publishes the single trigger article through GitHub Actions and closes the issue.
+4. `scripts/x_trigger_scan.py` reads `config/x_trigger_accounts.json`, fetches RSS items from X account feed bridges, and stores cursors in Supabase `pipeline_state` under `x_trigger_state`.
+5. On first run for an account, the scanner records the latest tweet as the baseline and does not create review issues. Manual `backfill=true` creates cards for the latest posts.
+6. For each new post, the scanner summarizes it with the same Google/Gemma style API used by the article pipeline. If the model key is missing or fails, it falls back to a literal summary from the tweet text.
+7. The scanner opens a GitHub Issue labeled `x-trigger` and `needs-review`. The issue body contains the review summary, source URL, original tweet text, and a hidden payload used by the approval workflow.
+8. CJ or HB reviews the issue. Comment `/approve-trigger`, `yes`, or `예` to publish. Comment `/reject-trigger`, `no`, or `아니오` to reject.
+9. `X Trigger Review` handles the issue comment. One approved comment from an allowed reviewer publishes the single trigger article through GitHub Actions and closes the issue.
 
 ## Review Platform Choice
 
 GitHub Issues is the source of truth for approval. Telegram inline buttons would require a public webhook or polling service to receive callback queries, while GitHub issue comments are already a native Actions trigger. The scanner can still send an optional Telegram notification with the issue link by setting `TRIGGER_REVIEW_TELEGRAM_CHAT_ID`.
 
-## Cost Guardrails
+## Free Feed Guardrails
 
-The default scheduled X scan is intentionally small:
+The default scheduled X scan is intentionally modest to avoid hammering public RSS bridge instances:
 
 - Scope: `auto`
 - Accounts: `OpenAI`, `OpenAIDevs`, `AnthropicAI`, `GoogleDeepMind`
 - Schedule: every 4 hours
 - Results: `max_results=1`
-- User lookup: cached after the first successful run
 
 This keeps X as a fast but bounded signal. Broader account groups are manual by default:
 
@@ -40,7 +38,7 @@ This keeps X as a fast but bounded signal. Broader account groups are manual by 
 | `oss` | `auto`, `core`, `oss` | Open-source/local-model sweep |
 | `all` | every tier | Manual broad scan only |
 
-Do not raise the scheduled scope or `max_results` without setting a spending limit in the X Developer Console. X API reads are pay-per-use, so repeated broad polling can become expensive quickly.
+Do not raise the scheduled scope or `max_results` against public RSSHub instances. Self-host RSSHub and set `X_TRIGGER_FEED_BASE_URLS` if broader automated scans become necessary.
 
 ## Required Settings
 
@@ -48,7 +46,6 @@ The scheduled scan and `issue_comment` approval workflows must exist on the repo
 
 Secrets:
 
-- `X_BEARER_TOKEN`: read-only X API bearer token for scanning watched account timelines.
 - `GOOGLE_API_KEY` or `GOOGLE_API_KEYS`: summary model key(s).
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`: cursor state and publish log.
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`: Telegram publishing.
@@ -58,6 +55,7 @@ Optional variables:
 
 - `TRIGGER_REVIEWERS`: comma-separated GitHub usernames allowed to approve. If empty, GitHub `OWNER`, `MEMBER`, and `COLLABORATOR` commenters are allowed.
 - `TRIGGER_PUBLISH_PLATFORM`: `telegram`, `x`, or `both`. Defaults to `both`.
+- `X_TRIGGER_FEED_BASE_URLS`: comma-separated RSSHub-compatible base URLs. Defaults to public instances; self-hosted RSSHub is recommended for reliability.
 
 Optional secret:
 

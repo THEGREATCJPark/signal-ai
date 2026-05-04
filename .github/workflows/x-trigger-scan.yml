@@ -52,7 +52,7 @@ jobs:
     timeout-minutes: 15
     env:
       USE_DB: "true"
-      X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+      X_TRIGGER_FEED_BASE_URLS: ${{ vars.X_TRIGGER_FEED_BASE_URLS }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       GOOGLE_API_KEYS: ${{ secrets.GOOGLE_API_KEYS }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

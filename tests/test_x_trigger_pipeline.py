@@ -26,26 +26,35 @@ class XTriggerScanTest(unittest.TestCase):
             ["OpenAI", "testingcatalog", "steph_palazzolo"],
         )
 
-    def test_resolve_user_ids_reuses_cached_ids_and_marks_new_users(self):
-        from scripts.x_trigger_scan import normalize_account, resolve_account_users
+    def test_build_free_feed_url_uses_rsshub_route_without_x_api(self):
+        from scripts.x_trigger_scan import build_free_feed_url
 
-        accounts = [
-            normalize_account({"username": "OpenAI", "tier": "auto"}),
-            normalize_account({"username": "sama", "tier": "core"}),
-        ]
-        state = {"user_ids": {"openai": "42"}}
-        lookups = []
+        url = build_free_feed_url("https://rsshub.app", "OpenAI", max_results=1)
 
-        def fake_lookup(usernames):
-            lookups.append(usernames)
-            return {"sama": {"id": "99", "username": "sama"}}
+        self.assertEqual(
+            url,
+            "https://rsshub.app/twitter/user/OpenAI/excludeReplies=1&includeRts=0?limit=1",
+        )
 
-        users, next_state = resolve_account_users(accounts, state, fake_lookup)
+    def test_parse_rsshub_tweets_extracts_status_id_and_clean_text(self):
+        from scripts.x_trigger_scan import parse_feed_tweets
 
-        self.assertEqual(users["openai"]["id"], "42")
-        self.assertEqual(users["sama"]["id"], "99")
-        self.assertEqual(lookups, [["sama"]])
-        self.assertEqual(next_state["user_ids"]["sama"], "99")
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0"><channel>
+          <item>
+            <title><![CDATA[OpenAI: Introducing a new API]]></title>
+            <link>https://x.com/OpenAI/status/12345</link>
+            <guid>https://x.com/OpenAI/status/12345</guid>
+            <pubDate>Mon, 04 May 2026 12:00:00 GMT</pubDate>
+            <description><![CDATA[<p>Introducing <b>a new API</b></p>]]></description>
+          </item>
+        </channel></rss>"""
+
+        tweets = parse_feed_tweets(xml, "OpenAI")
+
+        self.assertEqual(tweets[0]["id"], "12345")
+        self.assertEqual(tweets[0]["url"], "https://x.com/OpenAI/status/12345")
+        self.assertEqual(tweets[0]["text"], "Introducing a new API")
 
     def test_bootstrap_accounts_records_latest_without_candidates(self):
         from scripts.x_trigger_scan import account_key, detect_new_tweets

@@ -56,6 +56,7 @@ Optional variables:
 - `TRIGGER_REVIEWERS`: comma-separated GitHub usernames allowed to approve. If empty, GitHub `OWNER`, `MEMBER`, and `COLLABORATOR` commenters are allowed.
 - `TRIGGER_PUBLISH_PLATFORM`: `telegram`, `x`, or `both`. Defaults to `both`.
 - `X_TRIGGER_FEED_BASE_URLS`: comma-separated RSSHub-compatible base URLs. Defaults to public instances; self-hosted RSSHub is recommended for reliability.
+- `X_TRIGGER_FEED_TIMEOUT_SECONDS`: per-instance feed timeout. Defaults to `15`.
 
 Optional secret:
 

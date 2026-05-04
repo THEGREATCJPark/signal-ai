@@ -32,11 +32,12 @@ ISSUE_LABEL_COLORS = {
 }
 ISSUE_PAYLOAD_PREFIX = "x-trigger-payload:"
 DEFAULT_FREE_FEED_BASE_URLS = [
-    "https://rsshub.app",
-    "https://rss.detools.dev",
-    "https://rsshub.rssforever.com",
     "https://rsshub.pseudoyu.com",
+    "https://rsshub.app",
+    "https://rsshub.rssforever.com",
+    "https://rss.detools.dev",
 ]
+FREE_FEED_TIMEOUT_SECONDS = float(os.getenv("X_TRIGGER_FEED_TIMEOUT_SECONDS", "15"))
 GEMINI_MODEL = os.getenv("TRIGGER_SUMMARY_MODEL", "gemma-4-26b-a4b-it")
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -365,7 +366,7 @@ class FreeXFeedClient:
             try:
                 response = requests.get(
                     feed_url,
-                    timeout=45,
+                    timeout=FREE_FEED_TIMEOUT_SECONDS,
                     headers={"User-Agent": "FirstLightAI/1.0 (+https://github.com/THEGREATCJPark/signal-ai)"},
                 )
                 if not response.ok:

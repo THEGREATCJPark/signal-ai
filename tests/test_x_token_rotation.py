@@ -42,6 +42,7 @@ class XTokenRotationTest(unittest.TestCase):
 
         self.assertEqual(result, {"id": "1"})
         get_access_token.assert_not_called()
+        self.assertEqual(post.call_args.args[0], "https://api.twitter.com/2/tweets")
         self.assertIsNotNone(post.call_args.kwargs["auth"])
         self.assertNotIn("Authorization", post.call_args.kwargs.get("headers", {}))
 

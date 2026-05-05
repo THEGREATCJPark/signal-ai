@@ -22,7 +22,7 @@ X_API_SECRET = os.getenv("X_API_SECRET")
 X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
-TWEET_URL = "https://api.x.com/2/tweets"
+TWEET_URL = os.getenv("X_TWEET_URL", "https://api.twitter.com/2/tweets")
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
 
 
@@ -115,6 +115,7 @@ def _oauth1_auth() -> OAuth1:
 def post_tweet(text: str) -> dict:
     """Post a tweet. OAuth 1.0a preferred; OAuth 2.0 fallback."""
     if _has_oauth1_credentials():
+        print("[x] Auth mode: OAuth 1.0a User Context")
         resp = requests.post(
             TWEET_URL,
             auth=_oauth1_auth(),
@@ -123,6 +124,7 @@ def post_tweet(text: str) -> dict:
             timeout=30,
         )
     else:
+        print("[x] Auth mode: OAuth 2.0 refresh-token fallback")
         access_token = _get_access_token()
         resp = requests.post(
             TWEET_URL,

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: "Account scope. Use all only for manual backfill/review runs."
+        description: "Account scope. Scheduled runs scan all configured accounts."
         required: false
         default: "auto"
         type: choice

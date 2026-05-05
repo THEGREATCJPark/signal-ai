@@ -61,9 +61,12 @@ def normalize_post(payload: dict[str, Any]) -> dict[str, Any]:
 def _flush(batch: list[dict[str, Any]], counts: Counter[str]) -> int:
     if not batch:
         return 0
-    rows = list(batch)
-    inserted = upsert_posts(rows)
+    deduped: dict[tuple[str, str], dict[str, Any]] = {}
     for row in batch:
+        deduped[(row["source"], row["source_id"])] = row
+    rows = list(deduped.values())
+    inserted = upsert_posts(rows)
+    for row in rows:
         counts[row["source"]] += 1
     batch.clear()
     return inserted

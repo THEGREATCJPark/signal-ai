@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 DEFAULT_INPUT = os.path.join(ROOT, "docs", "articles.json")
-DEFAULT_SOURCE = os.getenv("FIRST_LIGHT_PUBLISH_SOURCE", "file").strip().lower() or "file"
+DEFAULT_SOURCE = os.getenv("AI_FRONTIER_PUBLISH_SOURCE", "file").strip().lower() or "file"
 
 
 def load_raw_articles(source: str, input_path: str | os.PathLike) -> dict | list:
@@ -92,7 +92,7 @@ def normalize_articles(raw) -> list[dict]:
 def main():
     parser = argparse.ArgumentParser(description="AI 최전방 뉴스 발행")
     parser.add_argument("--source", choices=["file", "supabase"], default=DEFAULT_SOURCE,
-                        help="기사 입력 소스 (기본: FIRST_LIGHT_PUBLISH_SOURCE 또는 file)")
+                        help="기사 입력 소스 (기본: AI_FRONTIER_PUBLISH_SOURCE 또는 file)")
     parser.add_argument("--input", default=DEFAULT_INPUT,
                         help="입력 JSON 파일 경로 (기본: docs/articles.json)")
     parser.add_argument("--dry-run", action="store_true",

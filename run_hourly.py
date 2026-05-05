@@ -26,7 +26,7 @@ PAGES_ARTICLES_PATH = ROOT / "articles.json"
 EXPORTS_ARTICLES_DIR = ROOT / "exports" / "articles"
 JOURNAL_NAME = "AI 최전방 뉴스"
 DAILY_SUMMARY_FALLBACK_TITLE = "오늘의 AI 업데이트"
-PUBLISH_BRANCH = os.environ.get("FIRST_LIGHT_PUBLISH_BRANCH", "main")
+PUBLISH_BRANCH = os.environ.get("AI_FRONTIER_PUBLISH_BRANCH", "main")
 MODEL = "gemma-4-26b-a4b-it"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 KST = timezone(timedelta(hours=9))

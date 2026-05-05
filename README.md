@@ -1,130 +1,124 @@
 # AI 최전방 뉴스
 
-Discord chat-to-news automation for AI frontier updates.
+AI frontier news pipeline for daily publishing plus fast X-trigger review.
 
-This branch contains the local-first production path:
+`main` is the production branch. The old `dev`/PR #14 line contains useful
+experiments, but this branch now carries the selected production pieces:
+daily digest publishing, local-only crawler handoff, Supabase ingestion, and
+GitHub Issue based trigger approval.
 
-- export new Discord messages since the last successful run
-- preserve raw chat locally for downstream DB ingestion
-- scan message chunks with Gemma 4 26B
-- keep rumors instead of dropping them, tagged as `category=rumor`
-- deduplicate only exact same facts/events
-- re-rank active articles into `top`, `main`, and `side`
-- publish the updated static site assets
-- write daily new-article JSON files for other local pipelines
+## Production Flow
 
-Live preview:
+| Time (KST) | Flow | Runtime |
+| --- | --- | --- |
+| 07:00 | Local public/Discord crawl, bundle handoff to GitHub Actions, Supabase `posts` ingest | Local WSL + `.github/workflows/local-crawl-handoff.yml` |
+| 08:00 | Daily article generation from local Discord pipeline | Local WSL `run_cron_task.sh` |
+| 08:30 | Publish daily article content to Telegram and X | `.github/workflows/daily_publish.yml` |
+| Hourly `:17` | Scan watched X accounts and open review issues | `.github/workflows/x-trigger-scan.yml` |
+| On issue comment | Approve/reject a trigger candidate and publish if approved | `.github/workflows/x-trigger-review.yml` |
 
-- Main: https://htmlpreview.github.io/?https://gist.githubusercontent.com/pineapplesour/a9a6b3f417be5221efd2969fe8da85ed/raw/index.html
-- Archive: https://htmlpreview.github.io/?https://gist.githubusercontent.com/pineapplesour/a9a6b3f417be5221efd2969fe8da85ed/raw/archive.html
+Daily publish posts the article content only. It does not prepend any brand
+banner.
 
-## Runtime
+## X Trigger Pipeline
 
-Windows Task Scheduler owns the daily 08:00 KST local generation trigger:
+The trigger path uses free public feed crawling only. It scans
+`config/x_trigger_accounts.json`, summarizes new high-signal posts with the
+same AI tooling used by the existing pipeline, then creates a GitHub Issue for
+human review.
 
-```text
-Task name: AI 최전방 뉴스 Daily
-Schedule: daily at 08:00 KST
-Action: wsl.exe -e bash -lc 'cd /home/pineapple/bunjum2/signal && ./run_cron.sh >> /tmp/signal_daily.log 2>&1'
-```
+Review comments:
 
-The scheduled entrypoint is:
+- `yes`, `approve`, `승인`, `/approve`: publish to the configured platform
+- `no`, `reject`, `거절`, `/reject`: close without publishing
 
-```bash
-/home/pineapple/bunjum2/signal/run_cron.sh
-```
-
-The wrapper loads only the local `DISCORD_TOKEN` from `discord_export_config.env`, then runs:
-
-```bash
-/home/pineapple/miniconda3/bin/python3 run_hourly.py
-```
-
-`discord_export_config.env` is intentionally ignored and must never be committed.
-
-## Public Files
-
-- `docs/index.html`: front page
-- `docs/archive.html`: full article archive
-- `docs/articles.json`: accumulated public article state
-- `exports/articles/YYYY-MM-DD.json`: per-day new article export for other local pipelines
-
-## Discord Exporter
-
-The repository includes wrapper code, not the exporter binary:
-
-- `discord_export_linux.py` calls an installed `DiscordChatExporter.Cli`
-- `discord_export_text_only.py` supports the Windows/PowerShell path
-- `run_hourly.py` chooses the wrapper for the current environment
-
-Install or provide the actual exporter locally. Do not commit binaries, tokens, raw exports, or local DB files.
-
-## Security Boundary
-
-Never commit:
-
-- `discord_export_config.env`
-- `*.env`
-- `memory/`
-- raw Discord exports
-- SQLite DB files
-- generated DB backups
-
-The old planning document from the previous repository direction is preserved at `docs/legacy/chanjoon-original-plan.md`.
-
-## Supabase Ingest Path (new — cloud-ready)
-
-A parallel path to the local SQLite flow lets crawlers push raw posts to
-Supabase so that scheduling can move to GitHub Actions later without changing
-the JSONL contract.
-
-- Schema: `migrations/001..012/*.sql` — already applied live on project
-  `qyckjkidscpiyrdzqxoc`. Supabase migrations track records each one.
-- Tables: `posts` (raw, service_role only), `articles` (public read),
-  `publish_log`, `pipeline_state` (service_role), `ingest_runs` (observability).
-- Keepalive: pg_cron `signal_keepalive_daily` at 03:17 UTC prevents free-tier
-  auto-pause.
-- Write contract: `docs/ingest-spec.md` — required fields, scoring keys,
-  RLS matrix, and the upsert rule.
-- Two entrypoints read the same JSONL:
-  - `db/supabase_ingest.py` → Supabase `posts` (needs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`)
-  - `db/ingest.py` → local SQLite (unchanged; existing cron keeps working)
-- One-time backfill: `scripts/backfill_sqlite_to_supabase.py --db data/signal.db`
-  (moves `.db` → `.bak` on success).
-
-GitHub Secrets already registered on this repo: `SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`. Additional Telegram/X/LLM
-secrets can be added when the corresponding workflows land.
-
-## X Publishing Auth
-
-Daily X publishing prefers OAuth 1.0a user-context credentials:
+Publishing uses OAuth 1.0a X credentials first:
 
 - `X_API_KEY`
 - `X_API_SECRET`
 - `X_ACCESS_TOKEN`
 - `X_ACCESS_TOKEN_SECRET`
 
-These credentials do not use OAuth 2.0 refresh-token rotation, so they are the
-recommended path for scheduled publishing.
+OAuth 2.0 secrets may remain registered, but they are fallback-only:
+`X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_REFRESH_TOKEN`.
 
-OAuth 2.0 remains as a fallback. If the OAuth 1.0a credentials are incomplete,
-the publisher uses `X_CLIENT_ID` + `X_CLIENT_SECRET` + `X_REFRESH_TOKEN`; when X
-returns a rotated refresh token, the workflow stores it in Supabase
-`pipeline_state` under `x_oauth2_refresh_token`.
+## Watched X Accounts
 
-## Daily Schedule (KST, provisional)
+The requested priority groups are included in `config/x_trigger_accounts.json`:
 
-| 시간 | 무엇 | 담당 | 트리거 |
-|---|---|---|---|
-| 07:00 KST | 크롤 → Supabase `posts` 적재 | HB | GitHub Actions (`on: schedule`) |
-| 08:30 KST | Supabase `articles` → Telegram + X 발행 | CJ | GitHub Actions (`daily_publish.yml`) |
+- early detection: `testingcatalog`, `btibor91`
+- OpenAI: `OpenAI`, `OpenAIDevs`, `sama`, `gdb`, `polynoamial`
+- Anthropic/Claude: `AnthropicAI`, `claudeai`, `ClaudeDevs`, `DarioAmodei`, `alexalbert__`
+- Google/Gemini: `GoogleDeepMind`, `GoogleAI`, `GeminiApp`, `demishassabis`, `JeffDean`
+- benchmarks: `arena`, `ArtificialAnlys`, `METR_Evals`
+- interpretation/practice: `karpathy`, `simonw`
+- fast signal, scoop, and open-source/local-model accounts from the expanded watchlist
 
-두 시간 모두 임시. 적재/발행 품질 지켜보면서 최적 시간은 추후 조정.
+Scheduled trigger scans run with `SCHEDULED_SCOPE=all`, so the full configured
+watchlist is checked hourly. Manual runs can still choose a narrower scope.
 
-## 협업 룰
+## Local Crawler Handoff
 
-- **출시 전 (현재)**: `main`에 직접 push해서 빠르게 이터레이션. 자동 발행 커밋(`chore: publish AI 최전방 뉴스 ...`)과 사람 작업 모두 main 직행 OK.
-- **출시 후**: 모든 **사람 작업(크롤러 변경, 워크플로우 추가/수정, 스키마 변경, 발행 포맷 수정 등)**은 먼저 `dev`에 푸시 → dev에서 돌려보고 문제 없으면 `main`으로 PR/머지. 로컬 cron/스케줄이 만들어내는 **자동 발행 커밋은 계속 `main` 직행**.
+Crawler execution stays local. GitHub Actions receives only a short-lived
+bundle URL and performs the Supabase upsert with repository secrets.
 
-즉, 출시 이후에는 사람 손이 닿는 변경만 `dev → main` 게이트를 통과.
+Local commands:
+
+```bash
+./run_cron_task.sh
+./run_local_crawl_handoff_task.sh
+python scripts/local_crawl_ingest.py --skip-crawl data/crawled/example.jsonl
+python scripts/local_discord_ingest.py --skip-crawl data/crawled/discord-example.jsonl
+```
+
+Useful environment overrides:
+
+- `AI_FRONTIER_PYTHON`: Python interpreter for local shell wrappers
+- `AI_FRONTIER_PUBLISH_BRANCH`: branch used by the local publisher commit/push path
+- `AI_FRONTIER_PUBLISH_SOURCE`: default source for `scripts/run_publish.py`
+- `DISCORD_EXPORT_CONFIG`: local path to `discord_export_config.env`
+
+`discord_export_config.env`, raw exports, local DB files, and token-bearing
+files must stay untracked.
+
+## GitHub Secrets And Variables
+
+Required secrets:
+
+- Supabase: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
+- Telegram: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`
+- X OAuth 1.0a: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`
+- LLM: `GOOGLE_API_KEY` or `GOOGLE_API_KEYS`
+- Local handoff: `LOCAL_CRAWL_BUNDLE_URL`, `LOCAL_CRAWL_BATCH_SIZE`
+
+Useful variables:
+
+- `X_TRIGGER_FEED_MODE`
+- `X_TRIGGER_FEED_BASE_URLS`
+- `X_TRIGGER_NITTER_INSTANCES`
+- `NITTER_INSTANCES`
+- `TRIGGER_REVIEWERS`
+- `TRIGGER_PUBLISH_PLATFORM`
+
+## Important Files
+
+- `.github/workflows/daily_publish.yml`: 08:30 KST Telegram/X daily publish
+- `.github/workflows/x-trigger-scan.yml`: hourly watched-account scan
+- `.github/workflows/x-trigger-review.yml`: issue comment approval handler
+- `.github/workflows/local-crawl-handoff.yml`: local bundle ingestion into Supabase
+- `scripts/x_trigger_scan.py`: feed crawling, summarization, issue creation
+- `scripts/x_trigger_review.py`: approval parsing and trigger publishing
+- `scripts/dispatch_local_crawl_handoff.py`: local tunnel and workflow trigger
+- `db/supabase_ingest.py`: JSONL to Supabase `posts`
+
+## Verification
+
+```bash
+python -m unittest discover -s tests
+python -m compileall -q bot crawlers db scripts tests run_hourly.py discord_export_linux.py
+git diff --check
+```
+
+The operational target is simple: `main` should be safe to run as production,
+while `dev` remains a legacy/experimental reference rather than the deployment
+source of truth.

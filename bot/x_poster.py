@@ -1,8 +1,13 @@
 import json
 import os
+import sys
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 load_dotenv()
 
@@ -10,9 +15,45 @@ load_dotenv()
 X_CLIENT_ID = os.getenv("X_CLIENT_ID")
 X_CLIENT_SECRET = os.getenv("X_CLIENT_SECRET")
 X_REFRESH_TOKEN = os.getenv("X_REFRESH_TOKEN")
+X_REFRESH_TOKEN_STATE_KEY = os.getenv("X_REFRESH_TOKEN_STATE_KEY", "x_oauth2_refresh_token")
 
 TWEET_URL = "https://api.x.com/2/tweets"
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
+
+
+def _load_stored_refresh_token() -> str | None:
+    """Load latest rotated X refresh token from mutable pipeline state."""
+    if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
+        return None
+    try:
+        from db.articles import load_pipeline_state
+
+        state = load_pipeline_state(X_REFRESH_TOKEN_STATE_KEY) or {}
+    except Exception as exc:
+        print(f"[x] refresh token state load skipped: {exc}")
+        return None
+    token = state.get("refresh_token")
+    return str(token).strip() if token else None
+
+
+def _save_stored_refresh_token(refresh_token: str) -> None:
+    """Persist rotated X refresh token for the next scheduled run."""
+    if not refresh_token:
+        return
+    if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
+        print("[x] WARNING: Supabase is not configured; cannot persist rotated refresh_token")
+        return
+    from datetime import datetime, timezone
+    from db.articles import save_pipeline_state
+
+    save_pipeline_state(
+        X_REFRESH_TOKEN_STATE_KEY,
+        {
+            "refresh_token": refresh_token,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    print("[x] rotated refresh_token persisted to Supabase pipeline_state")
 
 
 def _get_access_token() -> str:
@@ -26,13 +67,14 @@ def _get_access_token() -> str:
     invalid_request)를 식별 가능하게 하고, 새 refresh_token을 stdout에 출력해 수동
     회전이 가능하게 한다. (영속화는 다음 단계: Supabase pipeline_state 권장.)
     """
-    if not X_CLIENT_ID or not X_REFRESH_TOKEN:
+    refresh_token = _load_stored_refresh_token() or X_REFRESH_TOKEN
+    if not X_CLIENT_ID or not refresh_token:
         raise RuntimeError("X_CLIENT_ID 또는 X_REFRESH_TOKEN 환경변수 없음")
 
     auth = (X_CLIENT_ID, X_CLIENT_SECRET) if X_CLIENT_SECRET else None
     payload = {
         "grant_type": "refresh_token",
-        "refresh_token": X_REFRESH_TOKEN,
+        "refresh_token": refresh_token,
     }
     # Public client(secret 없음): client_id를 body로 함께 보내야 함.
     if not X_CLIENT_SECRET:
@@ -45,9 +87,8 @@ def _get_access_token() -> str:
 
     data = resp.json()
     new_refresh = data.get("refresh_token")
-    if new_refresh and new_refresh != X_REFRESH_TOKEN:
-        print("[x] WARNING: refresh_token rotated. Update GH Secret X_REFRESH_TOKEN to:")
-        print(f"[x] NEW_REFRESH_TOKEN={new_refresh}")
+    if new_refresh and new_refresh != refresh_token:
+        _save_stored_refresh_token(new_refresh)
     return data["access_token"]
 
 

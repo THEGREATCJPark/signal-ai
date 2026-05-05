@@ -96,6 +96,20 @@ GitHub Secrets already registered on this repo: `SUPABASE_URL`,
 `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`. Additional Telegram/X/LLM
 secrets can be added when the corresponding workflows land.
 
+## X Token Rotation
+
+X OAuth 2.0 access tokens are short lived. The initial refresh token must be
+issued with `offline.access`, and X may return a new `refresh_token` whenever
+the workflow exchanges it for an access token. The publisher now stores the
+latest rotated refresh token in Supabase `pipeline_state` under
+`x_oauth2_refresh_token`; `X_REFRESH_TOKEN` is only the bootstrap fallback.
+
+If the token endpoint returns `invalid_request` or `invalid_grant`, the stored
+token and the fallback secret are already invalid. Re-authorize the X app once,
+save the new refresh token to the `X_REFRESH_TOKEN` GitHub Secret, then run the
+publish workflow once. After that, the workflow keeps the rotated token in
+Supabase for daily runs.
+
 ## Daily Schedule (KST, provisional)
 
 | 시간 | 무엇 | 담당 | 트리거 |

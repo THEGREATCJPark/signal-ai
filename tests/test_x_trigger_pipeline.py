@@ -464,12 +464,15 @@ class XTriggerReviewTest(unittest.TestCase):
         self.assertIn("X_TWEET_URL: https://api.twitter.com/2/tweets", workflow)
 
     def test_review_command_parses_english_and_korean_commands(self):
-        from scripts.x_trigger_review import parse_review_command, reviewer_is_allowed
+        from scripts.x_trigger_review import parse_review_command, parse_review_platform, reviewer_is_allowed
 
         for command in ("yes", "y", "예", "ㅇ", "approve", "승인", "/approve", "/approve-trigger"):
             self.assertEqual("approve", parse_review_command(command))
         for command in ("no", "n", "아니오", "아니요", "ㄴ", "reject", "거절", "/reject", "/reject-trigger"):
             self.assertEqual("reject", parse_review_command(command))
+        self.assertEqual("x", parse_review_platform("/approve-trigger x"))
+        self.assertEqual("telegram", parse_review_platform("승인 telegram"))
+        self.assertIsNone(parse_review_platform("yes"))
         self.assertTrue(reviewer_is_allowed("hb", "COLLABORATOR", []))
         self.assertFalse(reviewer_is_allowed("drive-by", "NONE", []))
 

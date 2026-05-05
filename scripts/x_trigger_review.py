@@ -23,6 +23,16 @@ load_dotenv()
 APPROVE_COMMANDS = {"/approve-trigger", "/approve", "approve", "yes", "y", "예", "ㅇ", "승인"}
 REJECT_COMMANDS = {"/reject-trigger", "/reject", "reject", "no", "n", "아니오", "아니요", "ㄴ", "거절"}
 DEFAULT_ALLOWED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+PLATFORM_ALIASES = {
+    "telegram": "telegram",
+    "텔레그램": "telegram",
+    "x": "x",
+    "twitter": "x",
+    "트위터": "x",
+    "both": "both",
+    "둘다": "both",
+    "전체": "both",
+}
 
 
 def parse_review_command(comment_body: str) -> str | None:
@@ -35,6 +45,22 @@ def parse_review_command(comment_body: str) -> str | None:
             return "approve"
         if first in REJECT_COMMANDS:
             return "reject"
+    return None
+
+
+def parse_review_platform(comment_body: str) -> str | None:
+    for raw_line in comment_body.splitlines():
+        parts = raw_line.strip().lower().split()
+        if not parts:
+            continue
+        first = parts[0]
+        if first not in APPROVE_COMMANDS and first not in REJECT_COMMANDS:
+            continue
+        for token in parts[1:]:
+            normalized = PLATFORM_ALIASES.get(token.strip())
+            if normalized:
+                return normalized
+        return None
     return None
 
 
@@ -198,7 +224,8 @@ def handle_event(event: dict[str, Any], *, platform: str = "both", dry_run: bool
         return 0
 
     candidate = extract_candidate_from_issue_body(str(issue.get("body") or ""))
-    published = publish_trigger_candidate(candidate, platform=platform, dry_run=dry_run)
+    requested_platform = parse_review_platform(str(comment.get("body") or "")) or platform
+    published = publish_trigger_candidate(candidate, platform=requested_platform, dry_run=dry_run)
     client.add_labels(issue_number, ["trigger-approved"])
     client.add_comment(
         issue_number,

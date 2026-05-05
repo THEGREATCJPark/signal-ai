@@ -87,7 +87,7 @@ jobs:
             SOURCE=supabase
             PLATFORM=both
             DRY_RUN=false
-            FORCE=false
+            FORCE=true
             LIMIT=0
           else
             SOURCE="${{ github.event.inputs.source || 'supabase' }}"

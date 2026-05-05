@@ -23,6 +23,9 @@ load_dotenv()
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8")
 STATE_KEY = "x_trigger_state"
 LOCAL_STATE_PATH = ROOT / "data" / "x_trigger_state.json"
 ISSUE_LABELS = ["x-trigger", "needs-review"]
@@ -149,6 +152,7 @@ def detect_new_tweets(
     previous_state: dict[str, Any] | None,
     *,
     bootstrap: bool = False,
+    force_latest: bool = False,
     include_replies: bool = False,
     include_retweets: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -168,7 +172,7 @@ def detect_new_tweets(
         newest = ordered[-1]["id"] if ordered else None
         previous = str(last_seen.get(key) or "")
 
-        if not previous and newest and not bootstrap:
+        if not previous and newest and not bootstrap and not force_latest:
             last_seen[key] = str(newest)
             continue
 
@@ -176,7 +180,7 @@ def detect_new_tweets(
             tid = str(tweet.get("id") or "")
             if not tid:
                 continue
-            if previous and _tweet_id_int(tid) <= _tweet_id_int(previous):
+            if previous and not force_latest and _tweet_id_int(tid) <= _tweet_id_int(previous):
                 continue
             kind = str(tweet.get("tweet_kind") or "post").lower()
             if kind == "reply" and not include_replies:
@@ -305,12 +309,16 @@ def _safe_json_from_text(text: str) -> dict[str, Any]:
 
 def fallback_summary(tweet: dict[str, Any], account: dict[str, Any]) -> dict[str, str]:
     text = " ".join(str(tweet.get("text") or "").split())
-    title = text[:54].rstrip()
-    if len(text) > 54:
-        title += "..."
-    if not title:
-        title = f"@{account['username']} 새 게시글"
-    body = text or "원문 텍스트가 비어 있습니다."
+    username = str(account.get("username") or "x").strip()
+    title = f"@{username} 새 X 게시글"
+    excerpt = text[:420].rstrip()
+    if len(text) > 420:
+        excerpt += "..."
+    body = (
+        "AI 요약을 생성하지 못했습니다. 검수자는 원문을 확인한 뒤 승인 여부를 판단하세요."
+        if not excerpt
+        else f"AI 요약을 생성하지 못했습니다. 검수자는 아래 원문 내용을 확인한 뒤 승인 여부를 판단하세요.\n\n원문: {excerpt}"
+    )
     if len(body) > 500:
         body = body[:497].rstrip() + "..."
     return {
@@ -373,14 +381,17 @@ def summarize_tweet(
 
 
 def _load_google_keys() -> list[str]:
+    keys: list[str] = []
     for env_name in ("GOOGLE_API_KEYS", "GEMINI_API_KEYS"):
         raw = os.getenv(env_name)
         if raw:
-            return [key.strip() for key in raw.split(",") if key.strip()]
+            keys.extend(key.strip() for key in raw.split(",") if key.strip())
     for env_name in ("GOOGLE_API_KEY", "GEMINI_API_KEY"):
         raw = os.getenv(env_name)
         if raw:
-            return [raw.strip()]
+            keys.append(raw.strip())
+    if keys:
+        return keys
     key_file = Path.home() / ".config" / "legal_evidence_rag" / "keys.env"
     if key_file.exists():
         for line in key_file.read_text(encoding="utf-8").splitlines():
@@ -518,7 +529,7 @@ def build_issue_body(candidate: dict[str, Any]) -> str:
     tweet = candidate["tweet"]
     summary = candidate["summary"]
     recommended = f"{summary.get('body', '').strip()}\n\n{tweet.get('url', '')}".strip()
-    return f"""## Trigger review
+    return f"""## X 트리거 검수
 
 **계정:** @{account['username']}
 **분류:** {account.get('group', '')} / {account.get('category', '')} / {account.get('tier', '')}
@@ -612,7 +623,7 @@ def ensure_github_labels(labels: list[str], *, token: str, repo: str) -> None:
             json={
                 "name": label,
                 "color": ISSUE_LABEL_COLORS.get(label, "ededed"),
-                "description": "AI 최전방 뉴스 X trigger workflow",
+                "description": "AI 최전방 뉴스 X 트리거 검수",
             },
             timeout=20,
         )
@@ -626,7 +637,7 @@ def create_github_issue(candidate: dict[str, Any], *, token: str | None = None, 
     if not token or not repo:
         raise RuntimeError("GITHUB_TOKEN and GITHUB_REPOSITORY are required to create review issues")
     ensure_github_labels(ISSUE_LABELS, token=token, repo=repo)
-    title = f"[Trigger] @{candidate['account']['username']}: {candidate['summary']['title']}"
+    title = f"[X 트리거 검수] @{candidate['account']['username']}: {candidate['summary']['title']}"
     response = requests.post(
         f"https://api.github.com/repos/{repo}/issues",
         headers=_github_headers(token),
@@ -645,10 +656,10 @@ def maybe_notify_telegram(candidate: dict[str, Any], issue_url: str) -> None:
     if not chat_id or not token:
         return
     text = (
-        f"AI 최전방 뉴스 trigger review\n\n"
+        f"AI 최전방 뉴스 X 트리거 검수 요청\n\n"
         f"@{candidate['account']['username']}: {candidate['summary']['title']}\n"
         f"{candidate['summary']['body']}\n\n"
-        f"Review: {issue_url}"
+        f"검수 이슈: {issue_url}"
     )
     requests.post(
         f"https://api.telegram.org/bot{token}/sendMessage",
@@ -670,6 +681,7 @@ def run_scan(args: argparse.Namespace) -> int:
         tweets_by_account,
         lookup_state,
         bootstrap=args.backfill,
+        force_latest=getattr(args, "force_latest", False),
     )
     if not raw_candidates:
         print("[trigger] no new watched X posts")
@@ -708,6 +720,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--feed-mode", choices=["nitter", "rsshub", "nitter-first", "rsshub-first"],
                         default=DEFAULT_FEED_MODE)
     parser.add_argument("--backfill", action="store_true", help="Create candidates even for accounts without cursors")
+    parser.add_argument("--force-latest", action="store_true",
+                        help="Create candidates from fetched latest posts even if already seen")
     parser.add_argument("--dry-run", action="store_true")
     return parser
 

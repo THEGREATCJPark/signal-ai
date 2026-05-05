@@ -49,6 +49,23 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertIn("SCHEDULED_SCOPE: all", workflow)
         self.assertIn("--scope $SCOPE", workflow)
 
+    def test_trigger_scan_workflow_passes_gemini_keys_for_korean_summary(self):
+        workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")
+
+        self.assertIn("GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}", workflow)
+        self.assertIn("GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}", workflow)
+
+    def test_load_google_keys_collects_google_and_gemini_envs(self):
+        from scripts import x_trigger_scan
+
+        env = {
+            "GOOGLE_API_KEY": "bad-google",
+            "GEMINI_API_KEYS": "good-one,good-two",
+        }
+
+        with patch.dict("os.environ", env, clear=True):
+            self.assertEqual(["good-one", "good-two", "bad-google"], x_trigger_scan._load_google_keys())
+
     def test_account_config_covers_requested_watchlist_without_duplicates(self):
         from scripts.x_trigger_scan import account_key, load_accounts
 
@@ -251,6 +268,28 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertEqual(["100"], [candidate["tweet"]["id"] for candidate in candidates])
         self.assertEqual("100", state["last_seen_ids"][account_key("OpenAI")])
 
+    def test_force_latest_creates_candidate_even_when_cursor_is_current(self):
+        from scripts.x_trigger_scan import account_key, detect_new_tweets
+
+        tweets_by_account = {
+            "OpenAI": [{"id": "100", "text": "New model is live", "tweet_kind": "post"}]
+        }
+
+        candidates, state = detect_new_tweets(
+            tweets_by_account,
+            {"last_seen_ids": {account_key("OpenAI"): "100"}},
+            force_latest=True,
+        )
+
+        self.assertEqual(["100"], [candidate["tweet"]["id"] for candidate in candidates])
+        self.assertEqual("100", state["last_seen_ids"][account_key("OpenAI")])
+
+    def test_workflow_can_force_latest_for_one_time_review_test(self):
+        workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")
+
+        self.assertIn("force_latest:", workflow)
+        self.assertIn("--force-latest", workflow)
+
     def test_build_candidate_issue_body_round_trips_payload_and_instructions(self):
         from scripts.x_trigger_scan import build_issue_body, extract_candidate_from_issue_body
 
@@ -271,6 +310,7 @@ class XTriggerScanTest(unittest.TestCase):
         parsed = extract_candidate_from_issue_body(body)
 
         self.assertEqual("x-123", parsed["id"])
+        self.assertIn("## X 트리거 검수", body)
         self.assertIn("계정", body)
         self.assertIn("분류", body)
         self.assertIn("원문 링크", body)
@@ -300,6 +340,18 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertEqual("OpenAI 발표", summary["title"])
         self.assertEqual("OpenAI가 중요한 발표를 했습니다.", summary["body"])
 
+    def test_fallback_summary_is_korean_review_safe(self):
+        from scripts.x_trigger_scan import fallback_summary
+
+        summary = fallback_summary(
+            {"text": "We shipped a new realtime API for developers."},
+            {"username": "OpenAIDevs"},
+        )
+
+        self.assertIn("@OpenAIDevs", summary["title"])
+        self.assertIn("AI 요약을 생성하지 못했습니다", summary["body"])
+        self.assertIn("원문", summary["body"])
+
     def test_summary_prompt_is_korean_and_readable(self):
         from scripts.x_trigger_scan import build_summary_prompt
 
@@ -312,6 +364,37 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertIn("원문", prompt)
         self.assertIn("@OpenAI", prompt)
         self.assertNotIn("??", prompt)
+
+    def test_github_issue_title_and_review_notification_are_korean(self):
+        from scripts import x_trigger_scan
+
+        candidate = {
+            "id": "x-123",
+            "account": {"username": "OpenAI", "category": "official", "group": "OpenAI", "tier": "auto"},
+            "tweet": {"id": "123", "text": "Introducing a new API.", "url": "https://x.com/OpenAI/status/123"},
+            "summary": {"title": "OpenAI 새 API 공개", "body": "OpenAI가 새 API를 공개했습니다."},
+        }
+
+        posted = {}
+
+        class Response:
+            ok = True
+
+            def json(self):
+                return {"html_url": "https://github.com/example/issues/1"}
+
+        def fake_post(url, **kwargs):
+            if url.endswith("/issues"):
+                posted.update(kwargs["json"])
+            return Response()
+
+        with patch.object(x_trigger_scan, "ensure_github_labels"), \
+             patch.object(x_trigger_scan.requests, "post", side_effect=fake_post):
+            url = x_trigger_scan.create_github_issue(candidate, token="token", repo="owner/repo")
+
+        self.assertEqual("https://github.com/example/issues/1", url)
+        self.assertTrue(posted["title"].startswith("[X 트리거 검수] @OpenAI:"))
+        self.assertIn("## X 트리거 검수", posted["body"])
 
     def test_dry_run_does_not_save_state_when_no_candidates(self):
         from scripts import x_trigger_scan

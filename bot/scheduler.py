@@ -83,6 +83,7 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
 
     state = get_state()
     platforms = ["telegram", "x"] if platform == "both" else [platform]
+    failures = []
 
     for plat in platforms:
         if force:
@@ -116,10 +117,14 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
                         state.mark_published(article_key(a), "telegram")
                         sent += 1
                     except Exception as inner:
+                        failures.append(f"telegram article failed: {a.get('title','?')[:40]}: {inner}")
                         print(f"[telegram] 개별 발행 실패: {a.get('title','?')[:40]} — {inner}")
                     time.sleep(TELEGRAM_PER_MESSAGE_DELAY)
+                if sent != len(to_publish):
+                    failures.append(f"telegram only published {sent}/{len(to_publish)} articles")
                 print(f"[telegram] {sent}/{len(to_publish)}개 기사 발행 완료")
             except Exception as e:
+                failures.append(f"telegram failed: {e}")
                 print(f"[telegram] 발행 실패: {e}")
 
         elif plat == "x":
@@ -129,10 +134,13 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
                     state.mark_published(article_key(a), "x")
                 print(f"[x] 일일 요약 포스팅 완료")
             except Exception as e:
+                failures.append(f"x failed: {e}")
                 print(f"[x] 발행 실패: {e}")
 
     if not dry_run:
         state.save()
+    if failures:
+        raise RuntimeError("; ".join(failures))
 
 
 if __name__ == "__main__":

@@ -50,14 +50,13 @@ class PublishFormatTest(unittest.TestCase):
         self.assertNotIn("FirstLight", text)
         self.assertNotIn("#AI", text)
 
-    def test_x_trigger_article_uses_quote_tweet_id_not_status_url_text(self):
+    def test_x_trigger_article_posts_plain_summary_without_status_url(self):
         import bot.x_poster as x_poster
 
         captured = {}
 
-        def fake_post_tweet(text, *, quote_tweet_id=None):
+        def fake_post_tweet(text):
             captured["text"] = text
-            captured["quote_tweet_id"] = quote_tweet_id
             return {"id": "1"}
 
         article = {
@@ -65,14 +64,17 @@ class PublishFormatTest(unittest.TestCase):
             "title": "OpenAI 발표",
             "summary": "OpenAI가 실시간 음성 API 개선 내용을 공개했습니다.",
             "url": "https://x.com/OpenAIDevs/status/2051453905343828350",
-            "raw_json": {"tweet": {"id": "2051453905343828350"}},
+            "raw_json": {
+                "account": {"username": "OpenAIDevs"},
+                "tweet": {"id": "2051453905343828350"},
+            },
         }
 
         with patch.object(x_poster, "post_tweet", side_effect=fake_post_tweet):
             x_poster.post_article(article)
 
-        self.assertEqual("2051453905343828350", captured["quote_tweet_id"])
         self.assertNotIn("https://x.com/", captured["text"])
+        self.assertIn("OpenAIDevs", captured["text"])
 
     def test_telegram_article_formats_content_only(self):
         from bot.formatter import format_article

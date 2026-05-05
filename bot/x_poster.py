@@ -102,11 +102,9 @@ def _oauth1_auth() -> OAuth1:
     )
 
 
-def post_tweet(text: str, *, quote_tweet_id: str | None = None) -> dict:
+def post_tweet(text: str) -> dict:
     """Post a tweet. OAuth 1.0a is preferred; OAuth 2.0 is a fallback."""
     payload = {"text": text[:280]}
-    if quote_tweet_id:
-        payload["quote_tweet_id"] = str(quote_tweet_id)
 
     if _has_oauth1_credentials():
         print("[x] Auth mode: OAuth 1.0a User Context")
@@ -151,6 +149,17 @@ def build_article_post_text(article: dict) -> str:
     return _fit_tweet("\n\n".join(parts))
 
 
+def build_trigger_post_text(article: dict) -> str:
+    """Build a plain trigger tweet without quote-tweeting the source post."""
+    raw_json = article.get("raw_json") or {}
+    account = raw_json.get("account") or {}
+    username = str(account.get("username") or "").strip().lstrip("@")
+    source = f"\ucd9c\ucc98: {username}" if username else ""
+    text_article = {**article, "url": ""}
+    parts = [build_article_post_text(text_article), source]
+    return _fit_tweet("\n\n".join(part for part in parts if part))
+
+
 def build_daily_summary_text(articles: list[dict]) -> str:
     lines = []
     for i, article in enumerate(articles[:5], 1):
@@ -163,12 +172,8 @@ def build_daily_summary_text(articles: list[dict]) -> str:
 
 def post_article(article: dict) -> dict:
     """Post a single article to X without digest branding."""
-    raw_json = article.get("raw_json") or {}
-    tweet = raw_json.get("tweet") or {}
-    quote_tweet_id = str(tweet.get("id") or "").strip()
-    if article.get("source") == "x_trigger" and quote_tweet_id:
-        text = build_article_post_text({**article, "url": ""})
-        return post_tweet(text, quote_tweet_id=quote_tweet_id)
+    if article.get("source") == "x_trigger":
+        return post_tweet(build_trigger_post_text(article))
     return post_tweet(build_article_post_text(article))
 
 

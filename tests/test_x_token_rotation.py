@@ -46,6 +46,51 @@ class XTokenRotationTest(unittest.TestCase):
         self.assertIsNotNone(post.call_args.kwargs["auth"])
         self.assertNotIn("Authorization", post.call_args.kwargs.get("headers", {}))
 
+    def test_oauth1_forbidden_retries_once_with_oauth2_user_context(self):
+        env = {
+            **self._env,
+            "X_API_KEY": "api-key",
+            "X_API_SECRET": "api-secret",
+            "X_ACCESS_TOKEN": "access-token",
+            "X_ACCESS_TOKEN_SECRET": "access-secret",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            import bot.x_poster as x_poster
+
+            x_poster = importlib.reload(x_poster)
+
+            class ForbiddenResponse:
+                ok = False
+                status_code = 403
+                text = '{"title":"Forbidden"}'
+
+                def raise_for_status(self):
+                    raise AssertionError("fallback response should be used")
+
+            class CreatedResponse:
+                ok = True
+                status_code = 201
+                text = '{"data":{"id":"2"}}'
+
+                def json(self):
+                    return {"data": {"id": "2"}}
+
+                def raise_for_status(self):
+                    return None
+
+            with patch.object(x_poster, "_get_access_token", return_value="oauth2-access") as get_access_token, \
+                 patch.object(x_poster.requests, "post", side_effect=[ForbiddenResponse(), CreatedResponse()]) as post:
+                result = x_poster.post_tweet("hello")
+
+        self.assertEqual(result, {"id": "2"})
+        get_access_token.assert_called_once()
+        self.assertEqual(post.call_count, 2)
+        self.assertIsNotNone(post.call_args_list[0].kwargs["auth"])
+        self.assertEqual(
+            post.call_args_list[1].kwargs["headers"]["Authorization"],
+            "Bearer oauth2-access",
+        )
+
     def test_uses_stored_refresh_token_before_env_and_persists_rotated_token(self):
         with patch.dict(os.environ, self._env, clear=False):
             import bot.x_poster as x_poster

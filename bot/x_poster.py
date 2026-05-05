@@ -91,6 +91,10 @@ def _has_oauth1_credentials() -> bool:
     return all([X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET])
 
 
+def _has_oauth2_refresh_credentials() -> bool:
+    return bool(X_CLIENT_ID and (X_REFRESH_TOKEN or os.getenv("SUPABASE_URL")))
+
+
 def _oauth1_auth() -> OAuth1:
     if not _has_oauth1_credentials():
         raise RuntimeError("X OAuth 1.0a credentials are incomplete")
@@ -102,33 +106,53 @@ def _oauth1_auth() -> OAuth1:
     )
 
 
+def _post_tweet_oauth1(payload: dict) -> requests.Response:
+    print("[x] Auth mode: OAuth 1.0a User Context")
+    return requests.post(
+        TWEET_URL,
+        auth=_oauth1_auth(),
+        headers={"Content-Type": "application/json"},
+        json=payload,
+        timeout=30,
+    )
+
+
+def _post_tweet_oauth2(payload: dict) -> requests.Response:
+    print("[x] Auth mode: OAuth 2.0 refresh-token fallback")
+    access_token = _get_access_token()
+    return requests.post(
+        TWEET_URL,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=30,
+    )
+
+
+def _log_tweet_response(resp: requests.Response) -> None:
+    print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
+
+
 def post_tweet(text: str) -> dict:
     """Post a tweet. OAuth 1.0a is preferred; OAuth 2.0 is a fallback."""
     payload = {"text": text[:280]}
+    print(f"[x] Payload chars: {len(payload['text'])}")
 
     if _has_oauth1_credentials():
-        print("[x] Auth mode: OAuth 1.0a User Context")
-        resp = requests.post(
-            TWEET_URL,
-            auth=_oauth1_auth(),
-            headers={"Content-Type": "application/json"},
-            json=payload,
-            timeout=30,
-        )
+        resp = _post_tweet_oauth1(payload)
+        _log_tweet_response(resp)
+        if resp.ok:
+            return resp.json().get("data", {})
+        if resp.status_code in {401, 403} and _has_oauth2_refresh_credentials():
+            print("[x] OAuth 1.0a was rejected; retrying once with OAuth 2.0 User Context")
+            resp = _post_tweet_oauth2(payload)
+            _log_tweet_response(resp)
     else:
-        print("[x] Auth mode: OAuth 2.0 refresh-token fallback")
-        access_token = _get_access_token()
-        resp = requests.post(
-            TWEET_URL,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=30,
-        )
+        resp = _post_tweet_oauth2(payload)
+        _log_tweet_response(resp)
 
-    print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
     resp.raise_for_status()
     return resp.json().get("data", {})
 

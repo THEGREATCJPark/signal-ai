@@ -46,6 +46,7 @@ class XTriggerScanTest(unittest.TestCase):
     def test_scheduled_scan_uses_all_watch_accounts(self):
         workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")
 
+        self.assertIn('- cron: "0 * * * *"', workflow)
         self.assertIn("SCHEDULED_SCOPE: all", workflow)
         self.assertIn("--scope $SCOPE", workflow)
 

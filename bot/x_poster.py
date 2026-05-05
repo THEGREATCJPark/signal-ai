@@ -5,6 +5,7 @@ from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
+from requests_oauthlib import OAuth1
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -16,6 +17,10 @@ X_CLIENT_ID = os.getenv("X_CLIENT_ID")
 X_CLIENT_SECRET = os.getenv("X_CLIENT_SECRET")
 X_REFRESH_TOKEN = os.getenv("X_REFRESH_TOKEN")
 X_REFRESH_TOKEN_STATE_KEY = os.getenv("X_REFRESH_TOKEN_STATE_KEY", "x_oauth2_refresh_token")
+X_API_KEY = os.getenv("X_API_KEY")
+X_API_SECRET = os.getenv("X_API_SECRET")
+X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
+X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
 TWEET_URL = "https://api.x.com/2/tweets"
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
@@ -92,18 +97,42 @@ def _get_access_token() -> str:
     return data["access_token"]
 
 
-def post_tweet(text: str) -> dict:
-    """트윗 게시 (280자 제한, OAuth 2.0 Bearer)"""
-    access_token = _get_access_token()
+def _has_oauth1_credentials() -> bool:
+    return all([X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET])
 
-    resp = requests.post(
-        TWEET_URL,
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        },
-        json={"text": text[:280]},
+
+def _oauth1_auth() -> OAuth1:
+    if not _has_oauth1_credentials():
+        raise RuntimeError("X OAuth 1.0a credentials are incomplete")
+    return OAuth1(
+        client_key=X_API_KEY,
+        client_secret=X_API_SECRET,
+        resource_owner_key=X_ACCESS_TOKEN,
+        resource_owner_secret=X_ACCESS_TOKEN_SECRET,
     )
+
+
+def post_tweet(text: str) -> dict:
+    """Post a tweet. OAuth 1.0a preferred; OAuth 2.0 fallback."""
+    if _has_oauth1_credentials():
+        resp = requests.post(
+            TWEET_URL,
+            auth=_oauth1_auth(),
+            headers={"Content-Type": "application/json"},
+            json={"text": text[:280]},
+            timeout=30,
+        )
+    else:
+        access_token = _get_access_token()
+        resp = requests.post(
+            TWEET_URL,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            },
+            json={"text": text[:280]},
+            timeout=30,
+        )
     print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
     resp.raise_for_status()
     return resp.json().get("data", {})

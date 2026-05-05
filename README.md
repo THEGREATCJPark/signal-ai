@@ -96,19 +96,22 @@ GitHub Secrets already registered on this repo: `SUPABASE_URL`,
 `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`. Additional Telegram/X/LLM
 secrets can be added when the corresponding workflows land.
 
-## X Token Rotation
+## X Publishing Auth
 
-X OAuth 2.0 access tokens are short lived. The initial refresh token must be
-issued with `offline.access`, and X may return a new `refresh_token` whenever
-the workflow exchanges it for an access token. The publisher now stores the
-latest rotated refresh token in Supabase `pipeline_state` under
-`x_oauth2_refresh_token`; `X_REFRESH_TOKEN` is only the bootstrap fallback.
+Daily X publishing prefers OAuth 1.0a user-context credentials:
 
-If the token endpoint returns `invalid_request` or `invalid_grant`, the stored
-token and the fallback secret are already invalid. Re-authorize the X app once,
-save the new refresh token to the `X_REFRESH_TOKEN` GitHub Secret, then run the
-publish workflow once. After that, the workflow keeps the rotated token in
-Supabase for daily runs.
+- `X_API_KEY`
+- `X_API_SECRET`
+- `X_ACCESS_TOKEN`
+- `X_ACCESS_TOKEN_SECRET`
+
+These credentials do not use OAuth 2.0 refresh-token rotation, so they are the
+recommended path for scheduled publishing.
+
+OAuth 2.0 remains as a fallback. If the OAuth 1.0a credentials are incomplete,
+the publisher uses `X_CLIENT_ID` + `X_CLIENT_SECRET` + `X_REFRESH_TOKEN`; when X
+returns a rotated refresh token, the workflow stores it in Supabase
+`pipeline_state` under `x_oauth2_refresh_token`.
 
 ## Daily Schedule (KST, provisional)
 

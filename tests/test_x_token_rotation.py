@@ -12,6 +12,39 @@ class XTokenRotationTest(unittest.TestCase):
             "X_REFRESH_TOKEN": "env-refresh",
         }
 
+    def test_oauth1_secrets_post_without_refreshing_oauth2_token(self):
+        env = {
+            **self._env,
+            "X_API_KEY": "api-key",
+            "X_API_SECRET": "api-secret",
+            "X_ACCESS_TOKEN": "access-token",
+            "X_ACCESS_TOKEN_SECRET": "access-secret",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            import bot.x_poster as x_poster
+
+            x_poster = importlib.reload(x_poster)
+
+            class Response:
+                ok = True
+                status_code = 200
+                text = '{"data":{"id":"1"}}'
+
+                def json(self):
+                    return {"data": {"id": "1"}}
+
+                def raise_for_status(self):
+                    return None
+
+            with patch.object(x_poster, "_get_access_token") as get_access_token, \
+                 patch.object(x_poster.requests, "post", return_value=Response()) as post:
+                result = x_poster.post_tweet("hello")
+
+        self.assertEqual(result, {"id": "1"})
+        get_access_token.assert_not_called()
+        self.assertIsNotNone(post.call_args.kwargs["auth"])
+        self.assertNotIn("Authorization", post.call_args.kwargs.get("headers", {}))
+
     def test_uses_stored_refresh_token_before_env_and_persists_rotated_token(self):
         with patch.dict(os.environ, self._env, clear=False):
             import bot.x_poster as x_poster

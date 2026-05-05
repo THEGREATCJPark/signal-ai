@@ -4,6 +4,36 @@ from datetime import datetime, timezone
 
 
 class XTriggerScanTest(unittest.TestCase):
+    def test_account_config_covers_requested_watchlist_without_duplicates(self):
+        from scripts.x_trigger_scan import account_key, load_accounts
+
+        requested = {
+            "testingcatalog", "btibor91", "arrakis_ai", "chetaslua", "synthwavedd",
+            "petergostev", "Swarek_", "KayvonJafar", "vitrupo", "immasiddtweets",
+            "rowancheung", "therundownai", "aibreakfast", "AlphaSignalAI", "bindureddy",
+            "mervenoyann", "OpenAI", "OpenAIDevs", "ChatGPTapp", "sama", "gdb",
+            "polynoamial", "nickaturley", "aidan_mclau", "AnthropicAI", "claudeai",
+            "ClaudeDevs", "DarioAmodei", "alexalbert__", "AmandaAskell", "jackclarkSF",
+            "_sholtodouglas", "GoogleDeepMind", "GoogleAI", "GeminiApp", "demishassabis",
+            "JeffDean", "OfficialLoganK", "xai", "grok", "elonmusk", "karpathy",
+            "ilyasut", "MiraMurati", "johnschulman2", "_jasonwei", "ylecun", "fchollet",
+            "AndrewYNg", "emollick", "simonw", "swyx", "arena", "ArtificialAnlys",
+            "METR_Evals", "EpochAIResearch", "SWEbench", "LiveCodeBench", "arcprize",
+            "llmstats", "steph_palazzolo", "alexeheath", "haydenfield", "shiringhaffary",
+            "ZeffMax", "KylieRobison", "reckless", "caseynewton", "KevinRoose", "parmy",
+            "Aaron_Tilley", "tomwarren", "huggingface", "ClementDelangue", "Teknium",
+            "NousResearch", "Alibaba_Qwen", "deepseek_ai", "MistralAI", "AIatMeta",
+            "OpenRouterAI", "ollama", "vllm_project", "modal_labs", "replicate",
+            "cursor_ai", "anysphere", "Replit", "amasad", "windsurf_ai", "lovable_dev",
+            "v0", "vercel", "latentspacepod",
+        }
+
+        accounts = load_accounts()
+        configured = [account_key(account["username"]) for account in accounts]
+
+        self.assertEqual(len(configured), len(set(configured)))
+        self.assertTrue({account_key(handle) for handle in requested}.issubset(set(configured)))
+
     def test_filter_accounts_for_auto_and_manual_scopes(self):
         from scripts.x_trigger_scan import filter_accounts_for_scope, normalize_account
 
@@ -11,6 +41,8 @@ class XTriggerScanTest(unittest.TestCase):
             normalize_account({"username": "OpenAI", "tier": "auto"}),
             normalize_account({"username": "testingcatalog", "tier": "core"}),
             normalize_account({"username": "steph_palazzolo", "tier": "scoop"}),
+            normalize_account({"username": "cursor_ai", "tier": "coding"}),
+            normalize_account({"username": "ilyasut", "tier": "research"}),
         ]
 
         self.assertEqual(
@@ -23,7 +55,15 @@ class XTriggerScanTest(unittest.TestCase):
         )
         self.assertEqual(
             [account["username"] for account in filter_accounts_for_scope(accounts, "all")],
-            ["OpenAI", "testingcatalog", "steph_palazzolo"],
+            ["OpenAI", "testingcatalog", "steph_palazzolo", "cursor_ai", "ilyasut"],
+        )
+        self.assertEqual(
+            [account["username"] for account in filter_accounts_for_scope(accounts, "coding")],
+            ["OpenAI", "testingcatalog", "cursor_ai"],
+        )
+        self.assertEqual(
+            [account["username"] for account in filter_accounts_for_scope(accounts, "research")],
+            ["OpenAI", "testingcatalog", "ilyasut"],
         )
 
     def test_build_free_feed_url_uses_rsshub_route_without_x_api(self):
@@ -55,6 +95,50 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertEqual(tweets[0]["id"], "12345")
         self.assertEqual(tweets[0]["url"], "https://x.com/OpenAI/status/12345")
         self.assertEqual(tweets[0]["text"], "Introducing a new API")
+
+    def test_fetch_account_tweets_falls_back_to_nitter_when_rsshub_fails(self):
+        from scripts.x_trigger_scan import FreeXFeedClient, normalize_account
+
+        rss = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0"><channel>
+          <item>
+            <title>OpenAI: Introducing a fallback feed</title>
+            <link>https://nitter.net/OpenAI/status/67890#m</link>
+            <guid isPermaLink="false">67890</guid>
+            <pubDate>Mon, 04 May 2026 12:00:00 GMT</pubDate>
+            <description><![CDATA[<p>Introducing a fallback feed</p>]]></description>
+          </item>
+        </channel></rss>"""
+
+        class Response:
+            def __init__(self, ok, text="", status_code=200):
+                self.ok = ok
+                self.text = text
+                self.status_code = status_code
+
+        class Session:
+            def __init__(self):
+                self.urls = []
+
+            def get(self, url, **kwargs):
+                self.urls.append(url)
+                if "rsshub.example" in url:
+                    return Response(False, status_code=503)
+                return Response(True, rss)
+
+        session = Session()
+        client = FreeXFeedClient(
+            base_urls=["https://rsshub.example"],
+            nitter_instances=["https://nitter.net"],
+            session=session,
+        )
+
+        tweets = client.fetch_account_tweets(normalize_account({"username": "OpenAI"}), max_results=1)
+
+        self.assertEqual(tweets[0]["id"], "67890")
+        self.assertEqual(tweets[0]["url"], "https://x.com/OpenAI/status/67890")
+        self.assertEqual(tweets[0]["free_source"], "nitter")
+        self.assertEqual(session.urls[-1], "https://nitter.net/OpenAI/rss")
 
     def test_bootstrap_accounts_records_latest_without_candidates(self):
         from scripts.x_trigger_scan import account_key, detect_new_tweets

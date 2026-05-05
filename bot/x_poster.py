@@ -102,15 +102,19 @@ def _oauth1_auth() -> OAuth1:
     )
 
 
-def post_tweet(text: str) -> dict:
+def post_tweet(text: str, *, quote_tweet_id: str | None = None) -> dict:
     """Post a tweet. OAuth 1.0a is preferred; OAuth 2.0 is a fallback."""
+    payload = {"text": text[:280]}
+    if quote_tweet_id:
+        payload["quote_tweet_id"] = str(quote_tweet_id)
+
     if _has_oauth1_credentials():
         print("[x] Auth mode: OAuth 1.0a User Context")
         resp = requests.post(
             TWEET_URL,
             auth=_oauth1_auth(),
             headers={"Content-Type": "application/json"},
-            json={"text": text[:280]},
+            json=payload,
             timeout=30,
         )
     else:
@@ -122,7 +126,7 @@ def post_tweet(text: str) -> dict:
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
             },
-            json={"text": text[:280]},
+            json=payload,
             timeout=30,
         )
 
@@ -159,6 +163,12 @@ def build_daily_summary_text(articles: list[dict]) -> str:
 
 def post_article(article: dict) -> dict:
     """Post a single article to X without digest branding."""
+    raw_json = article.get("raw_json") or {}
+    tweet = raw_json.get("tweet") or {}
+    quote_tweet_id = str(tweet.get("id") or "").strip()
+    if article.get("source") == "x_trigger" and quote_tweet_id:
+        text = build_article_post_text({**article, "url": ""})
+        return post_tweet(text, quote_tweet_id=quote_tweet_id)
     return post_tweet(build_article_post_text(article))
 
 

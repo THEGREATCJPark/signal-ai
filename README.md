@@ -29,9 +29,9 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
-│ Local WSL — crawler 7종 (07:00 KST 예정)          │
+│ Local WSL — crawler 8종 + hourly X watch          │
 │ HN · Reddit · arXiv · HuggingFace                │
-│ GeekNews · LessWrong · Discord                    │
+│ GeekNews · LessWrong · X watch · Discord          │
 └──────────────────────┬──────────────────────────┘
                        ↓ upsert (source, source_id)
 ┌──────────────────────┴──────────────────────────┐
@@ -89,13 +89,14 @@ GitHub Actions에서는 Repo Secrets의 같은 이름 값이 쓰이지만, crawl
 - [x] 텔레그램 봇 자동 발행 (`bot/telegram_bot.py`)
 - [x] X OAuth 2.0 Refresh Token 발행 (`bot/x_poster.py`)
 - [x] `publisher/state.py` USE_DB 듀얼 모드 (Supabase `publish_log` 또는 로컬 JSON)
-- [x] 크롤러 7종 구현 (`crawlers/`)
+- [x] 크롤러 8종 구현 (`crawlers/`)
 - [x] GH Actions `daily_publish.yml` (cron + workflow_dispatch)
 - [x] GitHub Pages 다이제스트 배포 (`pages.yml`)
 - [x] SQLite → Supabase 백필 스크립트 (`scripts/backfill_sqlite_to_supabase.py`)
 
 ### 진행 중
-- [x] **로컬 전용 크롤링/적재 경로** — `scripts/local_crawl_ingest.py`가 로컬 WSL에서 crawler 7종 실행 후 Supabase `posts`에 upsert
+- [x] **로컬 전용 크롤링/적재 경로** — `scripts/local_crawl_ingest.py`가 로컬 WSL에서 crawler 8종 실행 후 Supabase `posts`에 upsert
+- [x] **Hourly X watch 경로** — `run_x_watch_task.sh`가 Nitter RSS 기반 `x_watch`만 실행하고 Actions secrets handoff로 Supabase `posts`에 upsert
 - [x] **Discord 로컬 전용 적재 경로** — `scripts/local_discord_ingest.py`가 로컬 WSL에서만 Discord crawl 후 Supabase `posts`에 upsert
 - [ ] 로컬 적재 스케줄을 Windows Task Scheduler에 붙일지, 기존 08:00 로컬 기사 생성 run 안에 묶을지 결정
 - [ ] (선택) 로컬 SQLite 12k rows 백필 실행 결정
@@ -111,7 +112,7 @@ GitHub Actions에서는 Repo Secrets의 같은 이름 값이 쓰이지만, crawl
 
 | 영역 | 기술 |
 |------|------|
-| 크롤링 | Python (requests, feedparser, Algolia API, Reddit JSON, GraphQL) |
+| 크롤링 | Python (requests, feedparser, Algolia API, Reddit JSON, GraphQL, Nitter RSS) |
 | LLM | Gemma / Gemini (기사 생성) |
 | 봇 | Telegram Bot API (requests 직접 호출) |
 | X | X API v2 (OAuth 2.0 + Refresh Token) |
@@ -128,7 +129,7 @@ signal-ai/
 ├── crawlers/                  # 크롤링 모듈 (HB)
 │   ├── _common.py
 │   ├── hn.py / reddit.py / arxiv.py / hf_trending.py
-│   ├── geeknews.py / lesswrong.py / discord.py
+│   ├── geeknews.py / lesswrong.py / x_watch.py / discord.py
 │   ├── run_public.py          # 로컬 public-source subset runner
 │   └── run_all.py             # 로컬 전체 실행 + score 트리거
 │
@@ -162,8 +163,10 @@ signal-ai/
 ├── scripts/
 │   ├── run_publish.py         # 발행 메인 엔트리
 │   ├── validate_articles.py
-│   ├── local_crawl_ingest.py   # 로컬 crawler 7종 → Supabase posts
+│   ├── local_crawl_ingest.py   # 로컬 crawler 8종 → Supabase posts
 │   ├── local_discord_ingest.py # 로컬 Discord crawl → Supabase posts
+│   ├── dispatch_x_watch_handoff.py # X watch → Actions secrets ingest
+│   ├── x_watch_gate.py         # hourly X watch catch-up/lock gate
 │   └── backfill_sqlite_to_supabase.py
 │
 ├── docs/
@@ -207,6 +210,10 @@ GH Actions 운영에서는 Repo Secrets에 다음을 등록 (CJ가 관리):
 # 전체 크롤 + 적재 (JSONL → Supabase posts)
 # 전부 로컬 WSL에서 실행한다.
 python3 scripts/local_crawl_ingest.py
+
+# X 계정 watch만 1회 실행하고 Actions secrets로 Supabase 적재
+# run_x_watch_task.sh는 이 경로를 hourly gate로 감싼다.
+./run_x_watch_task.sh
 
 # Discord만 따로 적재해야 할 때
 python3 scripts/local_discord_ingest.py

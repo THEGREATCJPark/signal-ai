@@ -19,6 +19,7 @@ PUBLIC_CRAWLERS = (
     "hf_trending.py",
     "geeknews.py",
     "lesswrong.py",
+    "x_watch.py",
 )
 
 HERE = Path(__file__).parent

@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-CRAWLERS = ["hn.py", "reddit.py", "arxiv.py", "hf_trending.py", "geeknews.py", "lesswrong.py", "discord.py"]
+CRAWLERS = ["hn.py", "reddit.py", "arxiv.py", "hf_trending.py", "geeknews.py", "lesswrong.py", "x_watch.py", "discord.py"]
 HERE = Path(__file__).parent
 CRAWLED_DIR = HERE.parent / "data" / "crawled"
 
@@ -22,6 +22,7 @@ SCORE_THRESHOLDS = {
     "huggingface": 100,    # HF likes
     "geeknews": 50,        # GeekNews는 점수가 낮음
     "lesswrong": 50,       # LessWrong baseScore
+    "x_watch": 0,          # account-watch tweets are handled by LLM filtering
     "discord": 0,          # Discord는 score 없음
 }
 DEFAULT_THRESHOLD = 200

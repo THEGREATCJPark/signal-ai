@@ -2,11 +2,11 @@ name: X Trigger Scan
 
 on:
   schedule:
-    - cron: "17 */4 * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       scope:
-        description: "Account scope: auto, core, fast, scoop, oss, coding, research, benchmark, all"
+        description: "Account scope. Use all only for manual backfill/review runs."
         required: false
         default: "auto"
         type: choice
@@ -56,6 +56,7 @@ jobs:
     env:
       USE_DB: "true"
       X_TRIGGER_FEED_BASE_URLS: ${{ vars.X_TRIGGER_FEED_BASE_URLS }}
+      X_TRIGGER_FEED_MODE: ${{ vars.X_TRIGGER_FEED_MODE || 'nitter' }}
       X_TRIGGER_NITTER_INSTANCES: ${{ vars.X_TRIGGER_NITTER_INSTANCES }}
       NITTER_INSTANCES: ${{ vars.NITTER_INSTANCES }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}

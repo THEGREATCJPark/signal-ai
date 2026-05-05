@@ -27,7 +27,7 @@ def today_jsonl_path() -> Path:
 
 
 def run_x_watch(extra_args: list[str] | None = None) -> Path:
-    command = [sys.executable, str(ROOT / CRAWLER_COMMAND)]
+    command = [sys.executable, CRAWLER_COMMAND]
     if extra_args:
         command.extend(extra_args)
     subprocess.run(command, cwd=ROOT, check=True)
@@ -40,7 +40,7 @@ def run_x_watch(extra_args: list[str] | None = None) -> Path:
 def handoff_path(path: Path, *, no_wait: bool = False, batch_size: int = 500) -> None:
     command = [
         sys.executable,
-        str(ROOT / HANDOFF_COMMAND),
+        HANDOFF_COMMAND,
         "--skip-crawl",
         "--batch-size",
         str(batch_size),

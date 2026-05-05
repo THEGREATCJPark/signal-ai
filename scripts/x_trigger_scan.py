@@ -29,6 +29,8 @@ ISSUE_LABELS = ["x-trigger", "needs-review"]
 ISSUE_LABEL_COLORS = {
     "x-trigger": "5319e7",
     "needs-review": "fbca04",
+    "trigger-approved": "0e8a16",
+    "trigger-rejected": "b60205",
 }
 ISSUE_PAYLOAD_PREFIX = "x-trigger-payload:"
 DEFAULT_FREE_FEED_BASE_URLS = [
@@ -41,6 +43,9 @@ DEFAULT_NITTER_INSTANCES = [
     "https://nitter.net",
 ]
 FREE_FEED_TIMEOUT_SECONDS = float(os.getenv("X_TRIGGER_FEED_TIMEOUT_SECONDS", "15"))
+FEED_RETRIES = max(1, int(os.getenv("X_TRIGGER_FEED_RETRIES", "2")))
+PER_ACCOUNT_DELAY_SECONDS = max(0.0, float(os.getenv("X_TRIGGER_PER_ACCOUNT_DELAY_SECONDS", "1.5")))
+DEFAULT_FEED_MODE = os.getenv("X_TRIGGER_FEED_MODE", "nitter").strip().lower() or "nitter"
 GEMINI_MODEL = os.getenv("TRIGGER_SUMMARY_MODEL", "gemma-4-26b-a4b-it")
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -94,7 +99,15 @@ def load_accounts(path: str | os.PathLike | None = None) -> list[dict[str, str]]
     if path is None and (ROOT / "config" / "x_trigger_accounts.json").exists():
         path = ROOT / "config" / "x_trigger_accounts.json"
     raw = json.loads(Path(path).read_text(encoding="utf-8")) if path else DEFAULT_ACCOUNTS
-    return [normalize_account(account) for account in raw]
+    accounts: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in raw:
+        account = normalize_account(item)
+        if account["key"] in seen:
+            continue
+        seen.add(account["key"])
+        accounts.append(account)
+    return accounts
 
 
 SCOPE_TIERS = {
@@ -136,6 +149,8 @@ def detect_new_tweets(
     previous_state: dict[str, Any] | None,
     *,
     bootstrap: bool = False,
+    include_replies: bool = False,
+    include_retweets: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Return unseen tweets and the next state.
 
@@ -162,6 +177,11 @@ def detect_new_tweets(
             if not tid:
                 continue
             if previous and _tweet_id_int(tid) <= _tweet_id_int(previous):
+                continue
+            kind = str(tweet.get("tweet_kind") or "post").lower()
+            if kind == "reply" and not include_replies:
+                continue
+            if kind == "retweet" and not include_retweets:
                 continue
             candidates.append({"username": username, "tweet": tweet})
 
@@ -215,6 +235,8 @@ def _clean_feed_text(text: str) -> str:
 
 
 def _status_id_from_url(url: str) -> str:
+    if re.fullmatch(r"\d+", url or ""):
+        return url
     match = re.search(r"/status(?:es)?/(\d+)", url or "")
     return match.group(1) if match else ""
 
@@ -223,6 +245,18 @@ def _canonical_x_url(url: str, username: str, tweet_id: str) -> str:
     if tweet_id:
         return f"https://x.com/{username}/status/{tweet_id}"
     return url
+
+
+def _tweet_kind_from_title(title: str) -> str:
+    if (title or "").startswith("RT by"):
+        return "retweet"
+    if (title or "").startswith("R to"):
+        return "reply"
+    return "post"
+
+
+def _strip_nitter_title_prefix(title: str) -> str:
+    return re.sub(r"^(RT by\s+@?[^:]+:\s*|R to\s+@?[^:]+:\s*)", "", title or "").strip()
 
 
 def parse_feed_tweets(feed_xml: str, username: str, *, source: str = "rsshub") -> list[dict[str, Any]]:
@@ -243,12 +277,16 @@ def parse_feed_tweets(feed_xml: str, username: str, *, source: str = "rsshub") -
             continue
         description = _first_text(item, ["description", "summary", "content"])
         title = _first_text(item, ["title"])
-        text = _clean_feed_text(description) or _clean_feed_text(title)
+        text = _clean_feed_text(description) or _clean_feed_text(_strip_nitter_title_prefix(title))
         tweets.append({
             "id": tweet_id,
+            "guid": guid,
+            "link": link,
+            "title": title,
             "text": text,
             "url": _canonical_x_url(link, username, tweet_id),
             "created_at": _first_text(item, ["pubDate", "published", "updated"]),
+            "tweet_kind": _tweet_kind_from_title(title),
             "public_metrics": {},
             "free_source": source,
         })
@@ -384,49 +422,52 @@ class FreeXFeedClient:
         base_urls: list[str] | None = None,
         nitter_instances: list[str] | None = None,
         session: Any | None = None,
+        feed_mode: str | None = None,
+        retries: int | None = None,
     ):
         self.base_urls = [url.rstrip("/") for url in (base_urls or configured_free_feed_base_urls())]
         self.nitter_instances = [url.rstrip("/") for url in (nitter_instances or configured_nitter_instances())]
         self.session = session or requests
+        self.feed_mode = (feed_mode or DEFAULT_FEED_MODE).strip().lower()
+        self.retries = max(1, int(retries or FEED_RETRIES))
         if not self.base_urls and not self.nitter_instances:
             raise RuntimeError("No free X feed base URLs or Nitter instances configured")
+        if self.feed_mode not in {"nitter", "rsshub", "nitter-first", "rsshub-first"}:
+            raise ValueError(f"unsupported X_TRIGGER_FEED_MODE: {self.feed_mode}")
+
+    def _feed_attempts(self, account: dict[str, str], max_results: int) -> list[tuple[str, str]]:
+        nitter = [("nitter", build_nitter_feed_url(instance, account["username"])) for instance in self.nitter_instances]
+        rsshub = [
+            ("rsshub", build_free_feed_url(base_url, account["username"], max_results=max_results))
+            for base_url in self.base_urls
+        ]
+        if self.feed_mode == "nitter":
+            return nitter
+        if self.feed_mode == "rsshub":
+            return rsshub
+        if self.feed_mode == "rsshub-first":
+            return rsshub + nitter
+        return nitter + rsshub
 
     def fetch_account_tweets(self, account: dict[str, str], max_results: int = 1) -> list[dict[str, Any]]:
         errors = []
-        for base_url in self.base_urls:
-            feed_url = build_free_feed_url(base_url, account["username"], max_results=max_results)
-            try:
-                response = self.session.get(
-                    feed_url,
-                    timeout=FREE_FEED_TIMEOUT_SECONDS,
-                    headers={"User-Agent": "FirstLightAI/1.0 (+https://github.com/THEGREATCJPark/signal-ai)"},
-                )
-                if not response.ok:
-                    errors.append(f"{base_url}: {response.status_code}")
-                    continue
-                tweets = parse_feed_tweets(response.text, account["username"], source="rsshub")
-                if tweets:
-                    return tweets[:max(1, int(max_results or 1))]
-                errors.append(f"{base_url}: empty feed")
-            except Exception as exc:
-                errors.append(f"{base_url}: {exc}")
-        for instance in self.nitter_instances:
-            feed_url = build_nitter_feed_url(instance, account["username"])
-            try:
-                response = self.session.get(
-                    feed_url,
-                    timeout=FREE_FEED_TIMEOUT_SECONDS,
-                    headers={"User-Agent": "FirstLightAI/1.0 (+https://github.com/THEGREATCJPark/signal-ai)"},
-                )
-                if not response.ok:
-                    errors.append(f"{instance}: {response.status_code}")
-                    continue
-                tweets = parse_feed_tweets(response.text, account["username"], source="nitter")
-                if tweets:
-                    return tweets[:max(1, int(max_results or 1))]
-                errors.append(f"{instance}: empty feed")
-            except Exception as exc:
-                errors.append(f"{instance}: {exc}")
+        for source, feed_url in self._feed_attempts(account, max_results):
+            for attempt in range(1, self.retries + 1):
+                try:
+                    response = self.session.get(
+                        feed_url,
+                        timeout=FREE_FEED_TIMEOUT_SECONDS,
+                        headers={"User-Agent": "FirstLightAI/1.0 (+https://github.com/THEGREATCJPark/signal-ai)"},
+                    )
+                    if not response.ok:
+                        errors.append(f"{feed_url}: {response.status_code}")
+                        continue
+                    tweets = parse_feed_tweets(response.text, account["username"], source=source)
+                    if tweets:
+                        return tweets[:max(1, int(max_results or 1))]
+                    errors.append(f"{feed_url}: empty feed")
+                except Exception as exc:
+                    errors.append(f"{feed_url}: attempt {attempt}: {exc}")
         print(f"[trigger] free feed failed for @{account['username']}: {'; '.join(errors)}", file=sys.stderr)
         return []
 
@@ -439,8 +480,12 @@ class FreeXFeedClient:
     ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
         next_state = _copy_state(state)
         result: dict[str, list[dict[str, Any]]] = {}
-        for account in accounts:
+        import time
+
+        for index, account in enumerate(accounts):
             result[account["username"]] = self.fetch_account_tweets(account, max_results=max_results)
+            if PER_ACCOUNT_DELAY_SECONDS > 0 and index < len(accounts) - 1:
+                time.sleep(PER_ACCOUNT_DELAY_SECONDS)
         next_state["updated_at"] = datetime.now(timezone.utc).isoformat()
         return result, next_state
 
@@ -472,6 +517,33 @@ def build_issue_body(candidate: dict[str, Any]) -> str:
     account = candidate["account"]
     tweet = candidate["tweet"]
     summary = candidate["summary"]
+    recommended = f"{summary.get('body', '').strip()}\n\n{tweet.get('url', '')}".strip()
+    return f"""## Trigger review
+
+**계정:** @{account['username']}
+**분류:** {account.get('group', '')} / {account.get('category', '')} / {account.get('tier', '')}
+**원문 링크:** {tweet.get('url', '')}
+**게시 시각:** {tweet.get('created_at', '')}
+**감지 시각:** {candidate.get('detected_at', '')}
+
+### 한국어 요약
+**{summary.get('title', '')}**
+
+{summary.get('body', '')}
+
+### 원문
+> {str(tweet.get('text', '')).replace(chr(10), chr(10) + '> ')}
+
+### 추천 발행문
+{recommended}
+
+### 검수
+승인 방법: `yes` / `예` / `approve` / `승인` / `/approve-trigger`
+
+거절 방법: `no` / `아니오` / `reject` / `거절` / `/reject-trigger`
+
+<!-- {ISSUE_PAYLOAD_PREFIX}{_payload_token(candidate)} -->
+"""
     return f"""## Trigger review
 
 **계정:** @{account['username']} ({account.get('group', account.get('category', 'watch'))})
@@ -612,7 +684,7 @@ def run_scan(args: argparse.Namespace) -> int:
     accounts = filter_accounts_for_scope(load_accounts(args.accounts), args.scope)
     by_key = {account["key"]: account for account in accounts}
     previous_state = load_trigger_state(args.state)
-    tweets_by_account, lookup_state = FreeXFeedClient().fetch_recent_by_accounts(
+    tweets_by_account, lookup_state = FreeXFeedClient(feed_mode=args.feed_mode).fetch_recent_by_accounts(
         accounts,
         max_results=args.max_results,
         state=previous_state,
@@ -624,13 +696,18 @@ def run_scan(args: argparse.Namespace) -> int:
     )
     if not raw_candidates:
         print("[trigger] no new watched X posts")
-        save_trigger_state(next_state, args.state)
+        if not args.dry_run:
+            save_trigger_state(next_state, args.state)
         return 0
 
     opened = []
+    seen_candidates: set[str] = set()
     for raw in raw_candidates:
         account = by_key.get(account_key(raw["username"])) or normalize_account(raw["username"])
         candidate = enrich_candidate(raw, account)
+        if candidate["id"] in seen_candidates:
+            continue
+        seen_candidates.add(candidate["id"])
         if args.dry_run:
             print(json.dumps(candidate, ensure_ascii=False, indent=2))
             continue
@@ -651,6 +728,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scope", choices=sorted(SCOPE_TIERS), default=os.getenv("TRIGGER_SCAN_SCOPE", "auto"),
                         help="Account tier scope to scan. Defaults to low-cost auto.")
     parser.add_argument("--max-results", type=int, default=int(os.getenv("TRIGGER_SCAN_MAX_RESULTS", "1")))
+    parser.add_argument("--feed-mode", choices=["nitter", "rsshub", "nitter-first", "rsshub-first"],
+                        default=DEFAULT_FEED_MODE)
     parser.add_argument("--backfill", action="store_true", help="Create candidates even for accounts without cursors")
     parser.add_argument("--dry-run", action="store_true")
     return parser

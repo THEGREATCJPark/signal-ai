@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.x_trigger_scan import extract_candidate_from_issue_body
+from scripts.x_trigger_scan import ensure_github_labels, extract_candidate_from_issue_body
 
 load_dotenv()
 
@@ -142,6 +142,7 @@ class GitHubIssueClient:
         response.raise_for_status()
 
     def add_labels(self, issue_number: int, labels: list[str]) -> None:
+        ensure_github_labels(labels, token=self.token, repo=self.repo)
         response = requests.post(
             f"{self.base}/issues/{issue_number}/labels",
             headers=self.headers,

@@ -91,6 +91,47 @@ class XTokenRotationTest(unittest.TestCase):
             "Bearer oauth2-access",
         )
 
+    def test_oauth1_forbidden_and_invalid_oauth2_retries_v1_status_update(self):
+        env = {
+            **self._env,
+            "X_API_KEY": "api-key",
+            "X_API_SECRET": "api-secret",
+            "X_ACCESS_TOKEN": "access-token",
+            "X_ACCESS_TOKEN_SECRET": "access-secret",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            import bot.x_poster as x_poster
+
+            x_poster = importlib.reload(x_poster)
+
+            class ForbiddenResponse:
+                ok = False
+                status_code = 403
+                text = '{"title":"Forbidden"}'
+
+                def raise_for_status(self):
+                    raise AssertionError("v1 fallback response should be used")
+
+            class V1CreatedResponse:
+                ok = True
+                status_code = 200
+                text = '{"id_str":"3","text":"hello"}'
+
+                def json(self):
+                    return {"id_str": "3", "text": "hello"}
+
+                def raise_for_status(self):
+                    return None
+
+            with patch.object(x_poster, "_get_access_token", side_effect=RuntimeError("invalid refresh")), \
+                 patch.object(x_poster.requests, "post", side_effect=[ForbiddenResponse(), V1CreatedResponse()]) as post:
+                result = x_poster.post_tweet("hello")
+
+        self.assertEqual(result, {"id": "3", "text": "hello"})
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args_list[1].args[0], "https://api.twitter.com/1.1/statuses/update.json")
+        self.assertEqual(post.call_args_list[1].kwargs["data"], {"status": "hello"})
+
     def test_uses_stored_refresh_token_before_env_and_persists_rotated_token(self):
         with patch.dict(os.environ, self._env, clear=False):
             import bot.x_poster as x_poster

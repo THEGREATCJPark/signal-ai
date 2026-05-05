@@ -21,6 +21,7 @@ X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
 TWEET_URL = os.getenv("X_TWEET_URL", "https://api.twitter.com/2/tweets")
+V1_TWEET_URL = os.getenv("X_V1_TWEET_URL", "https://api.twitter.com/1.1/statuses/update.json")
 TOKEN_URL = "https://api.x.com/2/oauth2/token"
 
 
@@ -131,8 +132,30 @@ def _post_tweet_oauth2(payload: dict) -> requests.Response:
     )
 
 
+def _post_tweet_oauth1_v1(payload: dict) -> requests.Response:
+    print("[x] Auth mode: OAuth 1.0a v1.1 status fallback")
+    return requests.post(
+        V1_TWEET_URL,
+        auth=_oauth1_auth(),
+        data={"status": payload["text"]},
+        timeout=30,
+    )
+
+
 def _log_tweet_response(resp: requests.Response) -> None:
     print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
+
+
+def _tweet_response_data(resp: requests.Response) -> dict:
+    data = resp.json()
+    if isinstance(data, dict) and isinstance(data.get("data"), dict):
+        return data["data"]
+    if isinstance(data, dict) and (data.get("id_str") or data.get("id")):
+        return {
+            "id": str(data.get("id_str") or data.get("id")),
+            "text": str(data.get("text") or ""),
+        }
+    return data if isinstance(data, dict) else {}
 
 
 def post_tweet(text: str) -> dict:
@@ -144,17 +167,26 @@ def post_tweet(text: str) -> dict:
         resp = _post_tweet_oauth1(payload)
         _log_tweet_response(resp)
         if resp.ok:
-            return resp.json().get("data", {})
+            return _tweet_response_data(resp)
         if resp.status_code in {401, 403} and _has_oauth2_refresh_credentials():
             print("[x] OAuth 1.0a was rejected; retrying once with OAuth 2.0 User Context")
-            resp = _post_tweet_oauth2(payload)
+            try:
+                resp = _post_tweet_oauth2(payload)
+                _log_tweet_response(resp)
+                if resp.ok:
+                    return _tweet_response_data(resp)
+            except Exception as exc:
+                print(f"[x] OAuth 2.0 fallback failed: {exc}")
+        if resp.status_code in {401, 403}:
+            print("[x] v2 create tweet was rejected; retrying once with OAuth 1.0a v1.1 status update")
+            resp = _post_tweet_oauth1_v1(payload)
             _log_tweet_response(resp)
     else:
         resp = _post_tweet_oauth2(payload)
         _log_tweet_response(resp)
 
     resp.raise_for_status()
-    return resp.json().get("data", {})
+    return _tweet_response_data(resp)
 
 
 def _fit_tweet(text: str, limit: int = 280) -> str:

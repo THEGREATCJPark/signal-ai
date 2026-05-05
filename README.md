@@ -118,7 +118,7 @@ returns a rotated refresh token, the workflow stores it in Supabase
 | 시간 | 무엇 | 담당 | 트리거 |
 |---|---|---|---|
 | 07:00 KST | 크롤 → Supabase `posts` 적재 | HB | GitHub Actions (`on: schedule`) |
-| 16:32 KST | Supabase `articles` → Telegram + X 발행 | CJ | GitHub Actions (`daily_publish.yml`) |
+| 08:30 KST | Supabase `articles` → Telegram + X 발행 | CJ | GitHub Actions (`daily_publish.yml`) |
 
 두 시간 모두 임시. 적재/발행 품질 지켜보면서 최적 시간은 추후 조정.
 

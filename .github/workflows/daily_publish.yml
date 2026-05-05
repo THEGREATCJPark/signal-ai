@@ -2,8 +2,8 @@ name: Daily AI 최전방 뉴스 Publish
 
 on:
   schedule:
-    # 16:32 KST (07:32 UTC) test publish slot.
-    - cron: "32 7 * * *"
+    # 08:30 KST (23:30 UTC previous day) daily publish slot.
+    - cron: "30 23 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -48,7 +48,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: daily-first-light-publish
+  group: daily-ai-frontier-news-publish
   cancel-in-progress: false
 
 jobs:

@@ -13,8 +13,8 @@ GitHub Issue based trigger approval.
 | --- | --- | --- |
 | 07:00 | Local public/Discord crawl, bundle handoff to GitHub Actions, Supabase `posts` ingest | Local WSL + `.github/workflows/local-crawl-handoff.yml` |
 | 08:00 | Daily article generation from local Discord pipeline | Local WSL `run_cron_task.sh` |
-| 08:30 | Publish daily article content to Telegram and X | `.github/workflows/daily_publish.yml` |
-| Hourly `:17` | Scan watched X accounts and open review issues | `.github/workflows/x-trigger-scan.yml` |
+| 08:30 | Sync generated articles to Supabase, then publish daily article content to Telegram and X | `.github/workflows/daily_publish.yml` |
+| Hourly `:00` | Scan watched X accounts and open review issues | `.github/workflows/x-trigger-scan.yml` |
 | On issue comment | Approve/reject a trigger candidate and publish if approved | `.github/workflows/x-trigger-review.yml` |
 
 Daily publish posts the article content only. It does not prepend any brand
@@ -32,14 +32,14 @@ Review comments:
 - `yes`, `approve`, `승인`, `/approve`: publish to the configured platform
 - `no`, `reject`, `거절`, `/reject`: close without publishing
 
-Publishing uses OAuth 1.0a X credentials first:
+Publishing uses OAuth 1.0a X credentials only:
 
 - `X_API_KEY`
 - `X_API_SECRET`
 - `X_ACCESS_TOKEN`
 - `X_ACCESS_TOKEN_SECRET`
 
-OAuth 2.0 secrets may remain registered, but they are fallback-only:
+OAuth 2.0 secrets may remain registered for legacy/manual experiments, but posting does not use them:
 `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_REFRESH_TOKEN`.
 
 ## Watched X Accounts
@@ -55,12 +55,20 @@ The requested priority groups are included in `config/x_trigger_accounts.json`:
 - fast signal, scoop, and open-source/local-model accounts from the expanded watchlist
 
 Scheduled trigger scans run with `SCHEDULED_SCOPE=all`, so the full configured
-watchlist is checked hourly. Manual runs can still choose a narrower scope.
+watchlist is checked hourly. The default feed mode is `nitter-first`: try Nitter
+RSS, then RSSHub-compatible free feed mirrors. Manual runs can still choose a
+narrower scope.
 
 ## Local Crawler Handoff
 
 Crawler execution stays local. GitHub Actions receives only a short-lived
 bundle URL and performs the Supabase upsert with repository secrets.
+
+Operational dependency: the local WSL machine that owns `run_cron_task.sh` and
+`run_local_crawl_handoff_task.sh` must be awake for fresh daily collection and
+article generation. GitHub Actions can still publish and run X trigger scans
+without that machine, but the daily report will only be as fresh as the latest
+pushed `docs/articles.json` and synced Supabase `public_state`.
 
 Local commands:
 
@@ -88,7 +96,7 @@ Required secrets:
 - Supabase: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
 - Telegram: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`
 - X OAuth 1.0a: `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`
-- LLM: `GOOGLE_API_KEY` or `GOOGLE_API_KEYS`
+- LLM: `GOOGLE_API_KEY` or `GOOGLE_API_KEYS`; trigger scan uses `GEMINI_API_KEYS_CJ`
 - Local handoff: `LOCAL_CRAWL_BUNDLE_URL`, `LOCAL_CRAWL_BATCH_SIZE`
 
 Useful variables:

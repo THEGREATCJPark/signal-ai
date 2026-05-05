@@ -14,6 +14,12 @@ class DailyPublishScheduleTest(unittest.TestCase):
         self.assertIn("PLATFORM=both", workflow)
         self.assertIn("DRY_RUN=false", workflow)
 
+    def test_scheduled_publish_syncs_generated_articles_to_supabase_before_publish(self):
+        workflow = (ROOT / ".github" / "workflows" / "daily_publish.yml").read_text(encoding="utf-8")
+
+        self.assertIn("github.event_name == 'schedule' ||", workflow)
+        self.assertIn("python scripts/sync_articles_to_supabase.py --input docs/articles.json", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

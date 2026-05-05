@@ -4,7 +4,7 @@ import time
 import glob as glob_module
 
 from bot.telegram_bot import send_article, send_daily_digest
-from bot.x_poster import post_daily_summary
+from bot.x_poster import daily_summary_articles, post_daily_summary
 from publisher.state import article_key, get_state
 
 # Telegram 메시지 사이 대기 (Bot API 권장: 채널당 ~20msg/min, 보수적으로 1초)
@@ -126,8 +126,9 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
 
         elif plat == "x":
             try:
-                post_daily_summary(to_publish)
-                for a in to_publish:
+                posted_articles = daily_summary_articles(to_publish)
+                post_daily_summary(posted_articles)
+                for a in posted_articles:
                     state.mark_published(article_key(a), "x")
                 print(f"[x] 일일 요약 포스팅 완료")
             except Exception as e:

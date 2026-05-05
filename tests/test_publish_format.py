@@ -132,6 +132,40 @@ class PublishFormatTest(unittest.TestCase):
 
         send_digest_header.assert_not_called()
 
+    def test_scheduler_marks_only_articles_in_x_daily_summary_as_published(self):
+        with patch.dict(os.environ, {"TELEGRAM_PER_MESSAGE_DELAY": "0"}, clear=False):
+            import bot.scheduler as scheduler
+
+            scheduler = importlib.reload(scheduler)
+
+        class State:
+            def __init__(self):
+                self.marked = []
+
+            def get_unpublished(self, articles, platform):
+                return articles
+
+            def mark_published(self, key, platform):
+                self.marked.append((key, platform))
+
+            def save(self):
+                return None
+
+        state = State()
+        articles = [
+            {"id": f"a{i}", "title": f"Title {i}", "summary": "body", "score": 100 - i}
+            for i in range(1, 7)
+        ]
+
+        with patch.object(scheduler, "get_state", return_value=state), \
+             patch.object(scheduler, "post_daily_summary", return_value={"id": "tweet-1"}):
+            scheduler.publish(articles, platform="x", force=True)
+
+        self.assertEqual(
+            [(f"a{i}", "x") for i in range(1, 6)],
+            state.marked,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

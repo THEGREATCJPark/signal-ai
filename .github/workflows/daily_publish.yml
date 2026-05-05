@@ -66,9 +66,6 @@ jobs:
       X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
       X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
       X_TWEET_URL: https://api.twitter.com/2/tweets
-      X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
-      X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
-      X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
 
     steps:
       - name: Checkout
@@ -83,11 +80,16 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Validate articles
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: python scripts/validate_articles.py
 
       - name: Sync generated articles to Supabase
-        if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.source == 'supabase' || github.event.inputs.source == '') }}
+        if: >-
+          ${{
+            github.event_name == 'schedule' ||
+            (github.event_name == 'workflow_dispatch' &&
+              (github.event.inputs.source == 'supabase' || github.event.inputs.source == ''))
+          }}
         run: python scripts/sync_articles_to_supabase.py --input docs/articles.json
 
       - name: Run scheduled or manual publish

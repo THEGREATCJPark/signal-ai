@@ -48,7 +48,7 @@ DEFAULT_NITTER_INSTANCES = [
 FREE_FEED_TIMEOUT_SECONDS = float(os.getenv("X_TRIGGER_FEED_TIMEOUT_SECONDS", "15"))
 FEED_RETRIES = max(1, int(os.getenv("X_TRIGGER_FEED_RETRIES", "2")))
 PER_ACCOUNT_DELAY_SECONDS = max(0.0, float(os.getenv("X_TRIGGER_PER_ACCOUNT_DELAY_SECONDS", "1.5")))
-DEFAULT_FEED_MODE = os.getenv("X_TRIGGER_FEED_MODE", "nitter").strip().lower() or "nitter"
+DEFAULT_FEED_MODE = os.getenv("X_TRIGGER_FEED_MODE", "nitter-first").strip().lower() or "nitter-first"
 DEFAULT_SUMMARY_MODEL = "gemini-3.1-flash-lite-preview"
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 

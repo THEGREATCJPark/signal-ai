@@ -56,6 +56,12 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertIn("GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS_CJ }}", workflow)
         self.assertIn('TRIGGER_SUMMARY_MODEL: "gemini-3.1-flash-lite-preview"', workflow)
 
+    def test_trigger_scan_workflow_defaults_to_nitter_with_rsshub_fallbacks(self):
+        workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")
+
+        self.assertIn("X_TRIGGER_FEED_MODE: ${{ vars.X_TRIGGER_FEED_MODE || 'nitter-first' }}", workflow)
+        self.assertIn("https://rsshub.pseudoyu.com,https://rsshub.app,https://rsshub.rssforever.com,https://rss.detools.dev", workflow)
+
     def test_load_google_keys_prefers_cj_gemini_keys(self):
         from scripts import x_trigger_scan
 
@@ -202,6 +208,40 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertTrue(session.urls[0].startswith("https://rsshub.example/twitter/user/OpenAI/"))
         self.assertEqual("nitter", tweets[0]["free_source"])
         self.assertEqual("https://nitter.net/OpenAI/rss", session.urls[-1])
+
+    def test_fetch_account_tweets_falls_back_to_rsshub_when_nitter_fails(self):
+        from scripts.x_trigger_scan import FreeXFeedClient, normalize_account
+
+        class Response:
+            def __init__(self, ok, text="", status_code=200):
+                self.ok = ok
+                self.text = text
+                self.status_code = status_code
+
+        class Session:
+            def __init__(self):
+                self.urls = []
+
+            def get(self, url, **kwargs):
+                self.urls.append(url)
+                if "nitter.net" in url:
+                    return Response(False, status_code=429)
+                return Response(True, NITTER_RSS)
+
+        session = Session()
+        client = FreeXFeedClient(
+            base_urls=["https://rsshub.example"],
+            nitter_instances=["https://nitter.net"],
+            session=session,
+            feed_mode="nitter-first",
+        )
+
+        tweets = client.fetch_account_tweets(normalize_account({"username": "OpenAI"}), max_results=1)
+
+        self.assertEqual("12345", tweets[0]["id"])
+        self.assertEqual("rsshub", tweets[0]["free_source"])
+        self.assertEqual("https://nitter.net/OpenAI/rss", session.urls[0])
+        self.assertTrue(session.urls[-1].startswith("https://rsshub.example/twitter/user/OpenAI/"))
 
     def test_parse_nitter_rss_item_extracts_status_fields(self):
         from scripts.x_trigger_scan import parse_feed_tweets

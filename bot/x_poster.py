@@ -17,6 +17,7 @@ X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
 TWEET_URL = os.getenv("X_TWEET_URL", "https://api.twitter.com/2/tweets")
+MAX_DAILY_SUMMARY_ITEMS = 5
 
 
 def _has_oauth1_credentials() -> bool:
@@ -73,9 +74,17 @@ def build_trigger_post_text(article: dict) -> str:
     return build_daily_summary_text([article])
 
 
+def daily_summary_articles(articles: list[dict]) -> list[dict]:
+    """Return the articles that can actually fit in the one-tweet daily summary."""
+    return [
+        article for article in articles
+        if str(article.get("title") or "").strip()
+    ][:MAX_DAILY_SUMMARY_ITEMS]
+
+
 def build_daily_summary_text(articles: list[dict]) -> str:
     lines = []
-    for i, article in enumerate(articles[:5], 1):
+    for i, article in enumerate(daily_summary_articles(articles), 1):
         title = str(article.get("title") or "").strip()
         if title:
             lines.append(f"{i}. {title}")

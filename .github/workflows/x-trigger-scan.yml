@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       scope:
-        description: "Account scope: auto, core, fast, scoop, oss, all"
+        description: "Account scope: auto, core, fast, scoop, oss, coding, research, benchmark, all"
         required: false
         default: "auto"
         type: choice
@@ -16,6 +16,9 @@ on:
           - fast
           - scoop
           - oss
+          - coding
+          - research
+          - benchmark
           - all
       backfill:
         description: "Create review issues for the latest posts even without existing cursors"
@@ -53,6 +56,8 @@ jobs:
     env:
       USE_DB: "true"
       X_TRIGGER_FEED_BASE_URLS: ${{ vars.X_TRIGGER_FEED_BASE_URLS }}
+      X_TRIGGER_NITTER_INSTANCES: ${{ vars.X_TRIGGER_NITTER_INSTANCES }}
+      NITTER_INSTANCES: ${{ vars.NITTER_INSTANCES }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
       GOOGLE_API_KEYS: ${{ secrets.GOOGLE_API_KEYS }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

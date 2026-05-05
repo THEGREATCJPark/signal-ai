@@ -36,6 +36,10 @@ DEFAULT_FREE_FEED_BASE_URLS = [
     "https://rsshub.rssforever.com",
     "https://rsshub.pseudoyu.com",
 ]
+DEFAULT_NITTER_INSTANCES = [
+    "https://nitter.net",
+]
+FREE_FEED_TIMEOUT_SECONDS = float(os.getenv("X_TRIGGER_FEED_TIMEOUT_SECONDS", "15"))
 GEMINI_MODEL = os.getenv("TRIGGER_SUMMARY_MODEL", "gemma-4-26b-a4b-it")
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -98,7 +102,10 @@ SCOPE_TIERS = {
     "fast": {"auto", "core", "fast"},
     "scoop": {"auto", "core", "scoop"},
     "oss": {"auto", "core", "oss"},
-    "all": {"auto", "core", "fast", "scoop", "oss", "manual"},
+    "coding": {"auto", "core", "coding"},
+    "research": {"auto", "core", "research"},
+    "benchmark": {"auto", "core", "benchmark"},
+    "all": {"auto", "core", "fast", "scoop", "oss", "coding", "research", "benchmark", "manual"},
 }
 
 
@@ -171,11 +178,24 @@ def configured_free_feed_base_urls() -> list[str]:
     return DEFAULT_FREE_FEED_BASE_URLS
 
 
+def configured_nitter_instances() -> list[str]:
+    raw = os.getenv("NITTER_INSTANCES") or os.getenv("X_TRIGGER_NITTER_INSTANCES")
+    if raw:
+        return [item.strip().rstrip("/") for item in raw.split(",") if item.strip()]
+    return DEFAULT_NITTER_INSTANCES
+
+
 def build_free_feed_url(base_url: str, username: str, max_results: int = 1) -> str:
     base = base_url.rstrip("/")
     handle = quote(username.strip().lstrip("@"), safe="")
     limit = max(1, int(max_results or 1))
     return f"{base}/twitter/user/{handle}/excludeReplies=1&includeRts=0?limit={limit}"
+
+
+def build_nitter_feed_url(instance: str, username: str) -> str:
+    base = instance.rstrip("/")
+    handle = quote(username.strip().lstrip("@"), safe="")
+    return f"{base}/{handle}/rss"
 
 
 def _first_text(element: ET.Element, names: list[str]) -> str:
@@ -198,7 +218,13 @@ def _status_id_from_url(url: str) -> str:
     return match.group(1) if match else ""
 
 
-def parse_feed_tweets(feed_xml: str, username: str) -> list[dict[str, Any]]:
+def _canonical_x_url(url: str, username: str, tweet_id: str) -> str:
+    if tweet_id:
+        return f"https://x.com/{username}/status/{tweet_id}"
+    return url
+
+
+def parse_feed_tweets(feed_xml: str, username: str, *, source: str = "rsshub") -> list[dict[str, Any]]:
     root = ET.fromstring(feed_xml)
     items = root.findall(".//item")
     if not items:
@@ -220,10 +246,10 @@ def parse_feed_tweets(feed_xml: str, username: str) -> list[dict[str, Any]]:
         tweets.append({
             "id": tweet_id,
             "text": text,
-            "url": link or f"https://x.com/{username}/status/{tweet_id}",
+            "url": _canonical_x_url(link, username, tweet_id),
             "created_at": _first_text(item, ["pubDate", "published", "updated"]),
             "public_metrics": {},
-            "free_source": "rsshub",
+            "free_source": source,
         })
     return tweets
 
@@ -352,30 +378,54 @@ def call_google_model(prompt: str, json_mode: bool = False) -> str:
 
 
 class FreeXFeedClient:
-    def __init__(self, base_urls: list[str] | None = None):
+    def __init__(
+        self,
+        base_urls: list[str] | None = None,
+        nitter_instances: list[str] | None = None,
+        session: Any | None = None,
+    ):
         self.base_urls = [url.rstrip("/") for url in (base_urls or configured_free_feed_base_urls())]
-        if not self.base_urls:
-            raise RuntimeError("No free X feed base URLs configured")
+        self.nitter_instances = [url.rstrip("/") for url in (nitter_instances or configured_nitter_instances())]
+        self.session = session or requests
+        if not self.base_urls and not self.nitter_instances:
+            raise RuntimeError("No free X feed base URLs or Nitter instances configured")
 
     def fetch_account_tweets(self, account: dict[str, str], max_results: int = 1) -> list[dict[str, Any]]:
         errors = []
         for base_url in self.base_urls:
             feed_url = build_free_feed_url(base_url, account["username"], max_results=max_results)
             try:
-                response = requests.get(
+                response = self.session.get(
                     feed_url,
-                    timeout=45,
+                    timeout=FREE_FEED_TIMEOUT_SECONDS,
                     headers={"User-Agent": "FirstLightAI/1.0 (+https://github.com/THEGREATCJPark/signal-ai)"},
                 )
                 if not response.ok:
                     errors.append(f"{base_url}: {response.status_code}")
                     continue
-                tweets = parse_feed_tweets(response.text, account["username"])
+                tweets = parse_feed_tweets(response.text, account["username"], source="rsshub")
                 if tweets:
                     return tweets[:max(1, int(max_results or 1))]
                 errors.append(f"{base_url}: empty feed")
             except Exception as exc:
                 errors.append(f"{base_url}: {exc}")
+        for instance in self.nitter_instances:
+            feed_url = build_nitter_feed_url(instance, account["username"])
+            try:
+                response = self.session.get(
+                    feed_url,
+                    timeout=FREE_FEED_TIMEOUT_SECONDS,
+                    headers={"User-Agent": "FirstLightAI/1.0 (+https://github.com/THEGREATCJPark/signal-ai)"},
+                )
+                if not response.ok:
+                    errors.append(f"{instance}: {response.status_code}")
+                    continue
+                tweets = parse_feed_tweets(response.text, account["username"], source="nitter")
+                if tweets:
+                    return tweets[:max(1, int(max_results or 1))]
+                errors.append(f"{instance}: empty feed")
+            except Exception as exc:
+                errors.append(f"{instance}: {exc}")
         print(f"[trigger] free feed failed for @{account['username']}: {'; '.join(errors)}", file=sys.stderr)
         return []
 
@@ -611,3 +661,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

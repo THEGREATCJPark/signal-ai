@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""First Light AI — Discord-only incremental pipeline.
+"""AI 최전방 뉴스 — Discord-only incremental pipeline.
 
 매 실행:
 1) 기존 articles.json(schema v2) 로드 (v1이면 migrate)
@@ -24,7 +24,7 @@ ROOT = Path(__file__).parent
 ARTICLES_PATH = ROOT / "docs" / "articles.json"
 PAGES_ARTICLES_PATH = ROOT / "articles.json"
 EXPORTS_ARTICLES_DIR = ROOT / "exports" / "articles"
-JOURNAL_NAME = "First Light AI"
+JOURNAL_NAME = "AI 최전방 뉴스"
 DAILY_SUMMARY_FALLBACK_TITLE = "오늘의 AI 업데이트"
 PUBLISH_BRANCH = os.environ.get("FIRST_LIGHT_PUBLISH_BRANCH", "main")
 MODEL = "gemma-4-26b-a4b-it"
@@ -41,7 +41,14 @@ KEY_MIN_GAP_S = 3.0
 MERGE_ROUNDS = 3
 ACTIVE_POOL_LIMIT = 200  # 이 이하면 existing+new 전체 merge, 이상이면 retrieval mode
 
-LOG = lambda m: print(f"[{datetime.now().strftime('%H:%M:%S')}] {m}", flush=True)
+def LOG(message: object) -> None:
+    line = f"[{datetime.now().strftime('%H:%M:%S')}] {message}"
+    try:
+        print(line, flush=True)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        safe_line = line.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(safe_line, flush=True)
 
 
 # ── Keys ────────────────────────────────────────────────────────
@@ -361,7 +368,7 @@ def save_state(state):
     PAGES_ARTICLES_PATH.write_text(payload, encoding="utf-8")
 
 def git_relative(path: Path) -> str:
-    return str(Path(path).resolve().relative_to(ROOT.resolve()))
+    return Path(path).resolve().relative_to(ROOT.resolve()).as_posix()
 
 def publish_public_artifacts(paths: list[Path], run_at: datetime) -> bool:
     """Commit and push only public artifacts needed by GitHub Pages."""
@@ -453,7 +460,7 @@ def prompt_daily_summary(new_articles: list) -> str:
             f"- trust: {a.get('trust','high')}\n"
             f"- body:\n{body}"
         )
-    return f"""역할: First Light AI 데일리 에디터.
+    return f"""역할: AI 최전방 뉴스 데일리 에디터.
 오늘 새로 업데이트된 청크 처리 결과의 기사 본문 전체를 읽고, 하나의 자세한 데일리 요약글로 다시 쓰세요.
 
 ## 작성 규칙

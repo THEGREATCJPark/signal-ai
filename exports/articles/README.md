@@ -11,7 +11,7 @@ Each file contains only the articles newly accepted during that run, plus minima
 ```json
 {
   "schema_version": 1,
-  "journal": "First Light AI",
+  "journal": "AI 최전방 뉴스",
   "date": "2026-04-20",
   "generated_at": "2026-04-20T12:00:00+09:00",
   "count": 0,

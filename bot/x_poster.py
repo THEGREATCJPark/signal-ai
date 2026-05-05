@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 from pathlib import Path
@@ -12,7 +11,6 @@ sys.path.insert(0, str(ROOT))
 
 load_dotenv()
 
-# OAuth 2.0 credentials
 X_CLIENT_ID = os.getenv("X_CLIENT_ID")
 X_CLIENT_SECRET = os.getenv("X_CLIENT_SECRET")
 X_REFRESH_TOKEN = os.getenv("X_REFRESH_TOKEN")
@@ -27,7 +25,7 @@ TOKEN_URL = "https://api.x.com/2/oauth2/token"
 
 
 def _load_stored_refresh_token() -> str | None:
-    """Load latest rotated X refresh token from mutable pipeline state."""
+    """Load the latest rotated X refresh token from mutable pipeline state."""
     if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
         return None
     try:
@@ -42,13 +40,15 @@ def _load_stored_refresh_token() -> str | None:
 
 
 def _save_stored_refresh_token(refresh_token: str) -> None:
-    """Persist rotated X refresh token for the next scheduled run."""
+    """Persist a rotated X refresh token for the next scheduled run."""
     if not refresh_token:
         return
     if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
         print("[x] WARNING: Supabase is not configured; cannot persist rotated refresh_token")
         return
+
     from datetime import datetime, timezone
+
     from db.articles import save_pipeline_state
 
     save_pipeline_state(
@@ -62,26 +62,16 @@ def _save_stored_refresh_token(refresh_token: str) -> None:
 
 
 def _get_access_token() -> str:
-    """Refresh token으로 새 access token 발급.
-
-    X OAuth 2.0의 refresh_token은 사용할 때마다 **회전(rotate)**한다. 응답에 새
-    refresh_token이 포함되며 이전 값은 즉시 무효화된다. GitHub Secrets에 한 번
-    박아두면 다음 호출부터 invalid_grant 400.
-
-    여기서는 응답 body를 로그로 노출해서 실제 에러(invalid_grant / invalid_client /
-    invalid_request)를 식별 가능하게 하고, 새 refresh_token을 stdout에 출력해 수동
-    회전이 가능하게 한다. (영속화는 다음 단계: Supabase pipeline_state 권장.)
-    """
+    """Refresh OAuth 2.0 access token, persisting rotated refresh tokens."""
     refresh_token = _load_stored_refresh_token() or X_REFRESH_TOKEN
     if not X_CLIENT_ID or not refresh_token:
-        raise RuntimeError("X_CLIENT_ID 또는 X_REFRESH_TOKEN 환경변수 없음")
+        raise RuntimeError("X_CLIENT_ID or X_REFRESH_TOKEN environment variable is missing")
 
     auth = (X_CLIENT_ID, X_CLIENT_SECRET) if X_CLIENT_SECRET else None
     payload = {
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
     }
-    # Public client(secret 없음): client_id를 body로 함께 보내야 함.
     if not X_CLIENT_SECRET:
         payload["client_id"] = X_CLIENT_ID
 
@@ -113,7 +103,7 @@ def _oauth1_auth() -> OAuth1:
 
 
 def post_tweet(text: str) -> dict:
-    """Post a tweet. OAuth 1.0a preferred; OAuth 2.0 fallback."""
+    """Post a tweet. OAuth 1.0a is preferred; OAuth 2.0 is a fallback."""
     if _has_oauth1_credentials():
         print("[x] Auth mode: OAuth 1.0a User Context")
         resp = requests.post(
@@ -135,34 +125,43 @@ def post_tweet(text: str) -> dict:
             json={"text": text[:280]},
             timeout=30,
         )
+
     print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
     resp.raise_for_status()
     return resp.json().get("data", {})
 
 
-def post_article(article: dict) -> dict:
-    """단일 기사를 X에 포스팅"""
-    title = article.get("title", "")
-    url = article.get("url", "")
-    source = article.get("source", "")
-    score = article.get("score", 0)
+def _fit_tweet(text: str, limit: int = 280) -> str:
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
 
-    text = f"📡 {title}\n\n📌 {source} | 📊 {score}점\n🔗 {url}\n\n#AI #FirstLightAI"
-    return post_tweet(text)
+
+def build_article_post_text(article: dict) -> str:
+    title = str(article.get("title") or "").strip()
+    summary = str(article.get("summary") or "").strip()
+    url = str(article.get("url") or "").strip()
+
+    parts = [part for part in [title, summary, url] if part]
+    return _fit_tweet("\n\n".join(parts))
+
+
+def build_daily_summary_text(articles: list[dict]) -> str:
+    lines = []
+    for i, article in enumerate(articles[:5], 1):
+        title = str(article.get("title") or "").strip()
+        if title:
+            lines.append(f"{i}. {title}")
+
+    return _fit_tweet("\n".join(lines))
+
+
+def post_article(article: dict) -> dict:
+    """Post a single article to X without digest branding."""
+    return post_tweet(build_article_post_text(article))
 
 
 def post_daily_summary(articles: list[dict]) -> dict:
-    """일일 요약을 X에 포스팅"""
-    from datetime import datetime
-
-    today = datetime.now().strftime("%m/%d")
-    lines = [f"📡 First Light AI {today} 브리핑\n"]
-
-    for i, article in enumerate(articles[:5], 1):
-        title = article.get("title", "")
-        if len(title) > 40:
-            title = title[:37] + "..."
-        lines.append(f"{i}. {title}")
-
-    lines.append("\n#AI #FirstLightAI")
-    return post_tweet("\n".join(lines))
+    """Post article titles to X without headers, footers, or hashtags."""
+    return post_tweet(build_daily_summary_text(articles))

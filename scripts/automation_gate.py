@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import NamedTuple
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
+
+try:
+    import msvcrt
+except ImportError:
+    msvcrt = None
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,6 +88,25 @@ def log_line(log_file, message: str, now: datetime | None = None) -> None:
     print(f"[{ts}] {message}", file=log_file, flush=True)
 
 
+def try_lock(lock_file) -> bool:
+    if fcntl is not None:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        return True
+
+    if msvcrt is not None:
+        try:
+            lock_file.seek(0)
+            msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+
+    return True
+
+
 def run_command_if_due(
     *,
     root: Path = ROOT,
@@ -101,9 +129,7 @@ def run_command_if_due(
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
     with lock_path.open("w", encoding="utf-8") as lock_file, log_path.open("a", encoding="utf-8") as log_file:
-        try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+        if not try_lock(lock_file):
             log_line(log_file, "skip: another automation run is active", now)
             return 0
 

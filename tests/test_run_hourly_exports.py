@@ -162,7 +162,7 @@ class DailyExportsTest(unittest.TestCase):
                 self.assertEqual(out, Path(td) / "2026-04-20.json")
                 payload = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(payload["schema_version"], 1)
-        self.assertEqual(payload["journal"], "First Light AI")
+        self.assertEqual(payload["journal"], "AI 최전방 뉴스")
         self.assertEqual(payload["date"], "2026-04-20")
         self.assertEqual(payload["generated_at"], run_at.isoformat())
         self.assertEqual(payload["count"], 1)
@@ -182,7 +182,7 @@ class DailyExportsTest(unittest.TestCase):
     def test_save_state_mirrors_pages_articles_json(self):
         state = {
             "schema_version": 2,
-            "journal": "First Light AI",
+            "journal": "AI 최전방 뉴스",
             "articles": [{"id": "a1", "headline": "새 기사", "body": "본문"}],
         }
         with tempfile.TemporaryDirectory() as td:
@@ -236,7 +236,7 @@ class DailyExportsTest(unittest.TestCase):
                 "git",
                 "commit",
                 "-m",
-                "chore: publish First Light AI 2026-04-20",
+                "chore: publish AI 최전방 뉴스 2026-04-20",
                 "--",
                 "docs/articles.json",
                 "articles.json",
@@ -266,7 +266,7 @@ class DailyExportsTest(unittest.TestCase):
             "schema_version": 2,
             "last_run_at": old_created_at,
             "generated_at": old_created_at,
-            "journal": "First Light AI",
+            "journal": "AI 최전방 뉴스",
             "model": run_hourly.MODEL,
             "articles": [
                 {
@@ -297,7 +297,7 @@ class DailyExportsTest(unittest.TestCase):
             "schema_version": 2,
             "last_run_at": None,
             "generated_at": run_at.isoformat(),
-            "journal": "First Light AI",
+            "journal": "AI 최전방 뉴스",
             "model": run_hourly.MODEL,
             "articles": [],
             "decision_log": [],
@@ -363,7 +363,7 @@ class DailyExportsTest(unittest.TestCase):
             "schema_version": 2,
             "last_run_at": (run_at - timedelta(days=1)).isoformat(),
             "generated_at": (run_at - timedelta(days=1)).isoformat(),
-            "journal": "First Light AI",
+            "journal": "AI 최전방 뉴스",
             "model": run_hourly.MODEL,
             "articles": old_articles,
             "decision_log": [],
@@ -423,7 +423,7 @@ class DailyExportsTest(unittest.TestCase):
             "schema_version": 2,
             "last_run_at": (run_at - timedelta(days=1)).isoformat(),
             "generated_at": (run_at - timedelta(days=1)).isoformat(),
-            "journal": "First Light AI",
+            "journal": "AI 최전방 뉴스",
             "model": run_hourly.MODEL,
             "articles": old_articles,
             "decision_log": [],
@@ -451,7 +451,7 @@ class DailyExportsTest(unittest.TestCase):
             "schema_version": 2,
             "last_run_at": (run_at - timedelta(days=1)).isoformat(),
             "generated_at": (run_at - timedelta(days=1)).isoformat(),
-            "journal": "First Light AI",
+            "journal": "AI 최전방 뉴스",
             "model": run_hourly.MODEL,
             "articles": [],
             "decision_log": [],

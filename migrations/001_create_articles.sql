@@ -1,4 +1,4 @@
--- Generated First Light AI article store.
+-- Generated AI 최전방 뉴스 article store.
 -- articles are LLM-generated public news items, not raw crawler/Discord posts.
 
 create table if not exists public.articles (

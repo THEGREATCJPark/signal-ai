@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-First Light AI 발행 스크립트.
+AI 최전방 뉴스 발행 스크립트.
 기존 JSON 결과물(docs/articles.json)을 읽어서 Telegram/X에 발행합니다.
 
 Usage:
@@ -90,7 +90,7 @@ def normalize_articles(raw) -> list[dict]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="First Light AI 발행")
+    parser = argparse.ArgumentParser(description="AI 최전방 뉴스 발행")
     parser.add_argument("--source", choices=["file", "supabase"], default=DEFAULT_SOURCE,
                         help="기사 입력 소스 (기본: FIRST_LIGHT_PUBLISH_SOURCE 또는 file)")
     parser.add_argument("--input", default=DEFAULT_INPUT,

@@ -3,7 +3,7 @@ import os
 import time
 import glob as glob_module
 
-from bot.telegram_bot import send_article, send_daily_digest, send_digest_header
+from bot.telegram_bot import send_article, send_daily_digest
 from bot.x_poster import post_daily_summary
 from publisher.state import article_key, get_state
 
@@ -107,9 +107,6 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
         # 실제 발행
         if plat == "telegram":
             try:
-                # 헤더 1개 + 기사별 메시지 N개. 본문 잘림 없이 가독성 확보.
-                send_digest_header(len(to_publish))
-                time.sleep(TELEGRAM_PER_MESSAGE_DELAY)
                 sent = 0
                 for a in to_publish:
                     try:

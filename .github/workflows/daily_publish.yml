@@ -1,4 +1,4 @@
-name: Daily First Light AI Publish
+name: Daily AI 최전방 뉴스 Publish
 
 on:
   schedule:

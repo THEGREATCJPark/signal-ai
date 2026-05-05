@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sync generated First Light AI articles into Supabase.
+"""Sync generated AI 최전방 뉴스 articles into Supabase.
 
 This only writes generated article state to Supabase. It does not publish to
 Telegram or X.
@@ -49,7 +49,7 @@ def sync_articles(input_path: str | Path = DEFAULT_INPUT, dry_run: bool = False)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Sync generated First Light AI articles to Supabase")
+    parser = argparse.ArgumentParser(description="Sync generated AI 최전방 뉴스 articles to Supabase")
     parser.add_argument("--input", default=str(DEFAULT_INPUT), help="입력 articles.json 경로")
     parser.add_argument("--dry-run", action="store_true", help="Supabase 쓰기 없이 검증만 수행")
     args = parser.parse_args()

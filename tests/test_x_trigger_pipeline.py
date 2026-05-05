@@ -294,6 +294,19 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertEqual("OpenAI 발표", summary["title"])
         self.assertEqual("OpenAI가 중요한 발표를 했습니다.", summary["body"])
 
+    def test_summary_prompt_is_korean_and_readable(self):
+        from scripts.x_trigger_scan import build_summary_prompt
+
+        prompt = build_summary_prompt(
+            {"text": "We shipped something important.", "created_at": "2026-05-04T00:00:00Z"},
+            {"username": "OpenAI", "category": "official", "group": "OpenAI"},
+        )
+
+        self.assertIn("한국어", prompt)
+        self.assertIn("원문", prompt)
+        self.assertIn("@OpenAI", prompt)
+        self.assertNotIn("??", prompt)
+
     def test_dry_run_does_not_save_state_when_no_candidates(self):
         from scripts import x_trigger_scan
 

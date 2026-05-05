@@ -87,10 +87,12 @@ def publish_trigger_candidate(candidate: dict[str, Any], *, platform: str = "bot
 
     from bot.telegram_bot import send_article
     from bot.x_poster import post_article
+    from db.articles import upsert_generated_articles
     from publisher.state import article_key, get_state
 
     state = get_state()
     article_id = article_key(article)
+    upsert_generated_articles([article])
     published: list[str] = []
 
     for target in _platforms(platform):

@@ -49,7 +49,7 @@ FREE_FEED_TIMEOUT_SECONDS = float(os.getenv("X_TRIGGER_FEED_TIMEOUT_SECONDS", "1
 FEED_RETRIES = max(1, int(os.getenv("X_TRIGGER_FEED_RETRIES", "2")))
 PER_ACCOUNT_DELAY_SECONDS = max(0.0, float(os.getenv("X_TRIGGER_PER_ACCOUNT_DELAY_SECONDS", "1.5")))
 DEFAULT_FEED_MODE = os.getenv("X_TRIGGER_FEED_MODE", "nitter").strip().lower() or "nitter"
-GEMINI_MODEL = os.getenv("TRIGGER_SUMMARY_MODEL", "gemma-4-26b-a4b-it")
+DEFAULT_SUMMARY_MODEL = "gemini-3.1-flash-lite-preview"
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 DEFAULT_ACCOUNTS = [
@@ -382,11 +382,14 @@ def summarize_tweet(
 
 def _load_google_keys() -> list[str]:
     keys: list[str] = []
-    for env_name in ("GOOGLE_API_KEYS", "GEMINI_API_KEYS"):
+    cj_keys = os.getenv("GEMINI_API_KEYS_CJ")
+    if cj_keys:
+        return [key.strip() for key in cj_keys.split(",") if key.strip()]
+    for env_name in ("GEMINI_API_KEYS", "GOOGLE_API_KEYS"):
         raw = os.getenv(env_name)
         if raw:
             keys.extend(key.strip() for key in raw.split(",") if key.strip())
-    for env_name in ("GOOGLE_API_KEY", "GEMINI_API_KEY"):
+    for env_name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
         raw = os.getenv(env_name)
         if raw:
             keys.append(raw.strip())
@@ -403,13 +406,24 @@ def _load_google_keys() -> list[str]:
 def call_google_model(prompt: str, json_mode: bool = False) -> str:
     keys = _load_google_keys()
     if not keys:
-        raise RuntimeError("GOOGLE_API_KEY/GOOGLE_API_KEYS is not configured")
+        raise RuntimeError("GEMINI_API_KEYS_CJ or GEMINI_API_KEYS is not configured")
+    model = os.getenv("TRIGGER_SUMMARY_MODEL", DEFAULT_SUMMARY_MODEL).strip() or DEFAULT_SUMMARY_MODEL
     generation_config: dict[str, Any] = {"temperature": 0.25, "maxOutputTokens": 2048}
     if json_mode:
         generation_config["responseMimeType"] = "application/json"
-    if "gemma" in GEMINI_MODEL.lower():
-        generation_config["thinkingConfig"] = {"thinkingLevel": "minimal"}
-    endpoint = GEMINI_ENDPOINT.format(model=GEMINI_MODEL)
+        generation_config["responseSchema"] = {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "body": {"type": "string"},
+                "confidence": {"type": "string", "enum": ["official", "rumor", "inference"]},
+            },
+            "required": ["title", "body", "confidence"],
+        }
+    thinking_level = os.getenv("TRIGGER_SUMMARY_THINKING_LEVEL", "low").strip().lower()
+    if thinking_level:
+        generation_config["thinkingConfig"] = {"thinkingLevel": thinking_level}
+    endpoint = GEMINI_ENDPOINT.format(model=model)
     last_error = None
     for key in keys:
         response = requests.post(

@@ -52,19 +52,47 @@ class XTriggerScanTest(unittest.TestCase):
     def test_trigger_scan_workflow_passes_gemini_keys_for_korean_summary(self):
         workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")
 
-        self.assertIn("GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}", workflow)
-        self.assertIn("GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}", workflow)
+        self.assertIn("GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS_CJ }}", workflow)
+        self.assertIn('TRIGGER_SUMMARY_MODEL: "gemini-3.1-flash-lite-preview"', workflow)
 
-    def test_load_google_keys_collects_google_and_gemini_envs(self):
+    def test_load_google_keys_prefers_cj_gemini_keys(self):
         from scripts import x_trigger_scan
 
         env = {
             "GOOGLE_API_KEY": "bad-google",
-            "GEMINI_API_KEYS": "good-one,good-two",
+            "GEMINI_API_KEYS": "other-one",
+            "GEMINI_API_KEYS_CJ": "cj-one,cj-two",
         }
 
         with patch.dict("os.environ", env, clear=True):
-            self.assertEqual(["good-one", "good-two", "bad-google"], x_trigger_scan._load_google_keys())
+            self.assertEqual(["cj-one", "cj-two"], x_trigger_scan._load_google_keys())
+
+    def test_gemini_flash_lite_config_uses_structured_outputs_and_light_thinking(self):
+        from scripts import x_trigger_scan
+
+        captured = {}
+
+        class Response:
+            ok = True
+
+            def json(self):
+                return {"candidates": [{"content": {"parts": [{"text": '{"title":"요약","body":"본문입니다.","confidence":"official"}'}]}}]}
+
+        def fake_post(url, **kwargs):
+            captured["url"] = url
+            captured["json"] = kwargs["json"]
+            return Response()
+
+        with patch.dict("os.environ", {"GEMINI_API_KEYS_CJ": "cj-key", "TRIGGER_SUMMARY_MODEL": "gemini-3.1-flash-lite-preview"}), \
+             patch.object(x_trigger_scan.requests, "post", side_effect=fake_post):
+            text = x_trigger_scan.call_google_model("원문을 요약", json_mode=True)
+
+        self.assertIn("gemini-3.1-flash-lite-preview", captured["url"])
+        config = captured["json"]["generationConfig"]
+        self.assertEqual("application/json", config["responseMimeType"])
+        self.assertEqual("object", config["responseSchema"]["type"])
+        self.assertEqual("low", config["thinkingConfig"]["thinkingLevel"])
+        self.assertIn("요약", text)
 
     def test_account_config_covers_requested_watchlist_without_duplicates(self):
         from scripts.x_trigger_scan import account_key, load_accounts
@@ -497,10 +525,11 @@ class XTriggerReviewTest(unittest.TestCase):
             "bot.telegram_bot": fake_telegram,
             "bot.x_poster": fake_x,
             "publisher.state": fake_state,
-        }):
+        }), patch("db.articles.upsert_generated_articles", side_effect=lambda articles: calls.append(("upsert_articles", articles[0]["id"])) or len(articles)):
             published = publish_trigger_candidate(candidate, platform="both")
 
         self.assertEqual(["telegram", "x"], published)
+        self.assertLess(calls.index(("upsert_articles", "trigger-x-123")), calls.index(("telegram", "trigger-x-123")))
         self.assertIn(("telegram", "trigger-x-123"), calls)
         self.assertIn(("x", "trigger-x-123"), calls)
         self.assertIn(("mark", "trigger-x-123", "telegram"), calls)
@@ -543,7 +572,7 @@ class XTriggerReviewTest(unittest.TestCase):
             "bot.telegram_bot": fake_telegram,
             "bot.x_poster": fake_x,
             "publisher.state": fake_state,
-        }):
+        }), patch("db.articles.upsert_generated_articles", return_value=1):
             publish_trigger_candidate(candidate, platform="telegram")
 
         self.assertEqual("A&B <launch>", captured["title"])

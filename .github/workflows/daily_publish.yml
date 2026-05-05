@@ -1,6 +1,9 @@
 name: Daily First Light AI Publish
 
 on:
+  schedule:
+    # 16:25 KST (07:25 UTC) test publish slot.
+    - cron: "25 7 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -71,17 +74,31 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Validate articles
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         run: python scripts/validate_articles.py
 
       - name: Sync generated articles to Supabase
-        if: ${{ github.event.inputs.source == 'supabase' || github.event.inputs.source == '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.source == 'supabase' || github.event.inputs.source == '') }}
         run: python scripts/sync_articles_to_supabase.py --input docs/articles.json
 
-      - name: Run publish preview or manual publish
+      - name: Run scheduled or manual publish
         run: |
-          ARGS="--source ${{ github.event.inputs.source || 'supabase' }} --platform ${{ github.event.inputs.platform || 'both' }}"
-          if [ "${{ github.event.inputs.dry_run || 'true' }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
-          if [ "${{ github.event.inputs.force || 'false' }}" = "true" ]; then ARGS="$ARGS --force"; fi
-          LIMIT="${{ github.event.inputs.limit || '0' }}"
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            SOURCE=supabase
+            PLATFORM=both
+            DRY_RUN=false
+            FORCE=false
+            LIMIT=0
+          else
+            SOURCE="${{ github.event.inputs.source || 'supabase' }}"
+            PLATFORM="${{ github.event.inputs.platform || 'both' }}"
+            DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
+            FORCE="${{ github.event.inputs.force || 'false' }}"
+            LIMIT="${{ github.event.inputs.limit || '0' }}"
+          fi
+
+          ARGS="--source $SOURCE --platform $PLATFORM"
+          if [ "$DRY_RUN" = "true" ]; then ARGS="$ARGS --dry-run"; fi
+          if [ "$FORCE" = "true" ]; then ARGS="$ARGS --force"; fi
           if [ "$LIMIT" != "0" ]; then ARGS="$ARGS --limit $LIMIT"; fi
           python scripts/run_publish.py $ARGS

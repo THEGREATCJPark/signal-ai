@@ -50,7 +50,7 @@ class PublishFormatTest(unittest.TestCase):
         self.assertNotIn("FirstLight", text)
         self.assertNotIn("#AI", text)
 
-    def test_x_trigger_article_posts_plain_summary_without_status_url(self):
+    def test_x_trigger_article_posts_daily_style_title_only(self):
         import bot.x_poster as x_poster
 
         captured = {}
@@ -74,7 +74,9 @@ class PublishFormatTest(unittest.TestCase):
             x_poster.post_article(article)
 
         self.assertNotIn("https://x.com/", captured["text"])
-        self.assertIn("OpenAIDevs", captured["text"])
+        self.assertEqual("1. OpenAI 발표", captured["text"])
+        self.assertNotIn("OpenAIDevs", captured["text"])
+        self.assertNotIn("실시간 음성 API", captured["text"])
 
     def test_telegram_article_formats_content_only(self):
         from bot.formatter import format_article

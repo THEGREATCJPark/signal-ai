@@ -11,89 +11,16 @@ sys.path.insert(0, str(ROOT))
 
 load_dotenv()
 
-X_CLIENT_ID = os.getenv("X_CLIENT_ID")
-X_CLIENT_SECRET = os.getenv("X_CLIENT_SECRET")
-X_REFRESH_TOKEN = os.getenv("X_REFRESH_TOKEN")
-X_REFRESH_TOKEN_STATE_KEY = os.getenv("X_REFRESH_TOKEN_STATE_KEY", "x_oauth2_refresh_token")
 X_API_KEY = os.getenv("X_API_KEY")
 X_API_SECRET = os.getenv("X_API_SECRET")
 X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
 TWEET_URL = os.getenv("X_TWEET_URL", "https://api.twitter.com/2/tweets")
-V1_TWEET_URL = os.getenv("X_V1_TWEET_URL", "https://api.twitter.com/1.1/statuses/update.json")
-TOKEN_URL = "https://api.x.com/2/oauth2/token"
-
-
-def _load_stored_refresh_token() -> str | None:
-    """Load the latest rotated X refresh token from mutable pipeline state."""
-    if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
-        return None
-    try:
-        from db.articles import load_pipeline_state
-
-        state = load_pipeline_state(X_REFRESH_TOKEN_STATE_KEY) or {}
-    except Exception as exc:
-        print(f"[x] refresh token state load skipped: {exc}")
-        return None
-    token = state.get("refresh_token")
-    return str(token).strip() if token else None
-
-
-def _save_stored_refresh_token(refresh_token: str) -> None:
-    """Persist a rotated X refresh token for the next scheduled run."""
-    if not refresh_token:
-        return
-    if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
-        print("[x] WARNING: Supabase is not configured; cannot persist rotated refresh_token")
-        return
-
-    from datetime import datetime, timezone
-
-    from db.articles import save_pipeline_state
-
-    save_pipeline_state(
-        X_REFRESH_TOKEN_STATE_KEY,
-        {
-            "refresh_token": refresh_token,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        },
-    )
-    print("[x] rotated refresh_token persisted to Supabase pipeline_state")
-
-
-def _get_access_token() -> str:
-    """Refresh OAuth 2.0 access token, persisting rotated refresh tokens."""
-    refresh_token = _load_stored_refresh_token() or X_REFRESH_TOKEN
-    if not X_CLIENT_ID or not refresh_token:
-        raise RuntimeError("X_CLIENT_ID or X_REFRESH_TOKEN environment variable is missing")
-
-    auth = (X_CLIENT_ID, X_CLIENT_SECRET) if X_CLIENT_SECRET else None
-    payload = {
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-    }
-    if not X_CLIENT_SECRET:
-        payload["client_id"] = X_CLIENT_ID
-
-    resp = requests.post(TOKEN_URL, auth=auth, data=payload, timeout=30)
-    if not resp.ok:
-        print(f"[x] Token endpoint {resp.status_code}: {resp.text[:500]}")
-        resp.raise_for_status()
-
-    data = resp.json()
-    new_refresh = data.get("refresh_token")
-    if new_refresh and new_refresh != refresh_token:
-        _save_stored_refresh_token(new_refresh)
-    return data["access_token"]
 
 
 def _has_oauth1_credentials() -> bool:
     return all([X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET])
-
-
-def _has_oauth2_refresh_credentials() -> bool:
-    return bool(X_CLIENT_ID and (X_REFRESH_TOKEN or os.getenv("SUPABASE_URL")))
 
 
 def _oauth1_auth() -> OAuth1:
@@ -107,86 +34,22 @@ def _oauth1_auth() -> OAuth1:
     )
 
 
-def _post_tweet_oauth1(payload: dict) -> requests.Response:
+def post_tweet(text: str) -> dict:
+    """Post a tweet using OAuth 1.0a User Context only."""
+    payload = {"text": text[:280]}
+    print(f"[x] Payload chars: {len(payload['text'])}")
+
     print("[x] Auth mode: OAuth 1.0a User Context")
-    return requests.post(
+    resp = requests.post(
         TWEET_URL,
         auth=_oauth1_auth(),
         headers={"Content-Type": "application/json"},
         json=payload,
         timeout=30,
     )
-
-
-def _post_tweet_oauth2(payload: dict) -> requests.Response:
-    print("[x] Auth mode: OAuth 2.0 refresh-token fallback")
-    access_token = _get_access_token()
-    return requests.post(
-        TWEET_URL,
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=30,
-    )
-
-
-def _post_tweet_oauth1_v1(payload: dict) -> requests.Response:
-    print("[x] Auth mode: OAuth 1.0a v1.1 status fallback")
-    return requests.post(
-        V1_TWEET_URL,
-        auth=_oauth1_auth(),
-        data={"status": payload["text"]},
-        timeout=30,
-    )
-
-
-def _log_tweet_response(resp: requests.Response) -> None:
     print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
-
-
-def _tweet_response_data(resp: requests.Response) -> dict:
-    data = resp.json()
-    if isinstance(data, dict) and isinstance(data.get("data"), dict):
-        return data["data"]
-    if isinstance(data, dict) and (data.get("id_str") or data.get("id")):
-        return {
-            "id": str(data.get("id_str") or data.get("id")),
-            "text": str(data.get("text") or ""),
-        }
-    return data if isinstance(data, dict) else {}
-
-
-def post_tweet(text: str) -> dict:
-    """Post a tweet. OAuth 1.0a is preferred; OAuth 2.0 is a fallback."""
-    payload = {"text": text[:280]}
-    print(f"[x] Payload chars: {len(payload['text'])}")
-
-    if _has_oauth1_credentials():
-        resp = _post_tweet_oauth1(payload)
-        _log_tweet_response(resp)
-        if resp.ok:
-            return _tweet_response_data(resp)
-        if resp.status_code in {401, 403} and _has_oauth2_refresh_credentials():
-            print("[x] OAuth 1.0a was rejected; retrying once with OAuth 2.0 User Context")
-            try:
-                resp = _post_tweet_oauth2(payload)
-                _log_tweet_response(resp)
-                if resp.ok:
-                    return _tweet_response_data(resp)
-            except Exception as exc:
-                print(f"[x] OAuth 2.0 fallback failed: {exc}")
-        if resp.status_code in {401, 403}:
-            print("[x] v2 create tweet was rejected; retrying once with OAuth 1.0a v1.1 status update")
-            resp = _post_tweet_oauth1_v1(payload)
-            _log_tweet_response(resp)
-    else:
-        resp = _post_tweet_oauth2(payload)
-        _log_tweet_response(resp)
-
     resp.raise_for_status()
-    return _tweet_response_data(resp)
+    return resp.json().get("data", {})
 
 
 def _fit_tweet(text: str, limit: int = 280) -> str:
@@ -206,14 +69,8 @@ def build_article_post_text(article: dict) -> str:
 
 
 def build_trigger_post_text(article: dict) -> str:
-    """Build a plain trigger tweet without quote-tweeting the source post."""
-    raw_json = article.get("raw_json") or {}
-    account = raw_json.get("account") or {}
-    username = str(account.get("username") or "").strip().lstrip("@")
-    source = f"\ucd9c\ucc98: {username}" if username else ""
-    text_article = {**article, "url": ""}
-    parts = [build_article_post_text(text_article), source]
-    return _fit_tweet("\n\n".join(part for part in parts if part))
+    """Build trigger X text in the same one-line shape as daily publishing."""
+    return build_daily_summary_text([article])
 
 
 def build_daily_summary_text(articles: list[dict]) -> str:

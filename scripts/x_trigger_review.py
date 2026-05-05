@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import os
 import sys
@@ -80,14 +79,6 @@ def _platforms(platform: str) -> list[str]:
     return ["telegram", "x"] if platform == "both" else [platform]
 
 
-def _telegram_safe_article(article: dict[str, Any]) -> dict[str, Any]:
-    safe = dict(article)
-    for field in ("title", "headline", "summary", "body"):
-        if safe.get(field) is not None:
-            safe[field] = html.escape(str(safe[field]), quote=False)
-    return safe
-
-
 def publish_trigger_candidate(candidate: dict[str, Any], *, platform: str = "both", dry_run: bool = False) -> list[str]:
     article = build_trigger_article(candidate)
     if dry_run:
@@ -107,7 +98,7 @@ def publish_trigger_candidate(candidate: dict[str, Any], *, platform: str = "bot
             print(f"[trigger] already published to {target}: {article_id}")
             continue
         if target == "telegram":
-            send_article(_telegram_safe_article(article))
+            send_article(article)
         elif target == "x":
             post_article(article)
         else:

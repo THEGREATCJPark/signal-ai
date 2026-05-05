@@ -43,6 +43,12 @@ NITTER_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 class XTriggerScanTest(unittest.TestCase):
+    def test_scheduled_scan_uses_all_watch_accounts(self):
+        workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")
+
+        self.assertIn("SCHEDULED_SCOPE: all", workflow)
+        self.assertIn("--scope $SCOPE", workflow)
+
     def test_account_config_covers_requested_watchlist_without_duplicates(self):
         from scripts.x_trigger_scan import account_key, load_accounts
 
@@ -337,6 +343,15 @@ class XTriggerScanTest(unittest.TestCase):
 
 
 class XTriggerReviewTest(unittest.TestCase):
+    def test_review_workflow_passes_oauth1_credentials_for_x_publish(self):
+        workflow = Path(".github/workflows/x-trigger-review.yml").read_text(encoding="utf-8")
+
+        self.assertIn("X_API_KEY: ${{ secrets.X_API_KEY }}", workflow)
+        self.assertIn("X_API_SECRET: ${{ secrets.X_API_SECRET }}", workflow)
+        self.assertIn("X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}", workflow)
+        self.assertIn("X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}", workflow)
+        self.assertIn("X_TWEET_URL: https://api.twitter.com/2/tweets", workflow)
+
     def test_review_command_parses_english_and_korean_commands(self):
         from scripts.x_trigger_review import parse_review_command, reviewer_is_allowed
 
@@ -407,6 +422,49 @@ class XTriggerReviewTest(unittest.TestCase):
         self.assertIn(("x", "trigger-x-123"), calls)
         self.assertIn(("mark", "trigger-x-123", "telegram"), calls)
         self.assertIn(("mark", "trigger-x-123", "x"), calls)
+
+    def test_publish_trigger_candidate_does_not_pre_escape_telegram_article(self):
+        from scripts.x_trigger_review import publish_trigger_candidate
+
+        captured = {}
+
+        class FakeState:
+            def is_published(self, article_id, platform):
+                return False
+
+            def mark_published(self, article_id, platform):
+                return None
+
+            def save(self):
+                return None
+
+        candidate = {
+            "id": "x-456",
+            "account": {"username": "OpenAI", "category": "official"},
+            "tweet": {"id": "456", "url": "https://x.com/OpenAI/status/456"},
+            "summary": {
+                "title": "A&B <launch>",
+                "body": "Use A&B with <tags> safely.",
+            },
+        }
+
+        fake_telegram = types.ModuleType("bot.telegram_bot")
+        fake_telegram.send_article = lambda article: captured.update(article)
+        fake_x = types.ModuleType("bot.x_poster")
+        fake_x.post_article = lambda article: None
+        fake_state = types.ModuleType("publisher.state")
+        fake_state.article_key = lambda article: article["id"]
+        fake_state.get_state = lambda: FakeState()
+
+        with patch.dict(sys.modules, {
+            "bot.telegram_bot": fake_telegram,
+            "bot.x_poster": fake_x,
+            "publisher.state": fake_state,
+        }):
+            publish_trigger_candidate(candidate, platform="telegram")
+
+        self.assertEqual("A&B <launch>", captured["title"])
+        self.assertEqual("Use A&B with <tags> safely.", captured["summary"])
 
     def test_handle_event_reject_does_not_publish_and_closes_issue(self):
         from scripts import x_trigger_review

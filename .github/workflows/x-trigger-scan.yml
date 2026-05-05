@@ -55,6 +55,10 @@ jobs:
     timeout-minutes: 15
     env:
       USE_DB: "true"
+      SCHEDULED_SCOPE: all
+      X_TRIGGER_PER_ACCOUNT_DELAY_SECONDS: "0.2"
+      X_TRIGGER_FEED_TIMEOUT_SECONDS: "6"
+      X_TRIGGER_FEED_RETRIES: "1"
       X_TRIGGER_FEED_BASE_URLS: ${{ vars.X_TRIGGER_FEED_BASE_URLS }}
       X_TRIGGER_FEED_MODE: ${{ vars.X_TRIGGER_FEED_MODE || 'nitter' }}
       X_TRIGGER_NITTER_INSTANCES: ${{ vars.X_TRIGGER_NITTER_INSTANCES }}
@@ -82,7 +86,14 @@ jobs:
 
       - name: Scan watched X accounts
         run: |
-          ARGS="--accounts config/x_trigger_accounts.json --scope ${{ github.event.inputs.scope || 'auto' }} --max-results ${{ github.event.inputs.max_results || '1' }}"
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            SCOPE="$SCHEDULED_SCOPE"
+            MAX_RESULTS=1
+          else
+            SCOPE="${{ github.event.inputs.scope || 'auto' }}"
+            MAX_RESULTS="${{ github.event.inputs.max_results || '1' }}"
+          fi
+          ARGS="--accounts config/x_trigger_accounts.json --scope $SCOPE --max-results $MAX_RESULTS"
           if [ "${{ github.event.inputs.backfill || 'false' }}" = "true" ]; then ARGS="$ARGS --backfill"; fi
           if [ "${{ github.event.inputs.dry_run || 'false' }}" = "true" ]; then ARGS="$ARGS --dry-run"; fi
           python scripts/x_trigger_scan.py $ARGS

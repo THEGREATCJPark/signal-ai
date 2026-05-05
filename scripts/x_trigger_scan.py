@@ -322,7 +322,7 @@ def fallback_summary(tweet: dict[str, Any], account: dict[str, Any]) -> dict[str
 
 def build_summary_prompt(tweet: dict[str, Any], account: dict[str, Any]) -> str:
     metrics = tweet.get("public_metrics") or {}
-    return f"""역할: First Light AI 트리거 편집자
+    return f"""역할: AI 최전방 뉴스 트리거 편집자
 
 관심 X 계정에서 새 게시글이 올라왔다. 이 게시글을 검수자가 빠르게 판단할 수 있게 한국어로 요약하라.
 
@@ -457,7 +457,7 @@ class FreeXFeedClient:
                     response = self.session.get(
                         feed_url,
                         timeout=FREE_FEED_TIMEOUT_SECONDS,
-                        headers={"User-Agent": "FirstLightAI/1.0 (+https://github.com/THEGREATCJPark/signal-ai)"},
+                        headers={"User-Agent": "AIFrontierNews/1.0 (+https://github.com/THEGREATCJPark/signal-ai)"},
                     )
                     if not response.ok:
                         errors.append(f"{feed_url}: {response.status_code}")
@@ -612,7 +612,7 @@ def ensure_github_labels(labels: list[str], *, token: str, repo: str) -> None:
             json={
                 "name": label,
                 "color": ISSUE_LABEL_COLORS.get(label, "ededed"),
-                "description": "First Light AI X trigger workflow",
+                "description": "AI 최전방 뉴스 X trigger workflow",
             },
             timeout=20,
         )
@@ -645,7 +645,7 @@ def maybe_notify_telegram(candidate: dict[str, Any], issue_url: str) -> None:
     if not chat_id or not token:
         return
     text = (
-        f"First Light AI trigger review\n\n"
+        f"AI 최전방 뉴스 trigger review\n\n"
         f"@{candidate['account']['username']}: {candidate['summary']['title']}\n"
         f"{candidate['summary']['body']}\n\n"
         f"Review: {issue_url}"

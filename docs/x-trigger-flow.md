@@ -1,6 +1,6 @@
 # X Trigger Flow
 
-First Light AI keeps the daily digest on the existing schedule and adds an hourly review path for watched X accounts.
+AI 최전방 뉴스 keeps the daily digest on the existing schedule and adds an hourly review path for watched X accounts.
 
 ## Flow
 

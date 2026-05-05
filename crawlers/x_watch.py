@@ -34,7 +34,7 @@ SOURCE = "x_watch"
 DEFAULT_NITTER_INSTANCES = ("https://nitter.net",)
 DEFAULT_REQUEST_DELAY_SECONDS = 1.5
 DEFAULT_TIMEOUT_SECONDS = 25
-USER_AGENT = "FirstLightAI/0.1 (+local hourly X watch)"
+USER_AGENT = "AIFrontierNews/0.1 (+local hourly X watch)"
 DC_CREATOR = "{http://purl.org/dc/elements/1.1/}creator"
 
 

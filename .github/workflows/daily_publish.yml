@@ -4,6 +4,10 @@ on:
   schedule:
     # 16:32 KST (07:32 UTC) test publish slot.
     - cron: "32 7 * * *"
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/daily_publish.yml
   workflow_dispatch:
     inputs:
       dry_run:
@@ -83,7 +87,7 @@ jobs:
 
       - name: Run scheduled or manual publish
         run: |
-          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] || [ "${GITHUB_EVENT_NAME}" = "push" ]; then
             SOURCE=supabase
             PLATFORM=both
             DRY_RUN=false

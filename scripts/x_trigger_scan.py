@@ -544,29 +544,6 @@ def build_issue_body(candidate: dict[str, Any]) -> str:
 
 <!-- {ISSUE_PAYLOAD_PREFIX}{_payload_token(candidate)} -->
 """
-    return f"""## Trigger review
-
-**계정:** @{account['username']} ({account.get('group', account.get('category', 'watch'))})
-**원문:** {tweet.get('url', '')}
-**게시 시각:** {tweet.get('created_at', '')}
-
-### 요약
-**{summary.get('title', '')}**
-
-{summary.get('body', '')}
-
-### 원문
-> {str(tweet.get('text', '')).replace(chr(10), chr(10) + '> ')}
-
-### 검수
-댓글 중 하나를 남기면 GitHub Actions가 처리합니다.
-
-`/approve-trigger` 또는 `yes` 또는 `예`
-
-`/reject-trigger` 또는 `no` 또는 `아니오`
-
-<!-- {ISSUE_PAYLOAD_PREFIX}{_payload_token(candidate)} -->
-"""
 
 
 def extract_candidate_from_issue_body(body: str) -> dict[str, Any]:

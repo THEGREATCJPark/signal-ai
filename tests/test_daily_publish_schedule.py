@@ -6,15 +6,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DailyPublishScheduleTest(unittest.TestCase):
-    def test_scheduled_publish_runs_both_platforms_at_temporary_2042_kst(self):
+    def test_scheduled_publish_has_backup_slots_near_0830_kst(self):
         workflow = (ROOT / ".github" / "workflows" / "daily_publish.yml").read_text(encoding="utf-8")
 
-        self.assertIn('# 20:42 KST (11:42 UTC) temporary daily publish test slot.', workflow)
-        self.assertIn('- cron: "42 11 * * *"', workflow)
+        self.assertIn('# 08:30/08:37/08:45 KST backup slots', workflow)
+        self.assertIn('- cron: "30 23 * * *"', workflow)
+        self.assertIn('- cron: "37 23 * * *"', workflow)
+        self.assertIn('- cron: "45 23 * * *"', workflow)
         self.assertIn("PLATFORM=both", workflow)
         self.assertIn("DRY_RUN=false", workflow)
-        self.assertIn("FORCE=true", workflow)
-        self.assertIn("LIMIT=1", workflow)
+        self.assertIn("FORCE=false", workflow)
+        self.assertIn("LIMIT=0", workflow)
         self.assertIn('--allow-partial', workflow)
 
     def test_scheduled_publish_syncs_generated_articles_to_supabase_before_publish(self):

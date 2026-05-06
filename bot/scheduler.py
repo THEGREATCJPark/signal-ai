@@ -4,7 +4,7 @@ import time
 import glob as glob_module
 
 from bot.telegram_bot import send_article, send_daily_digest
-from bot.x_poster import post_article
+from bot.x_poster import post_article, post_daily_summary
 from publisher.state import article_key, get_state
 
 # Telegram 메시지 사이 대기 (Bot API 권장: 채널당 ~20msg/min, 보수적으로 1초)

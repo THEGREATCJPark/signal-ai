@@ -18,6 +18,7 @@ X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
 TWEET_URL = os.getenv("X_TWEET_URL", "https://api.twitter.com/2/tweets")
+V1_TWEET_URL = os.getenv("X_V1_TWEET_URL", "https://api.twitter.com/1.1/statuses/update.json")
 MAX_DAILY_SUMMARY_ITEMS = 5
 
 
@@ -50,8 +51,31 @@ def post_tweet(text: str) -> dict:
         timeout=30,
     )
     print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
+    if resp.ok:
+        return _tweet_response_data(resp)
+    if resp.status_code in {401, 403}:
+        print("[x] v2 create tweet rejected; retrying with OAuth 1.0a v1.1 status update")
+        resp = requests.post(
+            V1_TWEET_URL,
+            auth=_oauth1_auth(),
+            data={"status": payload["text"]},
+            timeout=30,
+        )
+        print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
     resp.raise_for_status()
-    return resp.json().get("data", {})
+    return _tweet_response_data(resp)
+
+
+def _tweet_response_data(resp: requests.Response) -> dict:
+    data = resp.json()
+    if isinstance(data, dict) and isinstance(data.get("data"), dict):
+        return data["data"]
+    if isinstance(data, dict) and (data.get("id_str") or data.get("id")):
+        return {
+            "id": str(data.get("id_str") or data.get("id")),
+            "text": str(data.get("text") or ""),
+        }
+    return data if isinstance(data, dict) else {}
 
 
 def _fit_tweet(text: str, limit: int = 280) -> str:

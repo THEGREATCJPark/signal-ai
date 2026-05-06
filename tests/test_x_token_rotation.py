@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 
 class XOAuth1PublishTest(unittest.TestCase):
-    def test_oauth1_secrets_post_without_oauth_fallbacks(self):
+    def test_oauth1_secrets_post_successfully_without_fallbacks(self):
         env = {
             "X_API_KEY": "api-key",
             "X_API_SECRET": "api-secret",
@@ -41,7 +41,7 @@ class XOAuth1PublishTest(unittest.TestCase):
         self.assertNotIn("Authorization", post.call_args.kwargs.get("headers", {}))
         self.assertNotIn("data", post.call_args.kwargs)
 
-    def test_oauth1_failure_does_not_retry_other_auth_modes(self):
+    def test_oauth1_v2_forbidden_retries_oauth1_v1_status_update(self):
         env = {
             "X_API_KEY": "api-key",
             "X_API_SECRET": "api-secret",
@@ -64,11 +64,25 @@ class XOAuth1PublishTest(unittest.TestCase):
                 def raise_for_status(self):
                     raise RuntimeError("oauth1 failed")
 
-            with patch.object(x_poster.requests, "post", return_value=ForbiddenResponse()) as post:
-                with self.assertRaises(RuntimeError):
-                    x_poster.post_tweet("hello")
+            class SuccessResponse:
+                ok = True
+                status_code = 200
+                text = '{"id_str":"2","text":"hello"}'
 
-        self.assertEqual(post.call_count, 1)
+                def json(self):
+                    return {"id_str": "2", "text": "hello"}
+
+                def raise_for_status(self):
+                    return None
+
+            with patch.object(x_poster.requests, "post", side_effect=[ForbiddenResponse(), SuccessResponse()]) as post:
+                result = x_poster.post_tweet("hello")
+
+        self.assertEqual({"id": "2", "text": "hello"}, result)
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(post.call_args_list[0].args[0], "https://api.twitter.com/2/tweets")
+        self.assertEqual(post.call_args_list[1].args[0], "https://api.twitter.com/1.1/statuses/update.json")
+        self.assertEqual(post.call_args_list[1].kwargs["data"], {"status": "hello"})
 
 
 if __name__ == "__main__":

@@ -25,13 +25,14 @@
     --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; overflow-x: hidden; }
   body {
     font-family: var(--sans);
     background: var(--paper);
     color: var(--ink);
     -webkit-font-smoothing: antialiased;
     line-height: 1.6;
+    overflow-x: hidden;
   }
 
   /* ── Topbar ── */
@@ -113,26 +114,29 @@
 
   /* ── Layout: sides + center ── */
   .layout {
-    max-width: 1560px;
+    width: 100%;
+    max-width: none;
     margin: 0 auto;
-    padding: 32px 24px 0;
+    padding: 32px clamp(18px, 2.4vw, 48px) 0;
     display: grid;
-    grid-template-columns: 300px minmax(0, 820px) 300px;
-    gap: 44px;
-    justify-content: center;
+    grid-template-columns: minmax(260px, 1fr) minmax(0, clamp(760px, 48vw, 920px)) minmax(260px, 1fr);
+    gap: clamp(28px, 3vw, 68px);
+    justify-content: stretch;
     align-items: start;
   }
+  .side-flow { display: none; }
   @media (max-width: 1280px) {
     .layout {
-      display: flex;
-      flex-direction: column;
+      display: block;
       grid-template-columns: 1fr;
       padding: 32px 18px 0;
-      gap: 0;
     }
-    .center { order: 1; }
-    .side-left { order: 2; margin-top: 40px; }
-    .side-right { order: 3; margin-top: 0; }
+    .center {
+      width: min(100%, 920px);
+      margin: 0 auto;
+    }
+    .side { display: none; }
+    .side-flow { display: block; }
   }
 
   /* ── Side columns (larger, no labels) ── */
@@ -498,7 +502,7 @@
   @media (max-width: 720px) {
     .daily-ribbon-stage {
       top: 84px;
-      right: -6px;
+      right: 0;
       width: 56px;
       height: 242px;
     }
@@ -529,6 +533,7 @@
       border-radius: 6px;
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
+      transform: translateY(-8px);
     }
     .summary-physics.open .summary-sheet {
       padding: 18px 18px max(56px, calc(34px + env(safe-area-inset-bottom)));
@@ -1073,6 +1078,17 @@
     return out;
   }
 
+  function sideCard(a, n, withSnip) {
+    const snip = withSnip ? `<div class="snip">${formatInlineText(excerpt(a.body, 120))}</div>` : '';
+    return `
+      <div class="side-item" data-id="${esc(a.id)}">
+        <div class="num">No. ${String(n).padStart(2, '0')} ${tagBadges(a)}</div>
+        <div class="t">${formatInlineText(a.headline)}</div>
+        ${snip}
+      </div>
+    `;
+  }
+
   // ── Center render ──
   let html = '';
   if (top[0]) {
@@ -1103,39 +1119,28 @@
   if (!top.length && !main.length) {
     html += `<div class="empty">메인 기사 없음. 사이드 또는 더보기를 확인하세요.</div>`;
   }
+  if (side.length) {
+    const sideFlowHtml = `
+      <section class="side-flow">
+        <div class="section-label"><span>MORE</span></div>
+        <div class="more-list">
+          ${side.map((a, i) => sideCard(a, i + 1, true)).join('')}
+        </div>
+      </section>
+    `;
+    html += sideFlowHtml;
+  }
   $('center').innerHTML = html;
 
-  // ── Sides render (split 3-way: left, center-extra, right) ──
-  function sideCard(a, n, withSnip) {
-    const snip = withSnip ? `<div class="snip">${formatInlineText(excerpt(a.body, 120))}</div>` : '';
-    return `
-      <div class="side-item" data-id="${esc(a.id)}">
-        <div class="num">No. ${String(n).padStart(2, '0')} ${tagBadges(a)}</div>
-        <div class="t">${formatInlineText(a.headline)}</div>
-        ${snip}
-      </div>
-    `;
-  }
-  // 3-way split: i%3 — 0→left, 1→center-extra, 2→right
-  const leftItems = side.filter((_, i) => i % 3 === 0);
-  const centerExtraItems = side.filter((_, i) => i % 3 === 1);
-  const rightItems = side.filter((_, i) => i % 3 === 2);
+  // ── Sides render (desktop only; narrow uses the chronological side-flow above) ──
+  const splitAt = Math.ceil(side.length / 2);
+  const leftItems = side.slice(0, splitAt);
+  const rightItems = side.slice(splitAt);
 
   $('side-left').innerHTML = leftItems
-    .map((a, i) => sideCard(a, i * 3 + 1, true)).join('');
+    .map((a, i) => sideCard(a, i + 1, true)).join('');
   $('side-right').innerHTML = rightItems
-    .map((a, i) => sideCard(a, i * 3 + 3, true)).join('');
-
-  // Center extra: append to main content as a second grid of side items
-  if (centerExtraItems.length) {
-    const extraHtml = `
-      <div class="section-label"><span>MORE</span></div>
-      <div class="more-list">
-        ${centerExtraItems.map((a, i) => sideCard(a, i * 3 + 2, true)).join('')}
-      </div>
-    `;
-    $('center').insertAdjacentHTML('beforeend', extraHtml);
-  }
+    .map((a, i) => sideCard(a, splitAt + i + 1, true)).join('');
 
   // ── Reader modal ──
   const byId = Object.fromEntries(all.map(a => [a.id, a]));

@@ -99,6 +99,36 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("fmtDate(a.created_at || a.placed_at || gen)", html)
         self.assertNotIn("fmtDate(a.placed_at || gen)", html)
 
+    def test_narrow_layout_uses_single_chronological_side_stream(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        mobile = html[html.index("@media (max-width: 1280px) {"):]
+        self.assertIn('class="side-flow"', html)
+        self.assertIn("const sideFlowHtml", html)
+        self.assertIn("${side.map((a, i) => sideCard(a, i + 1, true)).join('')}", html)
+        self.assertIn(".side { display: none; }", mobile)
+        self.assertIn(".side-flow { display: block; }", mobile)
+        self.assertNotIn("centerExtraItems", html)
+        self.assertNotIn("i % 3", html)
+
+    def test_wide_layout_expands_sidebars_to_available_width(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        layout = css_block(html, ".layout {")
+        self.assertIn("width: 100%;", layout)
+        self.assertIn("max-width: none;", layout)
+        self.assertIn("grid-template-columns: minmax(260px, 1fr) minmax(0, clamp(760px, 48vw, 920px)) minmax(260px, 1fr);", layout)
+        self.assertIn("gap: clamp(28px, 3vw, 68px);", layout)
+        self.assertNotIn("300px minmax(0, 820px) 300px", html)
+
+    def test_index_prevents_horizontal_overflow_from_responsive_chrome(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]
+        mobile_stage = css_block(mobile, ".daily-ribbon-stage {")
+        mobile_sheet = css_block(mobile, ".summary-sheet {")
+        self.assertIn("html { scroll-behavior: smooth; overflow-x: hidden; }", html)
+        self.assertRegex(html, r"body \{[^}]*overflow-x: hidden;")
+        self.assertIn("right: 0;", mobile_stage)
+        self.assertIn("transform: translateY(-8px);", mobile_sheet)
+
 
 if __name__ == "__main__":
     unittest.main()

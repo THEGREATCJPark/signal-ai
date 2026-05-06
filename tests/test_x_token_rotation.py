@@ -128,7 +128,7 @@ class XOAuth1PublishTest(unittest.TestCase):
         self.assertEqual({"id": "2", "text": "hello"}, result)
         self.assertEqual(post.call_count, 2)
         self.assertEqual(post.call_args_list[0].args[0], "https://api.x.com/2/tweets")
-        self.assertEqual(post.call_args_list[1].args[0], "https://api.x.com/1.1/statuses/update.json")
+        self.assertEqual(post.call_args_list[1].args[0], "https://api.twitter.com/1.1/statuses/update.json")
         self.assertEqual(post.call_args_list[1].kwargs["data"], {"status": "hello"})
 
     def test_uses_stored_refresh_token_before_env_and_persists_rotated_token(self):

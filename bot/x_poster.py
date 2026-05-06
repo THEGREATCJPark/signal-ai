@@ -22,7 +22,7 @@ X_REFRESH_TOKEN = os.getenv("X_REFRESH_TOKEN")
 X_REFRESH_TOKEN_STATE_KEY = os.getenv("X_REFRESH_TOKEN_STATE_KEY", "x_oauth2_refresh_token")
 
 TWEET_URL = os.getenv("X_TWEET_URL", "https://api.x.com/2/tweets")
-V1_TWEET_URL = os.getenv("X_V1_TWEET_URL", "https://api.x.com/1.1/statuses/update.json")
+V1_TWEET_URL = os.getenv("X_V1_TWEET_URL", "https://api.twitter.com/1.1/statuses/update.json")
 TOKEN_URL = os.getenv("X_TOKEN_URL", "https://api.x.com/2/oauth2/token")
 MAX_DAILY_SUMMARY_ITEMS = 5
 

@@ -2,8 +2,8 @@ name: Daily AI Frontier News Publish
 
 on:
   schedule:
-    # 20:30 KST (11:30 UTC) temporary daily publish test slot.
-    - cron: "30 11 * * *"
+    # 20:42 KST (11:42 UTC) temporary daily publish test slot.
+    - cron: "42 11 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -106,8 +106,8 @@ jobs:
             SOURCE=supabase
             PLATFORM=both
             DRY_RUN=false
-            FORCE=false
-            LIMIT=0
+            FORCE=true
+            LIMIT=1
             ALLOW_PARTIAL=true
           else
             SOURCE="${{ github.event.inputs.source || 'supabase' }}"

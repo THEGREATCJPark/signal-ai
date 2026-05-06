@@ -66,7 +66,7 @@ class PublishFormatTest(unittest.TestCase):
         self.assertLessEqual(x_poster._tweet_weight(text), 260)
         self.assertIn("https://example.com/gpt-55", text)
 
-    def test_x_trigger_article_posts_headline_keywords_and_source(self):
+    def test_x_trigger_article_posts_headline_comment_and_bare_source(self):
         import bot.x_poster as x_poster
 
         captured = {}
@@ -90,14 +90,10 @@ class PublishFormatTest(unittest.TestCase):
             x_poster.post_article(article)
 
         self.assertIn("OpenAI가 ChatGPT에 GPT-5.5 Instant 배포를 시작했습니다.", captured["text"])
-        self.assertIn("\ud0a4\uc6cc\ub4dc:", captured["text"])
-        self.assertIn("\ubaa8\ub378\ucd9c\uc2dc", captured["text"])
-        self.assertIn("\uc2e0\ubaa8\ub378", captured["text"])
-        self.assertIn("\uc81c\ud488\uc5c5\ub370\uc774\ud2b8", captured["text"])
-        self.assertIn("ChatGPT", captured["text"])
-        self.assertNotIn("@OpenAIDevs", captured["text"])
-        self.assertIn("\uc6d0\ubb38: https://x.com/OpenAIDevs/status/2051453905343828350", captured["text"])
-        self.assertNotIn("더 자연스럽고 간결한 답변", captured["text"])
+        self.assertIn("더 자연스럽고 간결한 답변을 제공하는 새 모델을 배포합니다.", captured["text"])
+        self.assertIn("https://x.com/OpenAIDevs/status/2051453905343828350", captured["text"])
+        self.assertNotIn("\ud0a4\uc6cc\ub4dc", captured["text"])
+        self.assertNotIn("\uc6d0\ubb38:", captured["text"])
         self.assertLessEqual(x_poster._tweet_weight(captured["text"]), 260)
 
     def test_telegram_article_formats_content_only(self):

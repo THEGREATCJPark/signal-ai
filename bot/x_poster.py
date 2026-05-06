@@ -34,22 +34,6 @@ MAX_TWEET_WEIGHT = int(os.getenv("X_MAX_TWEET_WEIGHT", "260"))
 URL_WEIGHT = int(os.getenv("X_URL_WEIGHT", "23"))
 URL_RE = re.compile(r"https?://\S+")
 KST = ZoneInfo("Asia/Seoul")
-KEYWORD_LABEL = "\ud0a4\uc6cc\ub4dc"
-SOURCE_LABEL = "\uc6d0\ubb38"
-KEYWORD_SEPARATOR = " \u00b7 "
-TRIGGER_KEYWORD_RULES = [
-    ("\ubaa8\ub378\ucd9c\uc2dc", ("roll out", "rollout", "launch", "release", "ship", "introduc", "\ucd9c\uc2dc", "\ubc30\ud3ec", "\uacf5\uac1c")),
-    ("\uc2e0\ubaa8\ub378", ("gpt-", "claude", "gemini", "grok", "llama", "qwen", "mistral", "model", "\uc2e0\ubaa8\ub378", "\ubaa8\ub378")),
-    ("\uc81c\ud488\uc5c5\ub370\uc774\ud2b8", ("update", "upgrade", "improve", "starting to", "\uc5c5\ub370\uc774\ud2b8", "\uac1c\uc120")),
-    ("ChatGPT", ("chatgpt",)),
-    ("\uc5d0\uc774\uc804\ud2b8", ("agent", "\uc5d0\uc774\uc804\ud2b8")),
-    ("API", ("api",)),
-    ("\ubca4\uce58\ub9c8\ud06c", ("benchmark", "eval", "\ubca4\uce58\ub9c8\ud06c", "\ud3c9\uac00")),
-    ("\ubcf4\uc548", ("security", "cyber", "safety", "\ubcf4\uc548", "\uc548\uc804")),
-    ("\uc624\ud508\uc18c\uc2a4", ("open source", "opensource", "\uc624\ud508\uc18c\uc2a4")),
-    ("\uc5f0\uad6c\uc131\uacfc", ("research", "paper", "study", "\uc5f0\uad6c", "\ub17c\ubb38")),
-    ("\uac00\uaca9\uc815\ucc45", ("pricing", "price", "cost", "\uac00\uaca9", "\uc694\uae08")),
-]
 
 
 def _refresh_token_hash(refresh_token: str | None) -> str | None:
@@ -332,41 +316,40 @@ def build_article_post_text(article: dict) -> str:
     return _fit_tweet("\n\n".join(parts))
 
 
-def _keyword_candidates(article: dict) -> list[str]:
-    raw = article.get("raw_json") if isinstance(article.get("raw_json"), dict) else {}
-    account = raw.get("account") if isinstance(raw.get("account"), dict) else {}
-    tweet = raw.get("tweet") if isinstance(raw.get("tweet"), dict) else {}
-    text = " ".join(
-        str(part or "")
-        for part in [
-            account.get("group"),
-            _article_title(article),
-            article.get("summary"),
-            tweet.get("text"),
-        ]
-    ).lower()
-    keywords = []
-    seen = set()
-    for label, terms in TRIGGER_KEYWORD_RULES:
-        if not any(term in text for term in terms):
-            continue
-        if label in seen:
-            continue
-        seen.add(label)
-        keywords.append(label)
-        if len(keywords) >= 4:
-            break
-    return keywords
+def _fit_trigger_post_text(
+    headline: str,
+    comment_lines: list[str],
+    url: str,
+    *,
+    limit: int = MAX_TWEET_WEIGHT,
+) -> str:
+    comments = [line.strip() for line in comment_lines if line and line.strip()]
+    lines = [line for line in [headline, *comments, url] if line]
+    text = "\n".join(lines)
+    if _tweet_weight(text) <= limit:
+        return text
+
+    if url:
+        remaining = limit - _tweet_weight(url) - 1
+        if remaining <= 0:
+            return _fit_tweet(url, limit)
+        fitted_headline = _fit_tweet(headline, remaining)
+        used = _tweet_weight(fitted_headline)
+        comment_budget = remaining - used - 1
+        comment = " ".join(comments)
+        fitted_comment = _fit_tweet(comment, comment_budget) if comment_budget > _tweet_weight("...") else ""
+        return "\n".join(line for line in [fitted_headline, fitted_comment, url] if line)
+
+    return _fit_tweet("\n".join([headline, *comments]), limit)
 
 
 def build_trigger_post_text(article: dict) -> str:
-    """Build headline/keywords/source text for trigger X posts."""
+    """Build magazine-style headline/comment/source text for trigger X posts."""
     headline = _article_title(article)
     url = _article_url(article)
-    keywords = _keyword_candidates(article)
-    keyword_line = f"{KEYWORD_LABEL}: {KEYWORD_SEPARATOR.join(keywords)}" if keywords else ""
-    source_line = f"{SOURCE_LABEL}: {url}" if url else ""
-    return _fit_headline_with_tail(headline, [keyword_line, source_line])
+    summary = str(article.get("summary") or article.get("body") or "").strip()
+    comments = [re.sub(r"\s+", " ", summary)] if summary else []
+    return _fit_trigger_post_text(headline, comments, url)
 
 
 def daily_summary_articles(articles: list[dict]) -> list[dict]:

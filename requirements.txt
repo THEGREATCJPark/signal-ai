@@ -1,5 +1,6 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
+requests-oauthlib>=2.0.0
 
 # DB — Supabase
 supabase>=2.0.0

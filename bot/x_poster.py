@@ -1,96 +1,108 @@
-import json
 import os
+import sys
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 load_dotenv()
 
-# OAuth 2.0 credentials
-X_CLIENT_ID = os.getenv("X_CLIENT_ID")
-X_CLIENT_SECRET = os.getenv("X_CLIENT_SECRET")
-X_REFRESH_TOKEN = os.getenv("X_REFRESH_TOKEN")
+X_API_KEY = os.getenv("X_API_KEY")
+X_API_SECRET = os.getenv("X_API_SECRET")
+X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
+X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
-TWEET_URL = "https://api.x.com/2/tweets"
-TOKEN_URL = "https://api.x.com/2/oauth2/token"
+TWEET_URL = os.getenv("X_TWEET_URL", "https://api.twitter.com/2/tweets")
+MAX_DAILY_SUMMARY_ITEMS = 5
 
 
-def _get_access_token() -> str:
-    """Refresh token으로 새 access token 발급.
+def _has_oauth1_credentials() -> bool:
+    return all([X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET])
 
-    X OAuth 2.0의 refresh_token은 사용할 때마다 **회전(rotate)**한다. 응답에 새
-    refresh_token이 포함되며 이전 값은 즉시 무효화된다. GitHub Secrets에 한 번
-    박아두면 다음 호출부터 invalid_grant 400.
 
-    여기서는 응답 body를 로그로 노출해서 실제 에러(invalid_grant / invalid_client /
-    invalid_request)를 식별 가능하게 하고, 새 refresh_token을 stdout에 출력해 수동
-    회전이 가능하게 한다. (영속화는 다음 단계: Supabase pipeline_state 권장.)
-    """
-    if not X_CLIENT_ID or not X_REFRESH_TOKEN:
-        raise RuntimeError("X_CLIENT_ID 또는 X_REFRESH_TOKEN 환경변수 없음")
+def _oauth1_auth():
+    if not _has_oauth1_credentials():
+        raise RuntimeError("X OAuth 1.0a credentials are incomplete")
+    try:
+        from requests_oauthlib import OAuth1
+    except ImportError as exc:
+        raise RuntimeError("requests-oauthlib is required for X OAuth 1.0a posting") from exc
 
-    auth = (X_CLIENT_ID, X_CLIENT_SECRET) if X_CLIENT_SECRET else None
-    payload = {
-        "grant_type": "refresh_token",
-        "refresh_token": X_REFRESH_TOKEN,
-    }
-    # Public client(secret 없음): client_id를 body로 함께 보내야 함.
-    if not X_CLIENT_SECRET:
-        payload["client_id"] = X_CLIENT_ID
-
-    resp = requests.post(TOKEN_URL, auth=auth, data=payload, timeout=30)
-    if not resp.ok:
-        print(f"[x] Token endpoint {resp.status_code}: {resp.text[:500]}")
-        resp.raise_for_status()
-
-    data = resp.json()
-    new_refresh = data.get("refresh_token")
-    if new_refresh and new_refresh != X_REFRESH_TOKEN:
-        print("[x] WARNING: refresh_token rotated. Update GH Secret X_REFRESH_TOKEN to:")
-        print(f"[x] NEW_REFRESH_TOKEN={new_refresh}")
-    return data["access_token"]
+    return OAuth1(
+        client_key=X_API_KEY,
+        client_secret=X_API_SECRET,
+        resource_owner_key=X_ACCESS_TOKEN,
+        resource_owner_secret=X_ACCESS_TOKEN_SECRET,
+    )
 
 
 def post_tweet(text: str) -> dict:
-    """트윗 게시 (280자 제한, OAuth 2.0 Bearer)"""
-    access_token = _get_access_token()
+    """Post a tweet using OAuth 1.0a User Context only."""
+    payload = {"text": text[:280]}
+    print(f"[x] Payload chars: {len(payload['text'])}")
 
+    print("[x] Auth mode: OAuth 1.0a User Context")
     resp = requests.post(
         TWEET_URL,
-        headers={
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        },
-        json={"text": text[:280]},
+        auth=_oauth1_auth(),
+        headers={"Content-Type": "application/json"},
+        json=payload,
+        timeout=30,
     )
     print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
     resp.raise_for_status()
     return resp.json().get("data", {})
 
 
-def post_article(article: dict) -> dict:
-    """단일 기사를 X에 포스팅"""
-    title = article.get("title", "")
-    url = article.get("url", "")
-    source = article.get("source", "")
-    score = article.get("score", 0)
+def _fit_tweet(text: str, limit: int = 280) -> str:
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
 
-    text = f"📡 {title}\n\n📌 {source} | 📊 {score}점\n🔗 {url}\n\n#AI #FirstLightAI"
-    return post_tweet(text)
+
+def build_article_post_text(article: dict) -> str:
+    title = str(article.get("title") or "").strip()
+    summary = str(article.get("summary") or "").strip()
+    url = str(article.get("url") or "").strip()
+
+    parts = [part for part in [title, summary, url] if part]
+    return _fit_tweet("\n\n".join(parts))
+
+
+def build_trigger_post_text(article: dict) -> str:
+    """Build trigger X text in the same one-line shape as daily publishing."""
+    return build_daily_summary_text([article])
+
+
+def daily_summary_articles(articles: list[dict]) -> list[dict]:
+    """Return the articles that can actually fit in the one-tweet daily summary."""
+    return [
+        article for article in articles
+        if str(article.get("title") or "").strip()
+    ][:MAX_DAILY_SUMMARY_ITEMS]
+
+
+def build_daily_summary_text(articles: list[dict]) -> str:
+    lines = []
+    for i, article in enumerate(daily_summary_articles(articles), 1):
+        title = str(article.get("title") or "").strip()
+        if title:
+            lines.append(f"{i}. {title}")
+
+    return _fit_tweet("\n".join(lines))
+
+
+def post_article(article: dict) -> dict:
+    """Post a single article to X without digest branding."""
+    if article.get("source") == "x_trigger":
+        return post_tweet(build_trigger_post_text(article))
+    return post_tweet(build_article_post_text(article))
 
 
 def post_daily_summary(articles: list[dict]) -> dict:
-    """일일 요약을 X에 포스팅"""
-    from datetime import datetime
-
-    today = datetime.now().strftime("%m/%d")
-    lines = [f"📡 First Light AI {today} 브리핑\n"]
-
-    for i, article in enumerate(articles[:5], 1):
-        title = article.get("title", "")
-        if len(title) > 40:
-            title = title[:37] + "..."
-        lines.append(f"{i}. {title}")
-
-    lines.append("\n#AI #FirstLightAI")
-    return post_tweet("\n".join(lines))
+    """Post article titles to X without headers, footers, or hashtags."""
+    return post_tweet(build_daily_summary_text(articles))

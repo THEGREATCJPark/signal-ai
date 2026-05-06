@@ -16,14 +16,86 @@ X_API_KEY = os.getenv("X_API_KEY")
 X_API_SECRET = os.getenv("X_API_SECRET")
 X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
+X_CLIENT_ID = os.getenv("X_CLIENT_ID")
+X_CLIENT_SECRET = os.getenv("X_CLIENT_SECRET")
+X_REFRESH_TOKEN = os.getenv("X_REFRESH_TOKEN")
+X_REFRESH_TOKEN_STATE_KEY = os.getenv("X_REFRESH_TOKEN_STATE_KEY", "x_oauth2_refresh_token")
 
 TWEET_URL = os.getenv("X_TWEET_URL", "https://api.x.com/2/tweets")
 V1_TWEET_URL = os.getenv("X_V1_TWEET_URL", "https://api.x.com/1.1/statuses/update.json")
+TOKEN_URL = os.getenv("X_TOKEN_URL", "https://api.x.com/2/oauth2/token")
 MAX_DAILY_SUMMARY_ITEMS = 5
+
+
+def _load_stored_refresh_token() -> str | None:
+    """Load the latest rotated X refresh token from mutable pipeline state."""
+    if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
+        return None
+    try:
+        from db.articles import load_pipeline_state
+
+        state = load_pipeline_state(X_REFRESH_TOKEN_STATE_KEY) or {}
+    except Exception as exc:
+        print(f"[x] refresh token state load skipped: {exc}")
+        return None
+    token = state.get("refresh_token")
+    return str(token).strip() if token else None
+
+
+def _save_stored_refresh_token(refresh_token: str) -> None:
+    """Persist a rotated refresh token so scheduled runs do not reuse a stale one."""
+    if not refresh_token:
+        return
+    if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
+        print("[x] WARNING: Supabase is not configured; cannot persist rotated refresh_token")
+        return
+
+    from datetime import datetime, timezone
+
+    from db.articles import save_pipeline_state
+
+    save_pipeline_state(
+        X_REFRESH_TOKEN_STATE_KEY,
+        {
+            "refresh_token": refresh_token,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    print("[x] rotated refresh_token persisted to Supabase pipeline_state")
+
+
+def _get_access_token() -> str:
+    """Refresh an OAuth 2.0 user-context token, persisting rotated refresh tokens."""
+    refresh_token = _load_stored_refresh_token() or X_REFRESH_TOKEN
+    if not X_CLIENT_ID or not refresh_token:
+        raise RuntimeError("X_CLIENT_ID or X_REFRESH_TOKEN environment variable is missing")
+
+    auth = (X_CLIENT_ID, X_CLIENT_SECRET) if X_CLIENT_SECRET else None
+    payload = {
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+    }
+    if not X_CLIENT_SECRET:
+        payload["client_id"] = X_CLIENT_ID
+
+    resp = requests.post(TOKEN_URL, auth=auth, data=payload, timeout=30)
+    if not resp.ok:
+        print(f"[x] Token endpoint {resp.status_code}: {resp.text[:500]}")
+        resp.raise_for_status()
+
+    data = resp.json()
+    new_refresh = data.get("refresh_token")
+    if new_refresh and new_refresh != refresh_token:
+        _save_stored_refresh_token(new_refresh)
+    return data["access_token"]
 
 
 def _has_oauth1_credentials() -> bool:
     return all([X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET])
+
+
+def _has_oauth2_refresh_credentials() -> bool:
+    return bool(X_CLIENT_ID and (X_REFRESH_TOKEN or os.getenv("SUPABASE_URL")))
 
 
 def _oauth1_auth() -> OAuth1:
@@ -54,6 +126,24 @@ def post_tweet(text: str) -> dict:
     if resp.ok:
         return _tweet_response_data(resp)
     if resp.status_code in {401, 403}:
+        if _has_oauth2_refresh_credentials():
+            print("[x] OAuth 1.0a was rejected; retrying with OAuth 2.0 User Context")
+            try:
+                access_token = _get_access_token()
+                resp = requests.post(
+                    TWEET_URL,
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                    timeout=30,
+                )
+                print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
+                if resp.ok:
+                    return _tweet_response_data(resp)
+            except Exception as exc:
+                print(f"[x] OAuth 2.0 fallback failed: {exc}")
         print("[x] v2 create tweet rejected; retrying with OAuth 1.0a v1.1 status update")
         resp = requests.post(
             V1_TWEET_URL,

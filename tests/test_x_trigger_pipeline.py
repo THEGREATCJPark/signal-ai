@@ -588,6 +588,9 @@ class XTriggerReviewTest(unittest.TestCase):
         self.assertIn("X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}", workflow)
         self.assertIn("X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}", workflow)
         self.assertIn("X_TWEET_URL: https://api.x.com/2/tweets", workflow)
+        self.assertIn("X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}", workflow)
+        self.assertIn("X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}", workflow)
+        self.assertIn("X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}", workflow)
 
     def test_review_command_parses_english_and_korean_commands(self):
         from scripts.x_trigger_review import parse_review_command, parse_review_platform, reviewer_is_allowed

@@ -28,7 +28,7 @@ jobs:
       X_API_SECRET: ${{ secrets.X_API_SECRET }}
       X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
       X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
-      X_TWEET_URL: https://api.twitter.com/2/tweets
+      X_TWEET_URL: https://api.x.com/2/tweets
       TRIGGER_REVIEWERS: ${{ vars.TRIGGER_REVIEWERS }}
       TRIGGER_PUBLISH_PLATFORM: ${{ vars.TRIGGER_PUBLISH_PLATFORM || 'both' }}
       GITHUB_TOKEN: ${{ github.token }}

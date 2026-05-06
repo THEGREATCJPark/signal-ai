@@ -17,8 +17,8 @@ X_API_SECRET = os.getenv("X_API_SECRET")
 X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
-TWEET_URL = os.getenv("X_TWEET_URL", "https://api.twitter.com/2/tweets")
-V1_TWEET_URL = os.getenv("X_V1_TWEET_URL", "https://api.twitter.com/1.1/statuses/update.json")
+TWEET_URL = os.getenv("X_TWEET_URL", "https://api.x.com/2/tweets")
+V1_TWEET_URL = os.getenv("X_V1_TWEET_URL", "https://api.x.com/1.1/statuses/update.json")
 MAX_DAILY_SUMMARY_ITEMS = 5
 
 

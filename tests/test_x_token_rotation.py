@@ -36,7 +36,7 @@ class XOAuth1PublishTest(unittest.TestCase):
 
         self.assertEqual(result, {"id": "1"})
         self.assertEqual(post.call_count, 1)
-        self.assertEqual(post.call_args.args[0], "https://api.twitter.com/2/tweets")
+        self.assertEqual(post.call_args.args[0], "https://api.x.com/2/tweets")
         self.assertIsNotNone(post.call_args.kwargs["auth"])
         self.assertNotIn("Authorization", post.call_args.kwargs.get("headers", {}))
         self.assertNotIn("data", post.call_args.kwargs)
@@ -80,8 +80,8 @@ class XOAuth1PublishTest(unittest.TestCase):
 
         self.assertEqual({"id": "2", "text": "hello"}, result)
         self.assertEqual(post.call_count, 2)
-        self.assertEqual(post.call_args_list[0].args[0], "https://api.twitter.com/2/tweets")
-        self.assertEqual(post.call_args_list[1].args[0], "https://api.twitter.com/1.1/statuses/update.json")
+        self.assertEqual(post.call_args_list[0].args[0], "https://api.x.com/2/tweets")
+        self.assertEqual(post.call_args_list[1].args[0], "https://api.x.com/1.1/statuses/update.json")
         self.assertEqual(post.call_args_list[1].kwargs["data"], {"status": "hello"})
 
 

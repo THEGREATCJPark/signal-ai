@@ -50,6 +50,20 @@ class PublishFormatTest(unittest.TestCase):
         self.assertNotIn("FirstLight", text)
         self.assertNotIn("#AI", text)
 
+    def test_x_article_text_is_trimmed_by_x_weighted_length(self):
+        import bot.x_poster as x_poster
+
+        article = {
+            "title": "GPT-5.5, 사이버 보안 및 게임 벤치마크에서 강력한 성능 입증",
+            "summary": "OpenAI의 최신 모델 GPT-5.5가 다양한 테스트에서 놀라운 성능을 보여주고 있습니다. " * 8,
+            "url": "https://example.com/gpt-55",
+        }
+
+        text = x_poster.build_compact_article_post_text(article)
+
+        self.assertLessEqual(x_poster._tweet_weight(text), 260)
+        self.assertIn("https://example.com/gpt-55", text)
+
     def test_x_trigger_article_posts_compact_telegram_style_text(self):
         import bot.x_poster as x_poster
 

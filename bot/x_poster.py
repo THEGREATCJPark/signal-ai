@@ -2,6 +2,7 @@ import os
 import re
 import sys
 import hashlib
+import unicodedata
 from pathlib import Path
 
 import requests
@@ -26,6 +27,10 @@ TWEET_URL = os.getenv("X_TWEET_URL", "https://api.x.com/2/tweets")
 V1_TWEET_URL = os.getenv("X_V1_TWEET_URL", "https://api.twitter.com/1.1/statuses/update.json")
 TOKEN_URL = os.getenv("X_TOKEN_URL", "https://api.x.com/2/oauth2/token")
 MAX_DAILY_SUMMARY_ITEMS = 5
+# Keep a small safety margin because X applies weighted tweet length rules.
+MAX_TWEET_WEIGHT = int(os.getenv("X_MAX_TWEET_WEIGHT", "260"))
+URL_WEIGHT = int(os.getenv("X_URL_WEIGHT", "23"))
+URL_RE = re.compile(r"https?://\S+")
 
 
 def _refresh_token_hash(refresh_token: str | None) -> str | None:
@@ -131,8 +136,8 @@ def _oauth1_auth() -> OAuth1:
 
 def post_tweet(text: str) -> dict:
     """Post a tweet using OAuth 1.0a User Context only."""
-    payload = {"text": text[:280]}
-    print(f"[x] Payload chars: {len(payload['text'])}")
+    payload = {"text": _fit_tweet(text)}
+    print(f"[x] Payload chars: {len(payload['text'])}, weighted: {_tweet_weight(payload['text'])}")
 
     print("[x] Auth mode: OAuth 1.0a User Context")
     resp = requests.post(
@@ -188,11 +193,51 @@ def _tweet_response_data(resp: requests.Response) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def _fit_tweet(text: str, limit: int = 280) -> str:
+def _char_weight(ch: str) -> int:
+    return 2 if unicodedata.east_asian_width(ch) in {"F", "W"} else 1
+
+
+def _tweet_weight(text: str) -> int:
+    weight = 0
+    pos = 0
+    for match in URL_RE.finditer(text):
+        weight += sum(_char_weight(ch) for ch in text[pos:match.start()])
+        weight += URL_WEIGHT
+        pos = match.end()
+    weight += sum(_char_weight(ch) for ch in text[pos:])
+    return weight
+
+
+def _fit_tweet(text: str, limit: int | None = None) -> str:
+    limit = limit or MAX_TWEET_WEIGHT
     text = text.strip()
-    if len(text) <= limit:
+    if _tweet_weight(text) <= limit:
         return text
-    return text[: limit - 3].rstrip() + "..."
+    suffix = "..."
+    suffix_weight = _tweet_weight(suffix)
+    out = []
+    weight = 0
+    pos = 0
+    for match in URL_RE.finditer(text):
+        for ch in text[pos:match.start()]:
+            ch_weight = _char_weight(ch)
+            if weight + ch_weight + suffix_weight > limit:
+                return "".join(out).rstrip() + suffix
+            out.append(ch)
+            weight += ch_weight
+        url = match.group(0)
+        if weight + URL_WEIGHT + suffix_weight > limit:
+            return "".join(out).rstrip() + suffix
+        out.append(url)
+        weight += URL_WEIGHT
+        pos = match.end()
+    for ch in text[pos:]:
+        ch_weight = _char_weight(ch)
+        if weight + ch_weight + suffix_weight > limit:
+            return "".join(out).rstrip() + suffix
+        out.append(ch)
+        weight += ch_weight
+    return "".join(out).strip()
 
 
 def _summary_lines(summary: str, max_lines: int) -> list[str]:
@@ -205,7 +250,7 @@ def _summary_lines(summary: str, max_lines: int) -> list[str]:
     return parts[:max_lines]
 
 
-def build_compact_article_post_text(article: dict, *, max_lines: int = 5, limit: int = 280) -> str:
+def build_compact_article_post_text(article: dict, *, max_lines: int = 5, limit: int = MAX_TWEET_WEIGHT) -> str:
     """Build compact title/summary/source text for X posts."""
     title = str(article.get("title") or article.get("headline") or "").strip()
     summary = str(article.get("summary") or article.get("body") or "").strip()
@@ -218,17 +263,17 @@ def build_compact_article_post_text(article: dict, *, max_lines: int = 5, limit:
         lines.append(url)
 
     text = "\n".join(lines[:max_lines])
-    if len(text) <= limit:
+    if _tweet_weight(text) <= limit:
         return text
 
     fixed_lines = [line for line in [title] if line]
     if url:
-        reserved = len("\n".join(fixed_lines + [url]))
+        reserved = _tweet_weight("\n".join(fixed_lines + [url]))
         summary_limit = max(0, limit - reserved - 1)
         fitted_summary = _fit_tweet(" ".join(_summary_lines(summary, summary_budget)), summary_limit)
         lines = fixed_lines + ([fitted_summary] if fitted_summary else []) + [url]
     else:
-        reserved = len("\n".join(fixed_lines))
+        reserved = _tweet_weight("\n".join(fixed_lines))
         summary_limit = max(0, limit - reserved - (1 if fixed_lines else 0))
         fitted_summary = _fit_tweet(" ".join(_summary_lines(summary, summary_budget)), summary_limit)
         lines = fixed_lines + ([fitted_summary] if fitted_summary else [])
@@ -271,7 +316,7 @@ def post_article(article: dict) -> dict:
     """Post a single article to X without digest branding."""
     if article.get("source") == "x_trigger":
         return post_tweet(build_trigger_post_text(article))
-    return post_tweet(build_article_post_text(article))
+    return post_tweet(build_compact_article_post_text(article))
 
 
 def post_daily_summary(articles: list[dict]) -> dict:

@@ -34,6 +34,9 @@ MAX_TWEET_WEIGHT = int(os.getenv("X_MAX_TWEET_WEIGHT", "260"))
 URL_WEIGHT = int(os.getenv("X_URL_WEIGHT", "23"))
 URL_RE = re.compile(r"https?://\S+")
 KST = ZoneInfo("Asia/Seoul")
+KEYWORD_LABEL = "\ud0a4\uc6cc\ub4dc"
+SOURCE_LABEL = "\uc6d0\ubb38"
+KEYWORD_SEPARATOR = " \u00b7 "
 TRIGGER_KEYWORD_RULES = [
     ("\ubaa8\ub378\ucd9c\uc2dc", ("roll out", "rollout", "launch", "release", "ship", "introduc", "\ucd9c\uc2dc", "\ubc30\ud3ec", "\uacf5\uac1c")),
     ("\uc2e0\ubaa8\ub378", ("gpt-", "claude", "gemini", "grok", "llama", "qwen", "mistral", "model", "\uc2e0\ubaa8\ub378", "\ubaa8\ub378")),
@@ -361,8 +364,8 @@ def build_trigger_post_text(article: dict) -> str:
     headline = _article_title(article)
     url = _article_url(article)
     keywords = _keyword_candidates(article)
-    keyword_line = f"\ud0a4\uc6cc\ub4dc: {' \u00b7 '.join(keywords)}" if keywords else ""
-    source_line = f"\uc6d0\ubb38: {url}" if url else ""
+    keyword_line = f"{KEYWORD_LABEL}: {KEYWORD_SEPARATOR.join(keywords)}" if keywords else ""
+    source_line = f"{SOURCE_LABEL}: {url}" if url else ""
     return _fit_headline_with_tail(headline, [keyword_line, source_line])
 
 

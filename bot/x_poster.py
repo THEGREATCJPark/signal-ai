@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import hashlib
 from pathlib import Path
 
 import requests
@@ -27,22 +28,37 @@ TOKEN_URL = os.getenv("X_TOKEN_URL", "https://api.x.com/2/oauth2/token")
 MAX_DAILY_SUMMARY_ITEMS = 5
 
 
-def _load_stored_refresh_token() -> str | None:
+def _refresh_token_hash(refresh_token: str | None) -> str | None:
+    if not refresh_token:
+        return None
+    return hashlib.sha256(refresh_token.encode("utf-8")).hexdigest()
+
+
+def _load_pipeline_state() -> dict:
+    from db.articles import load_pipeline_state
+
+    return load_pipeline_state(X_REFRESH_TOKEN_STATE_KEY) or {}
+
+
+def _load_stored_refresh_token(seed_refresh_token: str | None = None) -> str | None:
     """Load the latest rotated X refresh token from mutable pipeline state."""
     if not os.getenv("SUPABASE_URL") or not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
         return None
     try:
-        from db.articles import load_pipeline_state
-
-        state = load_pipeline_state(X_REFRESH_TOKEN_STATE_KEY) or {}
+        state = _load_pipeline_state()
     except Exception as exc:
         print(f"[x] refresh token state load skipped: {exc}")
+        return None
+    expected_hash = _refresh_token_hash(seed_refresh_token)
+    stored_hash = state.get("seed_hash")
+    if expected_hash and stored_hash and stored_hash != expected_hash:
+        print("[x] stored refresh_token ignored because X_REFRESH_TOKEN changed")
         return None
     token = state.get("refresh_token")
     return str(token).strip() if token else None
 
 
-def _save_stored_refresh_token(refresh_token: str) -> None:
+def _save_stored_refresh_token(refresh_token: str, seed_refresh_token: str | None = None) -> None:
     """Persist a rotated refresh token so scheduled runs do not reuse a stale one."""
     if not refresh_token:
         return
@@ -58,6 +74,7 @@ def _save_stored_refresh_token(refresh_token: str) -> None:
         X_REFRESH_TOKEN_STATE_KEY,
         {
             "refresh_token": refresh_token,
+            "seed_hash": _refresh_token_hash(seed_refresh_token),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         },
     )
@@ -66,7 +83,7 @@ def _save_stored_refresh_token(refresh_token: str) -> None:
 
 def _get_access_token() -> str:
     """Refresh an OAuth 2.0 user-context token, persisting rotated refresh tokens."""
-    refresh_token = _load_stored_refresh_token() or X_REFRESH_TOKEN
+    refresh_token = _load_stored_refresh_token(X_REFRESH_TOKEN) or X_REFRESH_TOKEN
     if not X_CLIENT_ID or not refresh_token:
         raise RuntimeError("X_CLIENT_ID or X_REFRESH_TOKEN environment variable is missing")
 
@@ -89,7 +106,7 @@ def _get_access_token() -> str:
         print(f"[x] OAuth2 granted scopes: {scope}")
     new_refresh = data.get("refresh_token")
     if new_refresh and new_refresh != refresh_token:
-        _save_stored_refresh_token(new_refresh)
+        _save_stored_refresh_token(new_refresh, X_REFRESH_TOKEN)
     return data["access_token"]
 
 

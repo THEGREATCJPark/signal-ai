@@ -162,7 +162,39 @@ class XOAuth1PublishTest(unittest.TestCase):
         self.assertEqual(token, "access-token")
         self.assertEqual(post.call_args.args[0], "https://api.x.com/2/oauth2/token")
         self.assertEqual(post.call_args.kwargs["data"]["refresh_token"], "stored-refresh")
-        save_token.assert_called_once_with("rotated-refresh")
+        save_token.assert_called_once_with("rotated-refresh", "env-refresh")
+
+    def test_env_refresh_token_change_ignores_stale_stored_token(self):
+        env = {
+            "X_CLIENT_ID": "client-id",
+            "X_CLIENT_SECRET": "client-secret",
+            "X_REFRESH_TOKEN": "new-env-refresh",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            import bot.x_poster as x_poster
+
+            x_poster = importlib.reload(x_poster)
+            stale_hash = x_poster._refresh_token_hash("old-env-refresh")
+
+            class Response:
+                ok = True
+                status_code = 200
+                text = '{"access_token":"access-token","refresh_token":"rotated-refresh"}'
+
+                def json(self):
+                    return {"access_token": "access-token", "refresh_token": "rotated-refresh"}
+
+            with patch.object(
+                x_poster,
+                "_load_pipeline_state",
+                return_value={"refresh_token": "stored-refresh", "seed_hash": stale_hash},
+            ), patch.object(x_poster, "_save_stored_refresh_token") as save_token, \
+                 patch.object(x_poster.requests, "post", return_value=Response()) as post:
+                token = x_poster._get_access_token()
+
+        self.assertEqual(token, "access-token")
+        self.assertEqual(post.call_args.kwargs["data"]["refresh_token"], "new-env-refresh")
+        save_token.assert_called_once_with("rotated-refresh", "new-env-refresh")
 
 
 if __name__ == "__main__":

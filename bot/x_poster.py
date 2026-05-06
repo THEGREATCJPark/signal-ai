@@ -34,6 +34,19 @@ MAX_TWEET_WEIGHT = int(os.getenv("X_MAX_TWEET_WEIGHT", "260"))
 URL_WEIGHT = int(os.getenv("X_URL_WEIGHT", "23"))
 URL_RE = re.compile(r"https?://\S+")
 KST = ZoneInfo("Asia/Seoul")
+TRIGGER_KEYWORD_RULES = [
+    ("\ubaa8\ub378\ucd9c\uc2dc", ("roll out", "rollout", "launch", "release", "ship", "introduc", "\ucd9c\uc2dc", "\ubc30\ud3ec", "\uacf5\uac1c")),
+    ("\uc2e0\ubaa8\ub378", ("gpt-", "claude", "gemini", "grok", "llama", "qwen", "mistral", "model", "\uc2e0\ubaa8\ub378", "\ubaa8\ub378")),
+    ("\uc81c\ud488\uc5c5\ub370\uc774\ud2b8", ("update", "upgrade", "improve", "starting to", "\uc5c5\ub370\uc774\ud2b8", "\uac1c\uc120")),
+    ("ChatGPT", ("chatgpt",)),
+    ("\uc5d0\uc774\uc804\ud2b8", ("agent", "\uc5d0\uc774\uc804\ud2b8")),
+    ("API", ("api",)),
+    ("\ubca4\uce58\ub9c8\ud06c", ("benchmark", "eval", "\ubca4\uce58\ub9c8\ud06c", "\ud3c9\uac00")),
+    ("\ubcf4\uc548", ("security", "cyber", "safety", "\ubcf4\uc548", "\uc548\uc804")),
+    ("\uc624\ud508\uc18c\uc2a4", ("open source", "opensource", "\uc624\ud508\uc18c\uc2a4")),
+    ("\uc5f0\uad6c\uc131\uacfc", ("research", "paper", "study", "\uc5f0\uad6c", "\ub17c\ubb38")),
+    ("\uac00\uaca9\uc815\ucc45", ("pricing", "price", "cost", "\uac00\uaca9", "\uc694\uae08")),
+]
 
 
 def _refresh_token_hash(refresh_token: str | None) -> str | None:
@@ -263,7 +276,7 @@ def _article_url(article: dict) -> str:
 
 def _daily_date_label(now: datetime | None = None) -> str:
     current = now.astimezone(KST) if now else datetime.now(KST)
-    return f"{current.month}월 {current.day}일 AI 최전방 소식"
+    return f"{current.month}\uc6d4 {current.day}\uc77c AI \ucd5c\uc804\ubc29 \uc18c\uc2dd"
 
 
 def _fit_headline_with_tail(headline: str, tail_lines: list[str], *, limit: int = MAX_TWEET_WEIGHT) -> str:
@@ -323,32 +336,22 @@ def _keyword_candidates(article: dict) -> list[str]:
     text = " ".join(
         str(part or "")
         for part in [
-            account.get("username"),
             account.get("group"),
             _article_title(article),
             article.get("summary"),
             tweet.get("text"),
         ]
-    )
-    candidates = []
-    username = str(account.get("username") or "").strip().lstrip("@")
-    if username:
-        candidates.append(f"@{username}")
-    candidates.extend(re.findall(r"[A-Za-z][A-Za-z0-9_.-]{1,}", text))
-
+    ).lower()
     keywords = []
     seen = set()
-    stopwords = {"https", "http", "com", "www", "the", "and", "for", "with", "from", "this", "that"}
-    for item in candidates:
-        cleaned = item.strip(".,:;()[]{}'\"")
-        if not cleaned or cleaned.lower() in stopwords:
+    for label, terms in TRIGGER_KEYWORD_RULES:
+        if not any(term in text for term in terms):
             continue
-        key = cleaned.lower()
-        if key in seen:
+        if label in seen:
             continue
-        seen.add(key)
-        keywords.append(cleaned)
-        if len(keywords) >= 5:
+        seen.add(label)
+        keywords.append(label)
+        if len(keywords) >= 4:
             break
     return keywords
 
@@ -358,8 +361,8 @@ def build_trigger_post_text(article: dict) -> str:
     headline = _article_title(article)
     url = _article_url(article)
     keywords = _keyword_candidates(article)
-    keyword_line = f"키워드: {' · '.join(keywords)}" if keywords else ""
-    source_line = f"원문: {url}" if url else ""
+    keyword_line = f"\ud0a4\uc6cc\ub4dc: {' \u00b7 '.join(keywords)}" if keywords else ""
+    source_line = f"\uc6d0\ubb38: {url}" if url else ""
     return _fit_headline_with_tail(headline, [keyword_line, source_line])
 
 

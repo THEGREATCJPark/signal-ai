@@ -18,11 +18,11 @@ class PublishFormatTest(unittest.TestCase):
             x_poster.post_tweet(x_poster.build_daily_summary_text(articles, now=datetime(2026, 5, 7)))
 
         text = post_tweet.call_args.args[0]
-        self.assertIn("5월 7일 AI 최전방 소식", text)
+        self.assertIn("5\uc6d4 7\uc77c AI \ucd5c\uc804\ubc29 \uc18c\uc2dd", text)
         self.assertIn("1. GPT-5.5가 보안 벤치마크에서 강한 성능을 보였습니다.", text)
         self.assertIn("2. 새 에이전트 기능 공개가 이어졌습니다.", text)
         self.assertNotIn("https://example.com", text)
-        self.assertNotIn("원문", text)
+        self.assertNotIn("\uc6d0\ubb38", text)
         self.assertNotIn("First Light", text)
         self.assertNotIn("FirstLight", text)
         self.assertNotIn("AI 최전방 뉴스", text)
@@ -90,10 +90,13 @@ class PublishFormatTest(unittest.TestCase):
             x_poster.post_article(article)
 
         self.assertIn("OpenAI가 ChatGPT에 GPT-5.5 Instant 배포를 시작했습니다.", captured["text"])
-        self.assertIn("키워드:", captured["text"])
-        self.assertIn("@OpenAIDevs", captured["text"])
-        self.assertIn("GPT-5.5", captured["text"])
-        self.assertIn("원문: https://x.com/OpenAIDevs/status/2051453905343828350", captured["text"])
+        self.assertIn("\ud0a4\uc6cc\ub4dc:", captured["text"])
+        self.assertIn("\ubaa8\ub378\ucd9c\uc2dc", captured["text"])
+        self.assertIn("\uc2e0\ubaa8\ub378", captured["text"])
+        self.assertIn("\uc81c\ud488\uc5c5\ub370\uc774\ud2b8", captured["text"])
+        self.assertIn("ChatGPT", captured["text"])
+        self.assertNotIn("@OpenAIDevs", captured["text"])
+        self.assertIn("\uc6d0\ubb38: https://x.com/OpenAIDevs/status/2051453905343828350", captured["text"])
         self.assertNotIn("더 자연스럽고 간결한 답변", captured["text"])
         self.assertLessEqual(x_poster._tweet_weight(captured["text"]), 260)
 

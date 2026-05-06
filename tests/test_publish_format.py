@@ -1,26 +1,28 @@
 import importlib
 import os
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
 
 class PublishFormatTest(unittest.TestCase):
-    def test_x_daily_summary_posts_content_only(self):
+    def test_x_daily_summary_posts_date_and_headlines_only(self):
         import bot.x_poster as x_poster
 
-        article = {
-            "title": "GPT-5.5, 사이버 보안 벤치마크에서 강력한 성능 입증",
-            "url": "https://example.com/gpt-55",
-        }
+        articles = [
+            {"title": "GPT-5.5가 보안 벤치마크에서 강한 성능을 보였습니다.", "url": "https://example.com/gpt-55"},
+            {"title": "새 에이전트 기능 공개가 이어졌습니다.", "url": "https://example.com/agent"},
+        ]
 
         with patch.object(x_poster, "post_tweet", return_value={"id": "1"}) as post_tweet:
-            x_poster.post_daily_summary([article])
+            x_poster.post_tweet(x_poster.build_daily_summary_text(articles, now=datetime(2026, 5, 7)))
 
         text = post_tweet.call_args.args[0]
-        self.assertEqual(
-            text,
-            "1. GPT-5.5, 사이버 보안 벤치마크에서 강력한 성능 입증",
-        )
+        self.assertIn("5월 7일 AI 최전방 소식", text)
+        self.assertIn("1. GPT-5.5가 보안 벤치마크에서 강한 성능을 보였습니다.", text)
+        self.assertIn("2. 새 에이전트 기능 공개가 이어졌습니다.", text)
+        self.assertNotIn("https://example.com", text)
+        self.assertNotIn("원문", text)
         self.assertNotIn("First Light", text)
         self.assertNotIn("FirstLight", text)
         self.assertNotIn("AI 최전방 뉴스", text)
@@ -64,7 +66,7 @@ class PublishFormatTest(unittest.TestCase):
         self.assertLessEqual(x_poster._tweet_weight(text), 260)
         self.assertIn("https://example.com/gpt-55", text)
 
-    def test_x_trigger_article_posts_compact_telegram_style_text(self):
+    def test_x_trigger_article_posts_headline_keywords_and_source(self):
         import bot.x_poster as x_poster
 
         captured = {}
@@ -75,23 +77,25 @@ class PublishFormatTest(unittest.TestCase):
 
         article = {
             "source": "x_trigger",
-            "title": "OpenAI 발표",
-            "summary": "OpenAI가 실시간 음성 API 개선 내용을 공개했습니다.",
+            "title": "OpenAI가 ChatGPT에 GPT-5.5 Instant 배포를 시작했습니다.",
+            "summary": "OpenAI가 더 자연스럽고 간결한 답변을 제공하는 새 모델을 배포합니다.",
             "url": "https://x.com/OpenAIDevs/status/2051453905343828350",
             "raw_json": {
-                "account": {"username": "OpenAIDevs"},
-                "tweet": {"id": "2051453905343828350"},
+                "account": {"username": "OpenAIDevs", "group": "OpenAI"},
+                "tweet": {"id": "2051453905343828350", "text": "GPT-5.5 Instant is starting to roll out in ChatGPT."},
             },
         }
 
         with patch.object(x_poster, "post_tweet", side_effect=fake_post_tweet):
             x_poster.post_article(article)
 
-        self.assertIn("OpenAI 발표", captured["text"])
-        self.assertIn("실시간 음성 API 개선 내용을 공개했습니다.", captured["text"])
-        self.assertIn("https://x.com/OpenAIDevs/status/2051453905343828350", captured["text"])
-        self.assertLessEqual(len(captured["text"].splitlines()), 5)
-        self.assertLessEqual(len(captured["text"]), 280)
+        self.assertIn("OpenAI가 ChatGPT에 GPT-5.5 Instant 배포를 시작했습니다.", captured["text"])
+        self.assertIn("키워드:", captured["text"])
+        self.assertIn("@OpenAIDevs", captured["text"])
+        self.assertIn("GPT-5.5", captured["text"])
+        self.assertIn("원문: https://x.com/OpenAIDevs/status/2051453905343828350", captured["text"])
+        self.assertNotIn("더 자연스럽고 간결한 답변", captured["text"])
+        self.assertLessEqual(x_poster._tweet_weight(captured["text"]), 260)
 
     def test_telegram_article_formats_content_only(self):
         from bot.formatter import format_article
@@ -147,7 +151,7 @@ class PublishFormatTest(unittest.TestCase):
 
         send_digest_header.assert_not_called()
 
-    def test_scheduler_posts_x_articles_through_article_path(self):
+    def test_scheduler_posts_x_daily_summary_once(self):
         with patch.dict(os.environ, {"TELEGRAM_PER_MESSAGE_DELAY": "0"}, clear=False):
             import bot.scheduler as scheduler
 
@@ -174,10 +178,10 @@ class PublishFormatTest(unittest.TestCase):
         posted = []
 
         with patch.object(scheduler, "get_state", return_value=state), \
-             patch.object(scheduler, "post_article", side_effect=lambda article: posted.append(article["id"]) or {"id": "tweet-1"}):
+             patch.object(scheduler, "post_daily_summary", side_effect=lambda articles: posted.append([a["id"] for a in articles]) or {"id": "tweet-1"}):
             scheduler.publish(articles, platform="x", force=True)
 
-        self.assertEqual([f"a{i}" for i in range(1, 7)], posted)
+        self.assertEqual([[f"a{i}" for i in range(1, 7)]], posted)
         self.assertEqual(
             [(f"a{i}", "x") for i in range(1, 7)],
             state.marked,
@@ -209,7 +213,7 @@ class PublishFormatTest(unittest.TestCase):
 
         with patch.object(scheduler, "get_state", return_value=State()), \
              patch.object(scheduler, "send_article", return_value={"ok": True}), \
-             patch.object(scheduler, "post_article", side_effect=RuntimeError("x forbidden")), \
+             patch.object(scheduler, "post_daily_summary", side_effect=RuntimeError("x forbidden")), \
              patch.object(scheduler.time, "sleep"):
             scheduler.publish([article], platform="both", force=True, strict=False)
 
@@ -232,7 +236,7 @@ class PublishFormatTest(unittest.TestCase):
         article = {"id": "a1", "title": "짧은 뉴스", "score": 10}
 
         with patch.object(scheduler, "get_state", return_value=State()), \
-             patch.object(scheduler, "post_article", side_effect=RuntimeError("x forbidden")):
+             patch.object(scheduler, "post_daily_summary", side_effect=RuntimeError("x forbidden")):
             with self.assertRaises(RuntimeError):
                 scheduler.publish([article], platform="x", force=True, strict=False)
 

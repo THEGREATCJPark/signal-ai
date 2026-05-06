@@ -3,7 +3,9 @@ import re
 import sys
 import hashlib
 import unicodedata
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
@@ -31,6 +33,7 @@ MAX_DAILY_SUMMARY_ITEMS = 5
 MAX_TWEET_WEIGHT = int(os.getenv("X_MAX_TWEET_WEIGHT", "260"))
 URL_WEIGHT = int(os.getenv("X_URL_WEIGHT", "23"))
 URL_RE = re.compile(r"https?://\S+")
+KST = ZoneInfo("Asia/Seoul")
 
 
 def _refresh_token_hash(refresh_token: str | None) -> str | None:
@@ -250,11 +253,35 @@ def _summary_lines(summary: str, max_lines: int) -> list[str]:
     return parts[:max_lines]
 
 
+def _article_title(article: dict) -> str:
+    return str(article.get("title") or article.get("headline") or "").strip()
+
+
+def _article_url(article: dict) -> str:
+    return str(article.get("url") or article.get("source_url") or "").strip()
+
+
+def _daily_date_label(now: datetime | None = None) -> str:
+    current = now.astimezone(KST) if now else datetime.now(KST)
+    return f"{current.month}월 {current.day}일 AI 최전방 소식"
+
+
+def _fit_headline_with_tail(headline: str, tail_lines: list[str], *, limit: int = MAX_TWEET_WEIGHT) -> str:
+    tail_lines = [line.strip() for line in tail_lines if line and line.strip()]
+    if not tail_lines:
+        return _fit_tweet(headline, limit)
+    tail = "\n".join(tail_lines)
+    remaining = max(0, limit - _tweet_weight(tail) - 1)
+    fitted_headline = _fit_tweet(headline, remaining) if remaining else ""
+    lines = [line for line in [fitted_headline, *tail_lines] if line]
+    return _fit_tweet("\n".join(lines), limit)
+
+
 def build_compact_article_post_text(article: dict, *, max_lines: int = 5, limit: int = MAX_TWEET_WEIGHT) -> str:
     """Build compact title/summary/source text for X posts."""
-    title = str(article.get("title") or article.get("headline") or "").strip()
+    title = _article_title(article)
     summary = str(article.get("summary") or article.get("body") or "").strip()
-    url = str(article.get("url") or "").strip()
+    url = _article_url(article)
 
     summary_budget = max(0, max_lines - 1 - (1 if url else 0))
     lines = [line for line in [title] if line]
@@ -281,33 +308,83 @@ def build_compact_article_post_text(article: dict, *, max_lines: int = 5, limit:
 
 
 def build_article_post_text(article: dict) -> str:
-    title = str(article.get("title") or "").strip()
+    title = _article_title(article)
     summary = str(article.get("summary") or "").strip()
-    url = str(article.get("url") or "").strip()
+    url = _article_url(article)
 
     parts = [part for part in [title, summary, url] if part]
     return _fit_tweet("\n\n".join(parts))
 
 
+def _keyword_candidates(article: dict) -> list[str]:
+    raw = article.get("raw_json") if isinstance(article.get("raw_json"), dict) else {}
+    account = raw.get("account") if isinstance(raw.get("account"), dict) else {}
+    tweet = raw.get("tweet") if isinstance(raw.get("tweet"), dict) else {}
+    text = " ".join(
+        str(part or "")
+        for part in [
+            account.get("username"),
+            account.get("group"),
+            _article_title(article),
+            article.get("summary"),
+            tweet.get("text"),
+        ]
+    )
+    candidates = []
+    username = str(account.get("username") or "").strip().lstrip("@")
+    if username:
+        candidates.append(f"@{username}")
+    candidates.extend(re.findall(r"[A-Za-z][A-Za-z0-9_.-]{1,}", text))
+
+    keywords = []
+    seen = set()
+    stopwords = {"https", "http", "com", "www", "the", "and", "for", "with", "from", "this", "that"}
+    for item in candidates:
+        cleaned = item.strip(".,:;()[]{}'\"")
+        if not cleaned or cleaned.lower() in stopwords:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        keywords.append(cleaned)
+        if len(keywords) >= 5:
+            break
+    return keywords
+
+
 def build_trigger_post_text(article: dict) -> str:
-    """Build trigger X text from the same title/summary/url shape as Telegram."""
-    return build_compact_article_post_text(article)
+    """Build headline/keywords/source text for trigger X posts."""
+    headline = _article_title(article)
+    url = _article_url(article)
+    keywords = _keyword_candidates(article)
+    keyword_line = f"키워드: {' · '.join(keywords)}" if keywords else ""
+    source_line = f"원문: {url}" if url else ""
+    return _fit_headline_with_tail(headline, [keyword_line, source_line])
 
 
 def daily_summary_articles(articles: list[dict]) -> list[dict]:
     """Return the articles that can actually fit in the one-tweet daily summary."""
     return [
         article for article in articles
-        if str(article.get("title") or "").strip()
+        if _article_title(article)
     ][:MAX_DAILY_SUMMARY_ITEMS]
 
 
-def build_daily_summary_text(articles: list[dict]) -> str:
-    lines = []
+def build_daily_summary_text(articles: list[dict], now: datetime | None = None) -> str:
+    lines = [_daily_date_label(now)]
     for i, article in enumerate(daily_summary_articles(articles), 1):
-        title = str(article.get("title") or "").strip()
-        if title:
-            lines.append(f"{i}. {title}")
+        title = _article_title(article)
+        line = f"{i}. {title}"
+        candidate = "\n".join(lines + [line])
+        if _tweet_weight(candidate) <= MAX_TWEET_WEIGHT:
+            lines.append(line)
+            continue
+
+        remaining = MAX_TWEET_WEIGHT - _tweet_weight("\n".join(lines)) - 1
+        if remaining > _tweet_weight(f"{i}. ..."):
+            lines.append(_fit_tweet(line, remaining))
+        break
 
     return _fit_tweet("\n".join(lines))
 

@@ -1,0 +1,46 @@
+name: X Post Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      text:
+        description: "Short diagnostic text to publish to X"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x-post-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    env:
+      USE_DB: "true"
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      X_API_KEY: ${{ secrets.X_API_KEY }}
+      X_API_SECRET: ${{ secrets.X_API_SECRET }}
+      X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+      X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+      X_TWEET_URL: https://api.x.com/2/tweets
+      X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
+      X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+      X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Post diagnostic text
+        run: python scripts/x_post_text.py "${{ github.event.inputs.text }}"

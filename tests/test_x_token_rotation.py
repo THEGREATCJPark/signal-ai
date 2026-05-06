@@ -5,6 +5,15 @@ from unittest.mock import patch
 
 
 class XOAuth1PublishTest(unittest.TestCase):
+    def test_x_post_text_cli_posts_supplied_text(self):
+        from scripts import x_post_text
+
+        with patch.object(x_post_text, "post_tweet", return_value={"id": "123"}) as post:
+            rc = x_post_text.main(["diagnostic text"])
+
+        self.assertEqual(0, rc)
+        post.assert_called_once_with("diagnostic text")
+
     def test_oauth1_secrets_post_successfully_without_fallbacks(self):
         env = {
             "X_API_KEY": "api-key",

@@ -580,6 +580,18 @@ class XTriggerScanTest(unittest.TestCase):
 
 
 class XTriggerReviewTest(unittest.TestCase):
+    def test_diagnostic_workflow_can_post_plain_x_text(self):
+        workflow = Path(".github/workflows/x_post_diagnostic.yml").read_text(encoding="utf-8")
+
+        self.assertIn("X_API_KEY: ${{ secrets.X_API_KEY }}", workflow)
+        self.assertIn("X_API_SECRET: ${{ secrets.X_API_SECRET }}", workflow)
+        self.assertIn("X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}", workflow)
+        self.assertIn("X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}", workflow)
+        self.assertIn("X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}", workflow)
+        self.assertIn("X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}", workflow)
+        self.assertIn("X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}", workflow)
+        self.assertIn("python scripts/x_post_text.py", workflow)
+
     def test_review_workflow_passes_oauth1_credentials_for_x_publish(self):
         workflow = Path(".github/workflows/x-trigger-review.yml").read_text(encoding="utf-8")
 

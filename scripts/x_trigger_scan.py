@@ -34,6 +34,7 @@ ISSUE_LABEL_COLORS = {
     "needs-review": "fbca04",
     "trigger-approved": "0e8a16",
     "trigger-rejected": "b60205",
+    "trigger-auto-published": "0e8a16",
 }
 ISSUE_PAYLOAD_PREFIX = "x-trigger-payload:"
 DEFAULT_FREE_FEED_BASE_URLS = [
@@ -51,6 +52,27 @@ PER_ACCOUNT_DELAY_SECONDS = max(0.0, float(os.getenv("X_TRIGGER_PER_ACCOUNT_DELA
 DEFAULT_FEED_MODE = os.getenv("X_TRIGGER_FEED_MODE", "nitter-first").strip().lower() or "nitter-first"
 DEFAULT_SUMMARY_MODEL = "gemini-3.1-flash-lite-preview"
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+AUTO_PUBLISH_KEYWORDS = (
+    "gpt",
+    "chatgpt",
+    "claude",
+    "gemini",
+    "grok",
+    "model",
+    "api",
+    "instant",
+    "roll out",
+    "rollout",
+    "starting to roll",
+    "release",
+    "released",
+    "launch",
+    "launched",
+    "available",
+    "ships",
+    "shipping",
+    "upgrade",
+)
 
 DEFAULT_ACCOUNTS = [
     {"username": "OpenAI", "category": "official", "group": "공식 발표"},
@@ -323,9 +345,22 @@ def fallback_summary(tweet: dict[str, Any], account: dict[str, Any]) -> dict[str
         body = body[:497].rstrip() + "..."
     return {
         "title": title,
-        "body": body,
+        "body": compact_summary_body(body),
         "confidence": "fallback",
     }
+
+
+def compact_summary_body(body: str, *, max_lines: int = 3, max_chars: int = 180) -> str:
+    body = re.sub(r"\s+", " ", (body or "").strip())
+    if not body:
+        return ""
+    parts = [part.strip() for part in re.split(r"(?<=[.!?。！？다요죠니다습니다])\s+", body) if part.strip()]
+    if not parts:
+        parts = [body]
+    text = "\n".join(parts[:max_lines])
+    if len(text) > max_chars:
+        text = text[: max_chars - 3].rstrip() + "..."
+    return "\n".join(text.splitlines()[:5])
 
 
 def build_summary_prompt(tweet: dict[str, Any], account: dict[str, Any]) -> str:
@@ -339,7 +374,9 @@ def build_summary_prompt(tweet: dict[str, Any], account: dict[str, Any]) -> str:
 - 공식 계정이면 발표/제품/개발자 영향 위주로 정리.
 - 루머/탐지 계정이면 불확실성을 분명히 표시.
 - 제목은 18~42자.
-- 본문은 2~4문장.
+- 본문은 1~2문장, 보통 2~3줄 안에서 끝낼 것.
+- 본문은 절대 5줄을 넘기지 말 것.
+- 발행기가 원문 링크를 붙이므로 본문에 URL을 넣지 말 것.
 - JSON 객체 하나만 출력.
 
 스키마:
@@ -372,7 +409,7 @@ def summarize_tweet(
         if title and len(body) >= 8:
             return {
                 "title": title,
-                "body": body,
+                "body": compact_summary_body(body),
                 "confidence": str(parsed.get("confidence") or account.get("category") or "unknown"),
             }
     except Exception as exc:
@@ -531,6 +568,80 @@ def enrich_candidate(raw_candidate: dict[str, Any], account: dict[str, Any]) -> 
         "summary": summary,
         "detected_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def should_auto_publish_candidate(candidate: dict[str, Any]) -> bool:
+    account = candidate.get("account") or {}
+    if str(account.get("category") or "").strip().lower() != "official":
+        return False
+
+    tweet = candidate.get("tweet") or {}
+    summary = candidate.get("summary") or {}
+    haystack = " ".join(
+        str(value or "")
+        for value in (
+            tweet.get("text"),
+            tweet.get("title"),
+            summary.get("title"),
+            summary.get("body"),
+        )
+    ).lower()
+    return any(keyword in haystack for keyword in AUTO_PUBLISH_KEYWORDS)
+
+
+def publish_trigger_candidate(candidate: dict[str, Any], *, platform: str = "both", dry_run: bool = False) -> list[str]:
+    from scripts.x_trigger_review import publish_trigger_candidate as publish
+
+    return publish(candidate, platform=platform, dry_run=dry_run)
+
+
+def _issue_number_from_url(issue_url: str) -> int | None:
+    match = re.search(r"/issues/(\d+)(?:$|[?#])", issue_url or "")
+    return int(match.group(1)) if match else None
+
+
+def record_auto_publish_on_issue(
+    issue_url: str,
+    candidate: dict[str, Any],
+    published: list[str],
+    *,
+    token: str | None = None,
+    repo: str | None = None,
+) -> None:
+    token = token or os.getenv("GITHUB_TOKEN")
+    repo = repo or os.getenv("GITHUB_REPOSITORY")
+    issue_number = _issue_number_from_url(issue_url)
+    if not token or not repo or not issue_number:
+        return
+
+    label = "trigger-auto-published"
+    ensure_github_labels([label], token=token, repo=repo)
+    headers = _github_headers(token)
+    base = f"https://api.github.com/repos/{repo}/issues/{issue_number}"
+    response = requests.post(
+        f"{base}/labels",
+        headers=headers,
+        json={"labels": [label]},
+        timeout=20,
+    )
+    response.raise_for_status()
+    account = (candidate.get("account") or {}).get("username", "unknown")
+    platforms = ", ".join(published) if published else "no new target"
+    comment = f"Auto-published @{account} high-signal official trigger to: {platforms}."
+    response = requests.post(
+        f"{base}/comments",
+        headers=headers,
+        json={"body": comment},
+        timeout=20,
+    )
+    response.raise_for_status()
+    response = requests.patch(
+        base,
+        headers=headers,
+        json={"state": "closed", "state_reason": "completed"},
+        timeout=20,
+    )
+    response.raise_for_status()
 
 
 def _payload_token(candidate: dict[str, Any]) -> str:
@@ -718,6 +829,14 @@ def run_scan(args: argparse.Namespace) -> int:
         maybe_notify_telegram(candidate, issue_url)
         opened.append(issue_url)
         print(f"[trigger] opened review issue: {issue_url}")
+        if should_auto_publish_candidate(candidate):
+            try:
+                platform = os.getenv("TRIGGER_AUTO_PUBLISH_PLATFORM", "both").strip().lower() or "both"
+                published = publish_trigger_candidate(candidate, platform=platform)
+                record_auto_publish_on_issue(issue_url, candidate, published)
+                print(f"[trigger] auto-published: {candidate['id']} -> {', '.join(published) or 'no new target'}")
+            except Exception as exc:
+                print(f"[trigger] auto-publish failed for {candidate['id']}: {exc}", file=sys.stderr)
     if not args.dry_run:
         save_trigger_state(next_state, args.state)
     print(f"[trigger] candidates: {len(raw_candidates)}, issues: {len(opened)}")

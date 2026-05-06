@@ -69,7 +69,7 @@ def normalize_articles(raw) -> list[dict]:
         if not aid:
             aid = hashlib.sha256(title.encode()).hexdigest()[:12]
 
-        # 발행용 요약: summary 우선, 없으면 body 전체. 길이 절단 없음 — 채널 메시지는
+        # 발행용 요약: summary 우선, 없으면 body 전체. 길이 절단 없음 - 채널 메시지는
         # bot/scheduler.py가 기사별로 한 메시지씩 보내므로 텔레그램 4096자 제한
         # 안에서 충분히 들어간다. (본문 평균 ~340자, 최대 ~1100자.)
         summary = (a.get("summary") or "").strip() or (a.get("body") or "").strip() or "요약 없음"
@@ -103,6 +103,8 @@ def main():
                         help="이미 발행된 기사도 재발행")
     parser.add_argument("--limit", type=int, default=0,
                         help="발행할 최대 기사 수 (0=무제한)")
+    parser.add_argument("--allow-partial", action="store_true",
+                        help="하나 이상의 플랫폼이 성공하면 나머지 플랫폼 실패를 non-fatal로 처리")
     args = parser.parse_args()
 
     # JSON 로드
@@ -124,7 +126,7 @@ def main():
     # 발행
     from bot.scheduler import publish
     publish(articles, dry_run=args.dry_run, platform=args.platform,
-           force=args.force, limit=args.limit)
+           force=args.force, limit=args.limit, strict=not args.allow_partial)
 
 
 if __name__ == "__main__":

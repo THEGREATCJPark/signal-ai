@@ -359,6 +359,28 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertIn("force_latest:", workflow)
         self.assertIn("--force-latest", workflow)
 
+    def test_official_model_rollout_candidate_should_auto_publish(self):
+        from scripts.x_trigger_scan import should_auto_publish_candidate
+
+        candidate = {
+            "account": {"username": "OpenAI", "category": "official"},
+            "tweet": {"text": "GPT-5.5 Instant is starting to roll out in ChatGPT."},
+            "summary": {"title": "GPT-5.5 Instant 출시", "body": "ChatGPT에 새 모델이 순차 배포됩니다."},
+        }
+
+        self.assertTrue(should_auto_publish_candidate(candidate))
+
+    def test_non_official_candidate_should_not_auto_publish(self):
+        from scripts.x_trigger_scan import should_auto_publish_candidate
+
+        candidate = {
+            "account": {"username": "testingcatalog", "category": "fast_signal"},
+            "tweet": {"text": "GPT-5.5 Instant might be rolling out."},
+            "summary": {"title": "GPT-5.5 루머", "body": "비공식 계정의 관측입니다."},
+        }
+
+        self.assertFalse(should_auto_publish_candidate(candidate))
+
     def test_build_candidate_issue_body_round_trips_payload_and_instructions(self):
         from scripts.x_trigger_scan import build_issue_body, extract_candidate_from_issue_body
 
@@ -492,6 +514,69 @@ class XTriggerScanTest(unittest.TestCase):
 
         self.assertEqual(0, rc)
         save.assert_not_called()
+
+    def test_run_scan_auto_publishes_official_high_signal_candidate_after_issue(self):
+        from scripts import x_trigger_scan
+
+        calls = []
+
+        class FakeClient:
+            def __init__(self, **kwargs):
+                pass
+
+            def fetch_recent_by_accounts(self, accounts, *, max_results, state):
+                return {
+                    "OpenAI": [{
+                        "id": "101",
+                        "text": "GPT-5.5 Instant is starting to roll out in ChatGPT.",
+                        "tweet_kind": "post",
+                        "url": "https://x.com/OpenAI/status/101",
+                    }]
+                }, state
+
+        args = types.SimpleNamespace(
+            accounts=None,
+            scope="auto",
+            state=None,
+            max_results=1,
+            backfill=False,
+            force_latest=False,
+            dry_run=False,
+            feed_mode="nitter",
+        )
+
+        def fake_issue(candidate, **kwargs):
+            calls.append(("issue", candidate["id"]))
+            return "https://github.com/owner/repo/issues/9"
+
+        def fake_publish(candidate, **kwargs):
+            calls.append(("publish", candidate["id"], kwargs.get("platform")))
+            return ["telegram", "x"]
+
+        def fake_update(issue_url, candidate, published):
+            calls.append(("update", issue_url, tuple(published)))
+
+        with patch.object(x_trigger_scan, "FreeXFeedClient", FakeClient), \
+             patch.object(x_trigger_scan, "load_trigger_state", return_value={"last_seen_ids": {"openai": "100"}}), \
+             patch.object(x_trigger_scan, "save_trigger_state") as save, \
+             patch.object(x_trigger_scan, "summarize_tweet", return_value={
+                 "title": "GPT-5.5 Instant 배포",
+                 "body": "OpenAI가 ChatGPT에 GPT-5.5 Instant를 순차 배포합니다.",
+                 "confidence": "official",
+             }), \
+             patch.object(x_trigger_scan, "create_github_issue", side_effect=fake_issue), \
+             patch.object(x_trigger_scan, "maybe_notify_telegram"), \
+             patch.object(x_trigger_scan, "publish_trigger_candidate", side_effect=fake_publish), \
+             patch.object(x_trigger_scan, "record_auto_publish_on_issue", side_effect=fake_update):
+            rc = x_trigger_scan.run_scan(args)
+
+        self.assertEqual(0, rc)
+        self.assertEqual([
+            ("issue", "x-101"),
+            ("publish", "x-101", "both"),
+            ("update", "https://github.com/owner/repo/issues/9", ("telegram", "x")),
+        ], calls)
+        save.assert_called_once()
 
 
 class XTriggerReviewTest(unittest.TestCase):

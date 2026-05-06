@@ -2,8 +2,8 @@ name: Daily AI Frontier News Publish
 
 on:
   schedule:
-    # 08:30 KST (23:30 UTC previous day) daily publish slot.
-    - cron: "30 23 * * *"
+    # 20:30 KST (11:30 UTC) temporary daily publish test slot.
+    - cron: "30 11 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -43,6 +43,14 @@ on:
         description: "Maximum article count, 0 means unlimited"
         required: false
         default: "0"
+      allow_partial:
+        description: "Succeed when at least one target platform publishes"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 permissions:
   contents: read
@@ -100,16 +108,19 @@ jobs:
             DRY_RUN=false
             FORCE=false
             LIMIT=0
+            ALLOW_PARTIAL=true
           else
             SOURCE="${{ github.event.inputs.source || 'supabase' }}"
             PLATFORM="${{ github.event.inputs.platform || 'both' }}"
             DRY_RUN="${{ github.event.inputs.dry_run || 'true' }}"
             FORCE="${{ github.event.inputs.force || 'false' }}"
             LIMIT="${{ github.event.inputs.limit || '0' }}"
+            ALLOW_PARTIAL="${{ github.event.inputs.allow_partial || 'true' }}"
           fi
 
           ARGS="--source $SOURCE --platform $PLATFORM"
           if [ "$DRY_RUN" = "true" ]; then ARGS="$ARGS --dry-run"; fi
           if [ "$FORCE" = "true" ]; then ARGS="$ARGS --force"; fi
           if [ "$LIMIT" != "0" ]; then ARGS="$ARGS --limit $LIMIT"; fi
+          if [ "$ALLOW_PARTIAL" = "true" ]; then ARGS="$ARGS --allow-partial"; fi
           python scripts/run_publish.py $ARGS

@@ -50,7 +50,7 @@ class PublishFormatTest(unittest.TestCase):
         self.assertNotIn("FirstLight", text)
         self.assertNotIn("#AI", text)
 
-    def test_x_trigger_article_posts_daily_style_title_only(self):
+    def test_x_trigger_article_posts_compact_telegram_style_text(self):
         import bot.x_poster as x_poster
 
         captured = {}
@@ -73,10 +73,11 @@ class PublishFormatTest(unittest.TestCase):
         with patch.object(x_poster, "post_tweet", side_effect=fake_post_tweet):
             x_poster.post_article(article)
 
-        self.assertNotIn("https://x.com/", captured["text"])
-        self.assertEqual("1. OpenAI 발표", captured["text"])
-        self.assertNotIn("OpenAIDevs", captured["text"])
-        self.assertNotIn("실시간 음성 API", captured["text"])
+        self.assertIn("OpenAI 발표", captured["text"])
+        self.assertIn("실시간 음성 API 개선 내용을 공개했습니다.", captured["text"])
+        self.assertIn("https://x.com/OpenAIDevs/status/2051453905343828350", captured["text"])
+        self.assertLessEqual(len(captured["text"].splitlines()), 5)
+        self.assertLessEqual(len(captured["text"]), 280)
 
     def test_telegram_article_formats_content_only(self):
         from bot.formatter import format_article
@@ -132,7 +133,7 @@ class PublishFormatTest(unittest.TestCase):
 
         send_digest_header.assert_not_called()
 
-    def test_scheduler_marks_only_articles_in_x_daily_summary_as_published(self):
+    def test_scheduler_posts_x_articles_through_article_path(self):
         with patch.dict(os.environ, {"TELEGRAM_PER_MESSAGE_DELAY": "0"}, clear=False):
             import bot.scheduler as scheduler
 
@@ -156,15 +157,70 @@ class PublishFormatTest(unittest.TestCase):
             {"id": f"a{i}", "title": f"Title {i}", "summary": "body", "score": 100 - i}
             for i in range(1, 7)
         ]
+        posted = []
 
         with patch.object(scheduler, "get_state", return_value=state), \
-             patch.object(scheduler, "post_daily_summary", return_value={"id": "tweet-1"}):
+             patch.object(scheduler, "post_article", side_effect=lambda article: posted.append(article["id"]) or {"id": "tweet-1"}):
             scheduler.publish(articles, platform="x", force=True)
 
+        self.assertEqual([f"a{i}" for i in range(1, 7)], posted)
         self.assertEqual(
-            [(f"a{i}", "x") for i in range(1, 6)],
+            [(f"a{i}", "x") for i in range(1, 7)],
             state.marked,
         )
+
+    def test_scheduler_can_tolerate_one_failed_platform_after_success(self):
+        with patch.dict(os.environ, {"TELEGRAM_PER_MESSAGE_DELAY": "0"}, clear=False):
+            import bot.scheduler as scheduler
+
+            scheduler = importlib.reload(scheduler)
+
+        class State:
+            def get_unpublished(self, articles, platform):
+                return articles
+
+            def mark_published(self, key, platform):
+                return None
+
+            def save(self):
+                return None
+
+        article = {
+            "id": "a1",
+            "title": "짧은 뉴스",
+            "summary": "요약",
+            "url": "https://example.com/news",
+            "score": 10,
+        }
+
+        with patch.object(scheduler, "get_state", return_value=State()), \
+             patch.object(scheduler, "send_article", return_value={"ok": True}), \
+             patch.object(scheduler, "post_article", side_effect=RuntimeError("x forbidden")), \
+             patch.object(scheduler.time, "sleep"):
+            scheduler.publish([article], platform="both", force=True, strict=False)
+
+    def test_scheduler_still_fails_when_no_platform_succeeds(self):
+        with patch.dict(os.environ, {"TELEGRAM_PER_MESSAGE_DELAY": "0"}, clear=False):
+            import bot.scheduler as scheduler
+
+            scheduler = importlib.reload(scheduler)
+
+        class State:
+            def get_unpublished(self, articles, platform):
+                return articles
+
+            def mark_published(self, key, platform):
+                return None
+
+            def save(self):
+                return None
+
+        article = {"id": "a1", "title": "짧은 뉴스", "score": 10}
+
+        with patch.object(scheduler, "get_state", return_value=State()), \
+             patch.object(scheduler, "post_article", side_effect=RuntimeError("x forbidden")):
+            with self.assertRaises(RuntimeError):
+                scheduler.publish([article], platform="x", force=True, strict=False)
 
 
 if __name__ == "__main__":

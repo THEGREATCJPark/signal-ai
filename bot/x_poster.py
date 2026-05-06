@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -60,6 +61,46 @@ def _fit_tweet(text: str, limit: int = 280) -> str:
     return text[: limit - 3].rstrip() + "..."
 
 
+def _summary_lines(summary: str, max_lines: int) -> list[str]:
+    summary = re.sub(r"\s+", " ", (summary or "").strip())
+    if not summary or max_lines <= 0:
+        return []
+    parts = [part.strip() for part in re.split(r"(?<=[.!?。！？다요죠니다습니다])\s+", summary) if part.strip()]
+    if not parts:
+        parts = [summary]
+    return parts[:max_lines]
+
+
+def build_compact_article_post_text(article: dict, *, max_lines: int = 5, limit: int = 280) -> str:
+    """Build compact title/summary/source text for X posts."""
+    title = str(article.get("title") or article.get("headline") or "").strip()
+    summary = str(article.get("summary") or article.get("body") or "").strip()
+    url = str(article.get("url") or "").strip()
+
+    summary_budget = max(0, max_lines - 1 - (1 if url else 0))
+    lines = [line for line in [title] if line]
+    lines.extend(_summary_lines(summary, summary_budget))
+    if url:
+        lines.append(url)
+
+    text = "\n".join(lines[:max_lines])
+    if len(text) <= limit:
+        return text
+
+    fixed_lines = [line for line in [title] if line]
+    if url:
+        reserved = len("\n".join(fixed_lines + [url]))
+        summary_limit = max(0, limit - reserved - 1)
+        fitted_summary = _fit_tweet(" ".join(_summary_lines(summary, summary_budget)), summary_limit)
+        lines = fixed_lines + ([fitted_summary] if fitted_summary else []) + [url]
+    else:
+        reserved = len("\n".join(fixed_lines))
+        summary_limit = max(0, limit - reserved - (1 if fixed_lines else 0))
+        fitted_summary = _fit_tweet(" ".join(_summary_lines(summary, summary_budget)), summary_limit)
+        lines = fixed_lines + ([fitted_summary] if fitted_summary else [])
+    return _fit_tweet("\n".join(lines[:max_lines]), limit)
+
+
 def build_article_post_text(article: dict) -> str:
     title = str(article.get("title") or "").strip()
     summary = str(article.get("summary") or "").strip()
@@ -70,8 +111,8 @@ def build_article_post_text(article: dict) -> str:
 
 
 def build_trigger_post_text(article: dict) -> str:
-    """Build trigger X text in the same one-line shape as daily publishing."""
-    return build_daily_summary_text([article])
+    """Build trigger X text from the same title/summary/url shape as Telegram."""
+    return build_compact_article_post_text(article)
 
 
 def daily_summary_articles(articles: list[dict]) -> list[dict]:

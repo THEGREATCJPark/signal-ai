@@ -4,7 +4,7 @@ import time
 import glob as glob_module
 
 from bot.telegram_bot import send_article, send_daily_digest
-from bot.x_poster import daily_summary_articles, post_daily_summary
+from bot.x_poster import post_article
 from publisher.state import article_key, get_state
 
 # Telegram 메시지 사이 대기 (Bot API 권장: 채널당 ~20msg/min, 보수적으로 1초)
@@ -64,7 +64,7 @@ def run_daily_publish():
 
 
 def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
-           force: bool = False, limit: int = 0):
+           force: bool = False, limit: int = 0, strict: bool = True):
     """JSON 기사 목록을 Telegram/X에 발행.
 
     Args:
@@ -72,6 +72,7 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
         dry_run: True이면 발행 없이 미리보기만
         platform: "telegram", "x", 또는 "both"
         force: True이면 published.json 무시, 전체 재발행
+        strict: True이면 플랫폼 하나라도 실패할 때 예외 발생
     """
     if not articles:
         print("발행할 기사가 없습니다.")
@@ -84,6 +85,7 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
     state = get_state()
     platforms = ["telegram", "x"] if platform == "both" else [platform]
     failures = []
+    completed_platforms = []
 
     for plat in platforms:
         if force:
@@ -93,6 +95,7 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
 
         if not to_publish:
             print(f"[{plat}] 새로 발행할 기사가 없습니다 (이미 발행됨)")
+            completed_platforms.append(plat)
             continue
 
         if limit > 0:
@@ -102,6 +105,7 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
             print(f"\n[DRY-RUN] [{plat}] {len(to_publish)}개 기사 발행 예정:")
             for a in to_publish:
                 print(f"  - {a.get('title', '제목 없음')}")
+            completed_platforms.append(plat)
             continue
 
         # 실제 발행
@@ -115,22 +119,33 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
                         sent += 1
                     except Exception as inner:
                         failures.append(f"telegram article failed: {a.get('title','?')[:40]}: {inner}")
-                        print(f"[telegram] 개별 발행 실패: {a.get('title','?')[:40]} — {inner}")
+                        print(f"[telegram] 개별 발행 실패: {a.get('title','?')[:40]} - {inner}")
                     time.sleep(TELEGRAM_PER_MESSAGE_DELAY)
                 if sent != len(to_publish):
                     failures.append(f"telegram only published {sent}/{len(to_publish)} articles")
                 print(f"[telegram] {sent}/{len(to_publish)}개 기사 발행 완료")
+                if sent:
+                    completed_platforms.append("telegram")
             except Exception as e:
                 failures.append(f"telegram failed: {e}")
                 print(f"[telegram] 발행 실패: {e}")
 
         elif plat == "x":
             try:
-                posted_articles = daily_summary_articles(to_publish)
-                post_daily_summary(posted_articles)
-                for a in posted_articles:
-                    state.mark_published(article_key(a), "x")
-                print(f"[x] 일일 요약 포스팅 완료")
+                sent = 0
+                for a in to_publish:
+                    try:
+                        post_article(a)
+                        state.mark_published(article_key(a), "x")
+                        sent += 1
+                    except Exception as inner:
+                        failures.append(f"x article failed: {a.get('title','?')[:40]}: {inner}")
+                        print(f"[x] 개별 발행 실패: {a.get('title','?')[:40]} - {inner}")
+                if sent != len(to_publish):
+                    failures.append(f"x only published {sent}/{len(to_publish)} articles")
+                print(f"[x] {sent}/{len(to_publish)}개 기사 발행 완료")
+                if sent:
+                    completed_platforms.append("x")
             except Exception as e:
                 failures.append(f"x failed: {e}")
                 print(f"[x] 발행 실패: {e}")
@@ -138,7 +153,10 @@ def publish(articles: list[dict], dry_run: bool = False, platform: str = "both",
     if not dry_run:
         state.save()
     if failures:
-        raise RuntimeError("; ".join(failures))
+        message = "; ".join(failures)
+        if strict or not completed_platforms:
+            raise RuntimeError(message)
+        print(f"[publish] non-fatal platform failure: {message}")
 
 
 if __name__ == "__main__":

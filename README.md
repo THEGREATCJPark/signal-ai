@@ -13,12 +13,13 @@ GitHub Issue based trigger approval.
 | --- | --- | --- |
 | 07:00 | Local public/Discord crawl, bundle handoff to GitHub Actions, Supabase `posts` ingest | Local WSL + `.github/workflows/local-crawl-handoff.yml` |
 | 08:00 | Daily article generation from local Discord pipeline | Local WSL `run_cron_task.sh` |
-| 08:30 | Sync generated articles to Supabase, then publish daily article content to Telegram and X | `.github/workflows/daily_publish.yml` |
+| 20:30 | Sync generated articles to Supabase, then publish daily article content to Telegram and X | `.github/workflows/daily_publish.yml` |
 | Hourly `:00` | Scan watched X accounts and open review issues | `.github/workflows/x-trigger-scan.yml` |
 | On issue comment | Approve/reject a trigger candidate and publish if approved | `.github/workflows/x-trigger-review.yml` |
 
 Daily publish posts the article content only. It does not prepend any brand
-banner.
+banner. X daily publishing uses the same per-article posting path as approved
+trigger publishing, so each selected article is posted and tracked separately.
 
 ## X Trigger Pipeline
 
@@ -26,6 +27,10 @@ The trigger path uses free public feed crawling only. It scans
 `config/x_trigger_accounts.json`, summarizes new high-signal posts with the
 same AI tooling used by the existing pipeline, then creates a GitHub Issue for
 human review.
+
+Official high-signal launch/model/API posts are also auto-published immediately
+after the review issue is created. The issue is kept as the audit record and is
+marked `trigger-auto-published` when the automatic publish succeeds.
 
 Review comments:
 
@@ -110,7 +115,7 @@ Useful variables:
 
 ## Important Files
 
-- `.github/workflows/daily_publish.yml`: 08:30 KST Telegram/X daily publish
+- `.github/workflows/daily_publish.yml`: 20:30 KST Telegram/X daily publish
 - `.github/workflows/x-trigger-scan.yml`: hourly watched-account scan
 - `.github/workflows/x-trigger-review.yml`: issue comment approval handler
 - `.github/workflows/local-crawl-handoff.yml`: local bundle ingestion into Supabase

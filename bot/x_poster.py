@@ -84,6 +84,9 @@ def _get_access_token() -> str:
         resp.raise_for_status()
 
     data = resp.json()
+    scope = data.get("scope")
+    if scope:
+        print(f"[x] OAuth2 granted scopes: {scope}")
     new_refresh = data.get("refresh_token")
     if new_refresh and new_refresh != refresh_token:
         _save_stored_refresh_token(new_refresh)

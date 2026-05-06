@@ -148,7 +148,11 @@ class XOAuth1PublishTest(unittest.TestCase):
                 text = '{"access_token":"access-token","refresh_token":"rotated-refresh"}'
 
                 def json(self):
-                    return {"access_token": "access-token", "refresh_token": "rotated-refresh"}
+                    return {
+                        "access_token": "access-token",
+                        "refresh_token": "rotated-refresh",
+                        "scope": "tweet.read tweet.write users.read offline.access",
+                    }
 
             with patch.object(x_poster, "_load_stored_refresh_token", return_value="stored-refresh"), \
                  patch.object(x_poster, "_save_stored_refresh_token") as save_token, \

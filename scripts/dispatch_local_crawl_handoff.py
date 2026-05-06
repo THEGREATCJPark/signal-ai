@@ -185,6 +185,8 @@ def trigger_secret_push(repo: str, ref: str, bundle_url: str, batch_size: int) -
         cwd=ROOT,
         check=True,
     )
+    subprocess.run(["git", "fetch", "origin", ref], cwd=ROOT, check=True)
+    subprocess.run(["git", "rebase", f"origin/{ref}"], cwd=ROOT, check=True)
     sha = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=ROOT,

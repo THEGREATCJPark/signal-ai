@@ -198,6 +198,35 @@ class IngestAutomationTest(unittest.TestCase):
             else:
                 os.environ["GITHUB_ACTIONS"] = old_value
 
+    def test_secret_push_rebases_before_pushing_trigger_commit(self):
+        mod = importlib.import_module("scripts.dispatch_local_crawl_handoff")
+        calls = []
+
+        class Result:
+            stdout = "rebased-sha\n"
+
+        def fake_run(command, **kwargs):
+            calls.append(list(command))
+            return Result()
+
+        with tempfile.TemporaryDirectory(dir=ROOT) as td:
+            root = Path(td)
+            trigger = root / ".github" / "local-crawl-handoff-trigger"
+            trigger.parent.mkdir(parents=True)
+
+            with (
+                patch.object(mod, "ROOT", root),
+                patch.object(mod, "TRIGGER_FILE", trigger),
+                patch.object(mod, "set_repo_secret"),
+                patch.object(mod.subprocess, "run", side_effect=fake_run),
+            ):
+                sha = mod.trigger_secret_push("repo/name", "dev", "https://fresh.example/bundle.tar.gz", 500)
+
+        self.assertEqual("rebased-sha", sha)
+        self.assertIn(["git", "fetch", "origin", "dev"], calls)
+        self.assertIn(["git", "rebase", "origin/dev"], calls)
+        self.assertLess(calls.index(["git", "rebase", "origin/dev"]), calls.index(["git", "push", "origin", "HEAD:dev"]))
+
     def test_supabase_ingest_deduplicates_conflicts_within_batch(self):
         ingest = importlib.import_module("db.ingest")
 

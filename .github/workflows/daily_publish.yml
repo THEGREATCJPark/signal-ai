@@ -2,10 +2,8 @@ name: Daily AI Frontier News Publish
 
 on:
   schedule:
-    # 08:30/08:37/08:45 KST backup slots (23:30/23:37/23:45 UTC previous day).
+    # 08:30 KST (23:30 UTC previous day).
     - cron: "30 23 * * *"
-    - cron: "37 23 * * *"
-    - cron: "45 23 * * *"
   workflow_dispatch:
     inputs:
       dry_run:

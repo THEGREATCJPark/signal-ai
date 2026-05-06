@@ -49,7 +49,7 @@
                        ↓
 ┌──────────────────────┴──────────────────────────┐
 │ GitHub Actions — daily_publish.yml               │
-│ 08:00 KST · dry_run/force/limit · both/tg/x      │
+│ manual dry-run · force/limit · both/tg/x         │
 ├──────────────┬────────────────────┬─────────────┤
 │  Telegram    │    X (Twitter)     │ GH Pages    │
 └──────────────┴────────────────────┴─────────────┘
@@ -87,10 +87,10 @@ GitHub Actions에서는 Repo Secrets의 같은 이름 값이 쓰이지만, crawl
 - [x] `get_recent_posts_by_source(days, per_source)` RPC — metadata points/score/upvotes/likes/num_comments 중 첫 매치 스코어
 - [x] pg_cron keepalive 활성
 - [x] 텔레그램 봇 자동 발행 (`bot/telegram_bot.py`)
-- [x] X OAuth 2.0 Refresh Token 발행 (`bot/x_poster.py`)
+- [x] X OAuth 1.0a User Context 발행 (`bot/x_poster.py`)
 - [x] `publisher/state.py` USE_DB 듀얼 모드 (Supabase `publish_log` 또는 로컬 JSON)
 - [x] 크롤러 8종 구현 (`crawlers/`)
-- [x] GH Actions `daily_publish.yml` (cron + workflow_dispatch)
+- [x] GH Actions `daily_publish.yml` (dev: workflow_dispatch dry-run default)
 - [x] GitHub Pages 다이제스트 배포 (`pages.yml`)
 - [x] SQLite → Supabase 백필 스크립트 (`scripts/backfill_sqlite_to_supabase.py`)
 
@@ -117,7 +117,7 @@ GitHub Actions에서는 Repo Secrets의 같은 이름 값이 쓰이지만, crawl
 | 봇 | Telegram Bot API (requests 직접 호출) |
 | X | X API v2 (OAuth 2.0 + Refresh Token) |
 | DB | Supabase PostgreSQL (RLS + pg_cron) |
-| 스케줄 | Windows Task Scheduler / GitHub Actions (`daily_publish.yml`) |
+| 스케줄 | Mint cron / GitHub Actions 수동 발행 (`daily_publish.yml`) |
 | 배포 | GitHub Pages (다이제스트 HTML) |
 
 ---
@@ -174,7 +174,7 @@ signal-ai/
 │   └── ...                    # 다이제스트 정적 산출물
 │
 ├── .github/workflows/
-│   ├── daily_publish.yml      # 발행 (cron 23:00 UTC = 08:00 KST)
+│   ├── daily_publish.yml      # 발행 수동 실행(dry-run 기본)
 │   └── deploy-pages.yml       # GH Pages
 │
 ├── run_hourly.py              # 기사 생성 (Discord/LLM)
@@ -199,7 +199,7 @@ cp .env.example .env   # 로컬 개발용
 GH Actions 운영에서는 Repo Secrets에 다음을 등록 (CJ가 관리):
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`
-- `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_REFRESH_TOKEN`
+- `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`
 - 크롤/LLM에 필요한 키 (HB 워크플로우에서 필요 시 추가)
 
 ### 3. DB 스키마
@@ -226,7 +226,7 @@ python scripts/run_publish.py --dry-run --platform telegram
 ```
 
 ### 5. GH Actions 운영
-- **`daily_publish.yml`**: 매일 08:00 KST 자동 발행. 수동 실행 시 `workflow_dispatch`로 `dry_run`/`platform`/`force`/`limit` 지정 가능
+- **`daily_publish.yml`**: `dev`에서는 수동 실행 전용이며 기본값은 dry-run. `workflow_dispatch`로 `dry_run`/`platform`/`force`/`limit` 지정 가능
 
 크롤링은 전부 로컬 WSL에서만 실행한다. GitHub Actions에는 crawler workflow를
 두지 않는다. 로컬에서 `scripts/local_crawl_ingest.py`를 실행하면 모든 crawler가
@@ -252,7 +252,7 @@ JSONL을 만들고 Supabase `posts`로 upsert한다.
 | `USE_DB` | `true` → publisher가 `publish_log` 사용 | 설정값 (env 기본 true 권장) |
 | `TELEGRAM_BOT_TOKEN` | BotFather 토큰 | ✅ |
 | `TELEGRAM_CHANNEL_ID` | 채널 ID (`@...` 또는 `-100...`) | ✅ |
-| `X_CLIENT_ID` / `X_CLIENT_SECRET` / `X_REFRESH_TOKEN` | X OAuth 2.0 | ✅ |
+| `X_API_KEY` / `X_API_SECRET` / `X_ACCESS_TOKEN` / `X_ACCESS_TOKEN_SECRET` | X OAuth 1.0a User Context | ✅ |
 | `GOOGLE_API_KEY` (or `GOOGLE_API_KEYS`) | Gemini/Gemma | 생성도 GHA로 옮기면 ✅ |
 | `DISCORD_TOKEN` | 로컬 Discord 크롤 전용. **GH Secrets에 올리지 말 것** | ❌ |
 

@@ -107,8 +107,7 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("${side.map((a, i) => sideCard(a, i + 1, true)).join('')}", html)
         self.assertIn(".side { display: none; }", mobile)
         self.assertIn(".side-flow { display: block; }", mobile)
-        self.assertNotIn("centerExtraItems", html)
-        self.assertNotIn("i % 3", html)
+        self.assertIn(".desktop-flow { display: none; }", mobile)
 
     def test_wide_layout_expands_sidebars_to_available_width(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
@@ -118,6 +117,17 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("grid-template-columns: minmax(260px, 1fr) minmax(0, clamp(760px, 48vw, 920px)) minmax(260px, 1fr);", layout)
         self.assertIn("gap: clamp(28px, 3vw, 68px);", layout)
         self.assertNotIn("300px minmax(0, 820px) 300px", html)
+
+    def test_wide_layout_fills_center_and_sidebars_in_fresh_rows(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('class="desktop-flow"', html)
+        self.assertIn("const leftItems = side.filter((_, i) => i % 3 === 0);", html)
+        self.assertIn("const centerExtraItems = side.filter((_, i) => i % 3 === 1);", html)
+        self.assertIn("const rightItems = side.filter((_, i) => i % 3 === 2);", html)
+        self.assertIn("leftItems.map((a, i) => sideCard(a, i * 3 + 1, true)).join('')", html)
+        self.assertIn("centerExtraItems.map((a, i) => sideCard(a, i * 3 + 2, true)).join('')", html)
+        self.assertIn("rightItems.map((a, i) => sideCard(a, i * 3 + 3, true)).join('')", html)
+        self.assertNotIn("const splitAt = Math.ceil(side.length / 2);", html)
 
     def test_index_prevents_horizontal_overflow_from_responsive_chrome(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")

@@ -125,6 +125,7 @@
     align-items: start;
   }
   .side-flow { display: none; }
+  .desktop-flow { display: block; }
   @media (max-width: 1280px) {
     .layout {
       display: block;
@@ -137,6 +138,7 @@
     }
     .side { display: none; }
     .side-flow { display: block; }
+    .desktop-flow { display: none; }
   }
 
   /* ── Side columns (larger, no labels) ── */
@@ -1089,6 +1091,10 @@
     `;
   }
 
+  const leftItems = side.filter((_, i) => i % 3 === 0);
+  const centerExtraItems = side.filter((_, i) => i % 3 === 1);
+  const rightItems = side.filter((_, i) => i % 3 === 2);
+
   // ── Center render ──
   let html = '';
   if (top[0]) {
@@ -1120,6 +1126,14 @@
     html += `<div class="empty">메인 기사 없음. 사이드 또는 더보기를 확인하세요.</div>`;
   }
   if (side.length) {
+    const desktopFlowHtml = centerExtraItems.length ? `
+      <section class="desktop-flow">
+        <div class="section-label"><span>MORE</span></div>
+        <div class="more-list">
+          ${centerExtraItems.map((a, i) => sideCard(a, i * 3 + 2, true)).join('')}
+        </div>
+      </section>
+    ` : '';
     const sideFlowHtml = `
       <section class="side-flow">
         <div class="section-label"><span>MORE</span></div>
@@ -1128,19 +1142,13 @@
         </div>
       </section>
     `;
-    html += sideFlowHtml;
+    html += desktopFlowHtml + sideFlowHtml;
   }
   $('center').innerHTML = html;
 
-  // ── Sides render (desktop only; narrow uses the chronological side-flow above) ──
-  const splitAt = Math.ceil(side.length / 2);
-  const leftItems = side.slice(0, splitAt);
-  const rightItems = side.slice(splitAt);
-
-  $('side-left').innerHTML = leftItems
-    .map((a, i) => sideCard(a, i + 1, true)).join('');
-  $('side-right').innerHTML = rightItems
-    .map((a, i) => sideCard(a, splitAt + i + 1, true)).join('');
+  // ── Sides render (desktop uses fresh rows; narrow uses chronological side-flow) ──
+  $('side-left').innerHTML = leftItems.map((a, i) => sideCard(a, i * 3 + 1, true)).join('');
+  $('side-right').innerHTML = rightItems.map((a, i) => sideCard(a, i * 3 + 3, true)).join('');
 
   // ── Reader modal ──
   const byId = Object.fromEntries(all.map(a => [a.id, a]));

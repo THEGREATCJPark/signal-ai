@@ -28,6 +28,14 @@ class DailyPublishScheduleTest(unittest.TestCase):
         self.assertIn("python scripts/validate_articles.py --require-fresh-kst", workflow)
         self.assertIn("python scripts/sync_articles_to_supabase.py --input docs/articles.json", workflow)
 
+    def test_github_daily_articles_uses_cj_gemini_secret(self):
+        workflow = (ROOT / ".github" / "workflows" / "daily_articles.yml").read_text(encoding="utf-8")
+
+        self.assertIn('- cron: "0 23 * * *"', workflow)
+        self.assertIn("GEMINI_API_KEYS_CJ: ${{ secrets.GEMINI_API_KEYS_CJ }}", workflow)
+        self.assertIn("python run_hourly.py", workflow)
+        self.assertIn("git push", workflow)
+
     def test_daily_freshness_rejects_previous_day_articles(self):
         from scripts.validate_articles import is_fresh_for_daily_publish
 

@@ -12,7 +12,7 @@ GitHub Issue based trigger approval.
 | Time (KST) | Flow | Runtime |
 | --- | --- | --- |
 | 07:00 | Local public/Discord crawl, bundle handoff to GitHub Actions, Supabase `posts` ingest | Windows Task Scheduler -> `run_local_crawl_handoff_task.ps1` |
-| 08:00 | Daily article generation from local Discord pipeline | Windows Task Scheduler -> `run_daily_articles_task.ps1` |
+| 08:00 | Daily article generation from local Discord pipeline | `.github/workflows/daily_articles.yml` using `GEMINI_API_KEYS_CJ`; Windows Task Scheduler -> `run_daily_articles_task.ps1` as local fallback |
 | 08:30 | Sync generated articles to Supabase, then publish daily article content to Telegram and X. | Windows Task Scheduler -> `run_daily_publish_task.ps1` |
 | 08:37, 08:45 | Backup publish attempts. GitHub scheduled workflows are best-effort and may be delayed; publish logs avoid duplicates if the 08:30 local task already ran. | `.github/workflows/daily_publish.yml` |
 | Hourly `:00` | Scan watched X accounts and open review issues | `.github/workflows/x-trigger-scan.yml` |
@@ -80,6 +80,8 @@ load. Without the local machine, the daily report will only be as fresh as the l
 
 Local article generation reads LLM keys in this priority order:
 `GEMINI_API_KEYS_CJ`, `GOOGLE_API_KEYS`, `GEMINI_API_KEYS`, then `GOOGLE_API_KEY`.
+On GitHub Actions, `daily_articles.yml` passes `secrets.GEMINI_API_KEYS_CJ`
+directly to `run_hourly.py`.
 `public_state`.
 
 Local commands:

@@ -1,0 +1,60 @@
+name: Daily AI Frontier Article Generation
+
+on:
+  schedule:
+    # 08:00 KST (23:00 UTC previous day).
+    - cron: "0 23 * * *"
+  workflow_dispatch:
+    inputs:
+      since:
+        description: "Optional ISO timestamp override for run_hourly.py --since"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-ai-frontier-article-generation
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    env:
+      GEMINI_API_KEYS_CJ: ${{ secrets.GEMINI_API_KEYS_CJ }}
+      AI_FRONTIER_PUBLISH_BRANCH: main
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate daily articles
+        run: |
+          if [ -n "${{ github.event.inputs.since || '' }}" ]; then
+            python run_hourly.py --since "${{ github.event.inputs.since }}"
+          else
+            python run_hourly.py
+          fi
+
+      - name: Push generated article artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -- docs/articles.json articles.json exports/articles data/new_articles_cache.json data/deduped_cache.json
+          if git diff --cached --quiet; then
+            echo "No generated article changes to push"
+            exit 0
+          fi
+          git commit -m "chore: generate daily articles $(TZ=Asia/Seoul date +%Y-%m-%d)"
+          git push

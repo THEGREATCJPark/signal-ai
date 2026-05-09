@@ -77,6 +77,9 @@ WSL. The 08:30 local publisher owns the exact daily posting slot; GitHub Actions
 remains a backup because `schedule` runs can be delayed or dropped under platform
 load. Without the local machine, the daily report will only be as fresh as the latest pushed
 `docs/articles.json` and synced Supabase
+
+Local article generation reads LLM keys in this priority order:
+`GEMINI_API_KEYS_CJ`, `GOOGLE_API_KEYS`, `GEMINI_API_KEYS`, then `GOOGLE_API_KEY`.
 `public_state`.
 
 Local commands:

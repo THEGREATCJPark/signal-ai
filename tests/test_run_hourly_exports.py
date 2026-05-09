@@ -16,6 +16,19 @@ class DailyExportsTest(unittest.TestCase):
         with patch.dict(run_hourly.os.environ, {"GOOGLE_API_KEYS": "key-a,key-b", "GOOGLE_API_KEY": "ignored"}, clear=False):
             self.assertEqual(["key-a", "key-b"], run_hourly.load_keys())
 
+    def test_load_keys_prefers_cj_gemini_keys(self):
+        with patch.dict(
+            run_hourly.os.environ,
+            {
+                "GEMINI_API_KEYS_CJ": "cj-a,cj-b",
+                "GOOGLE_API_KEYS": "google-a",
+                "GEMINI_API_KEYS": "gemini-a",
+                "GOOGLE_API_KEY": "single-a",
+            },
+            clear=False,
+        ):
+            self.assertEqual(["cj-a", "cj-b"], run_hourly.load_keys())
+
     def test_load_keys_accepts_single_environment_key(self):
         with patch.dict(run_hourly.os.environ, {"GOOGLE_API_KEYS": "", "GOOGLE_API_KEY": "single-key"}, clear=False):
             self.assertEqual(["single-key"], run_hourly.load_keys())

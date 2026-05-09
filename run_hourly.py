@@ -76,7 +76,7 @@ class KeyScheduler:
 
 def load_keys():
     load_dotenv(ROOT / ".env", override=False)
-    for name in ("GOOGLE_API_KEYS", "GEMINI_API_KEYS", "GEMINI_API_KEYS_CJ"):
+    for name in ("GEMINI_API_KEYS_CJ", "GOOGLE_API_KEYS", "GEMINI_API_KEYS"):
         keys = [k.strip() for k in os.getenv(name, "").split(",") if k.strip()]
         if keys:
             return keys
@@ -87,7 +87,7 @@ def load_keys():
     p = Path.home() / ".config" / "legal_evidence_rag" / "keys.env"
     if not p.exists():
         raise FileNotFoundError(
-            f"No Gemini/Google API keys found. Set GOOGLE_API_KEYS or GOOGLE_API_KEY in the environment/.env, or create {p}"
+            f"No Gemini/Google API keys found. Set GEMINI_API_KEYS_CJ, GOOGLE_API_KEYS, or GOOGLE_API_KEY in the environment/.env, or create {p}"
         )
     for line in p.read_text().splitlines():
         if "=" in line and not line.startswith("#"):

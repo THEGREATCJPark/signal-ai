@@ -1,7 +1,7 @@
-#!/bin/bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 DEFAULT_PYTHON="/home/pineapple/miniconda3/bin/python3"
@@ -15,9 +15,12 @@ fi
 
 CONFIG="${DISCORD_EXPORT_CONFIG:-$SCRIPT_DIR/discord_export_config.env}"
 if [ -f "$CONFIG" ]; then
+  TOKEN_ENV="$(mktemp)"
+  grep -E '^DISCORD_TOKEN=' "$CONFIG" > "$TOKEN_ENV" || true
   set -a
-  . <(grep -E '^DISCORD_TOKEN=' "$CONFIG")
+  . "$TOKEN_ENV"
   set +a
+  rm -f "$TOKEN_ENV"
 fi
 
 exec "$AI_FRONTIER_PYTHON" run_hourly.py

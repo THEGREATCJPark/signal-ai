@@ -14,15 +14,4 @@ if [ -z "${AI_FRONTIER_PYTHON:-}" ]; then
   fi
 fi
 
-CONFIG="${DISCORD_EXPORT_CONFIG:-$SCRIPT_DIR/discord_export_config.env}"
-if [ -f "$CONFIG" ]; then
-  TOKEN_ENV="$(mktemp)"
-  grep -E '^DISCORD_TOKEN=' "$CONFIG" > "$TOKEN_ENV" || true
-  set -a
-  . "$TOKEN_ENV"
-  set +a
-  rm -f "$TOKEN_ENV"
-fi
-
-exec "$AI_FRONTIER_PYTHON" scripts/local_crawl_handoff_gate.py -- \
-  "$AI_FRONTIER_PYTHON" scripts/dispatch_local_crawl_handoff.py
+exec "$AI_FRONTIER_PYTHON" scripts/daily_publish_local.py --platform both --allow-partial

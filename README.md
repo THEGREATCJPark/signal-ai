@@ -11,9 +11,10 @@ GitHub Issue based trigger approval.
 
 | Time (KST) | Flow | Runtime |
 | --- | --- | --- |
-| 07:00 | Local public/Discord crawl, bundle handoff to GitHub Actions, Supabase `posts` ingest | Local WSL + `.github/workflows/local-crawl-handoff.yml` |
-| 08:00 | Daily article generation from local Discord pipeline | Local WSL `run_cron_task.sh` |
-| 08:30, 08:37, 08:45 | Sync generated articles to Supabase, then publish daily article content to Telegram and X. Backup slots rely on publish logs to avoid duplicates. | `.github/workflows/daily_publish.yml` |
+| 07:00 | Local public/Discord crawl, bundle handoff to GitHub Actions, Supabase `posts` ingest | Windows Task Scheduler -> `run_local_crawl_handoff_task.ps1` |
+| 08:00 | Daily article generation from local Discord pipeline | Windows Task Scheduler -> `run_daily_articles_task.ps1` |
+| 08:30 | Sync generated articles to Supabase, then publish daily article content to Telegram and X. | Windows Task Scheduler -> `run_daily_publish_task.ps1` |
+| 08:37, 08:45 | Backup publish attempts. GitHub scheduled workflows are best-effort and may be delayed; publish logs avoid duplicates if the 08:30 local task already ran. | `.github/workflows/daily_publish.yml` |
 | Hourly `:00` | Scan watched X accounts and open review issues | `.github/workflows/x-trigger-scan.yml` |
 | On issue comment | Approve/reject a trigger candidate and publish if approved | `.github/workflows/x-trigger-review.yml` |
 
@@ -69,17 +70,21 @@ narrower scope.
 Crawler execution stays local. GitHub Actions receives only a short-lived
 bundle URL and performs the Supabase upsert with repository secrets.
 
-Operational dependency: the local WSL machine that owns `run_cron_task.sh` and
-`run_local_crawl_handoff_task.sh` must be awake for fresh daily collection and
-article generation. GitHub Actions can still publish and run X trigger scans
-without that machine, but the daily report will only be as fresh as the latest
-pushed `docs/articles.json` and synced Supabase `public_state`.
+Operational dependency: the Windows machine must be awake or allowed to wake for
+the Task Scheduler jobs. The local Windows jobs run with Windows Python, so they
+do not depend on WSL `crond`, a WSL default user, or Python being installed inside
+WSL. The 08:30 local publisher owns the exact daily posting slot; GitHub Actions
+remains a backup because `schedule` runs can be delayed or dropped under platform
+load. Without the local machine, the daily report will only be as fresh as the latest pushed
+`docs/articles.json` and synced Supabase
+`public_state`.
 
 Local commands:
 
 ```bash
 ./run_cron_task.sh
 ./run_local_crawl_handoff_task.sh
+./run_daily_publish_task.sh
 python scripts/local_crawl_ingest.py --skip-crawl data/crawled/example.jsonl
 python scripts/local_discord_ingest.py --skip-crawl data/crawled/discord-example.jsonl
 ```
@@ -115,7 +120,11 @@ Useful variables:
 
 ## Important Files
 
-- `.github/workflows/daily_publish.yml`: 08:30/08:37/08:45 KST Telegram/X daily publish backup slots
+- `run_daily_publish_task.sh`: 08:30 KST local Telegram/X daily publish
+- `run_daily_publish_task.ps1`: Windows Task Scheduler entrypoint for 08:30 KST daily publish
+- `run_daily_articles_task.ps1`: Windows Task Scheduler entrypoint for 08:00 KST article generation
+- `run_local_crawl_handoff_task.ps1`: Windows Task Scheduler entrypoint for 07:00 KST crawl handoff
+- `.github/workflows/daily_publish.yml`: 08:37/08:45 KST Telegram/X daily publish backup slots
 - `.github/workflows/x-trigger-scan.yml`: hourly watched-account scan
 - `.github/workflows/x-trigger-review.yml`: issue comment approval handler
 - `.github/workflows/local-crawl-handoff.yml`: local bundle ingestion into Supabase

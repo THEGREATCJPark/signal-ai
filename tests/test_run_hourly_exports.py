@@ -12,6 +12,14 @@ KST = timezone(timedelta(hours=9))
 
 
 class DailyExportsTest(unittest.TestCase):
+    def test_load_keys_prefers_environment_keys(self):
+        with patch.dict(run_hourly.os.environ, {"GOOGLE_API_KEYS": "key-a,key-b", "GOOGLE_API_KEY": "ignored"}, clear=False):
+            self.assertEqual(["key-a", "key-b"], run_hourly.load_keys())
+
+    def test_load_keys_accepts_single_environment_key(self):
+        with patch.dict(run_hourly.os.environ, {"GOOGLE_API_KEYS": "", "GOOGLE_API_KEY": "single-key"}, clear=False):
+            self.assertEqual(["single-key"], run_hourly.load_keys())
+
     def test_build_daily_summary_payload_uses_generated_title_and_metadata(self):
         run_at = datetime(2026, 4, 20, 8, 0, tzinfo=KST)
         articles = [{"id": "a1"}, {"id": "a2"}]

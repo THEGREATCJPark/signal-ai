@@ -595,6 +595,32 @@ def publish_trigger_candidate(candidate: dict[str, Any], *, platform: str = "bot
     return publish(candidate, platform=platform, dry_run=dry_run)
 
 
+def ensure_candidate_x_post_text(candidate: dict[str, Any]) -> str:
+    from bot.x_poster import MAX_TWEET_CHARS, MAX_TWEET_WEIGHT, _tweet_fits, _tweet_weight, build_trigger_post_text
+
+    text = str(candidate.get("x_post_text") or "").strip()
+    summary = candidate.get("summary") or {}
+    tweet = candidate.get("tweet") or {}
+    article = {
+        "source": "x_trigger",
+        "title": str(summary.get("title") or "").strip(),
+        "summary": str(summary.get("body") or "").strip(),
+        "url": str(tweet.get("url") or "").strip(),
+        "raw_json": {"x_post_text": text} if text else {},
+    }
+    text = build_trigger_post_text(article)
+
+    weight = _tweet_weight(text)
+    if not _tweet_fits(text):
+        raise ValueError(f"candidate X post exceeds limit: weight={weight}/{MAX_TWEET_WEIGHT}, chars={len(text)}/{MAX_TWEET_CHARS}")
+    candidate["x_post_text"] = text
+    candidate["x_post_weight"] = weight
+    candidate["x_post_limit"] = MAX_TWEET_WEIGHT
+    candidate["x_post_chars"] = len(text)
+    candidate["x_post_char_limit"] = MAX_TWEET_CHARS
+    return text
+
+
 def _issue_number_from_url(issue_url: str) -> int | None:
     match = re.search(r"/issues/(\d+)(?:$|[?#])", issue_url or "")
     return int(match.group(1)) if match else None
@@ -653,7 +679,11 @@ def build_issue_body(candidate: dict[str, Any]) -> str:
     account = candidate["account"]
     tweet = candidate["tweet"]
     summary = candidate["summary"]
-    recommended = f"{summary.get('body', '').strip()}\n\n{tweet.get('url', '')}".strip()
+    recommended = ensure_candidate_x_post_text(candidate)
+    x_post_weight = candidate.get("x_post_weight")
+    x_post_limit = candidate.get("x_post_limit")
+    x_post_chars = candidate.get("x_post_chars")
+    x_post_char_limit = candidate.get("x_post_char_limit")
     return f"""## X 트리거 검수
 
 **계정:** @{account['username']}
@@ -661,6 +691,7 @@ def build_issue_body(candidate: dict[str, Any]) -> str:
 **원문 링크:** {tweet.get('url', '')}
 **게시 시각:** {tweet.get('created_at', '')}
 **감지 시각:** {candidate.get('detected_at', '')}
+**X 길이 검사:** weight {x_post_weight}/{x_post_limit}, chars {x_post_chars}/{x_post_char_limit}
 
 ### 한국어 요약
 **{summary.get('title', '')}**
@@ -761,6 +792,7 @@ def create_github_issue(candidate: dict[str, Any], *, token: str | None = None, 
     repo = repo or os.getenv("GITHUB_REPOSITORY")
     if not token or not repo:
         raise RuntimeError("GITHUB_TOKEN and GITHUB_REPOSITORY are required to create review issues")
+    ensure_candidate_x_post_text(candidate)
     ensure_github_labels(ISSUE_LABELS, token=token, repo=repo)
     title = f"[X 트리거 검수] @{candidate['account']['username']}: {candidate['summary']['title']}"
     response = requests.post(

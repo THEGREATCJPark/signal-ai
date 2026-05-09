@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 cd "$SCRIPT_DIR"
 export PATH="/home/pineapple/bin:/home/pineapple/.local/bin:/home/pineapple/.dotnet:/home/pineapple/.dotnet/tools:/usr/local/bin:/usr/bin:/bin:$PATH"
@@ -13,4 +13,4 @@ if [ -z "${AI_FRONTIER_PYTHON:-}" ]; then
     AI_FRONTIER_PYTHON="$(command -v python3)"
   fi
 fi
-exec "$AI_FRONTIER_PYTHON" scripts/automation_gate.py -- ./run_cron.sh
+exec "$AI_FRONTIER_PYTHON" scripts/automation_gate.py -- sh ./run_cron.sh

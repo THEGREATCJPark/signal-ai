@@ -19,6 +19,7 @@ import argparse, json, os, re, subprocess, sys, time, threading, random
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import requests
+from dotenv import load_dotenv
 
 ROOT = Path(__file__).parent
 ARTICLES_PATH = ROOT / "docs" / "articles.json"
@@ -74,7 +75,20 @@ class KeyScheduler:
             return best
 
 def load_keys():
+    load_dotenv(ROOT / ".env", override=False)
+    for name in ("GOOGLE_API_KEYS", "GEMINI_API_KEYS", "GEMINI_API_KEYS_CJ"):
+        keys = [k.strip() for k in os.getenv(name, "").split(",") if k.strip()]
+        if keys:
+            return keys
+    single_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    if single_key and single_key.lower() not in {"your_key", "your-google-api-key"}:
+        return [single_key]
+
     p = Path.home() / ".config" / "legal_evidence_rag" / "keys.env"
+    if not p.exists():
+        raise FileNotFoundError(
+            f"No Gemini/Google API keys found. Set GOOGLE_API_KEYS or GOOGLE_API_KEY in the environment/.env, or create {p}"
+        )
     for line in p.read_text().splitlines():
         if "=" in line and not line.startswith("#"):
             return [k.strip() for k in line.split("=", 1)[1].split(",") if k.strip()]

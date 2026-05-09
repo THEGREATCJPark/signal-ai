@@ -11,22 +11,30 @@ from unittest.mock import patch
 REQUIRED_HANDLES = {
     "testingcatalog", "btibor91", "arrakis_ai", "chetaslua", "synthwavedd",
     "petergostev", "Swarek_", "KayvonJafar", "vitrupo", "immasiddtweets",
-    "rowancheung", "therundownai", "aibreakfast", "AlphaSignalAI", "bindureddy",
+    "rowancheung", "aibreakfast", "AlphaSignalAI", "bindureddy",
     "mervenoyann", "OpenAI", "OpenAIDevs", "ChatGPTapp", "sama", "gdb",
     "polynoamial", "nickaturley", "aidan_mclau", "AnthropicAI", "claudeai",
-    "ClaudeDevs", "DarioAmodei", "alexalbert__", "AmandaAskell", "jackclarkSF",
+    "ClaudeDevs", "DarioAmodei", "alexalbert__", "jackclarkSF",
     "_sholtodouglas", "GoogleDeepMind", "GoogleAI", "GeminiApp", "demishassabis",
-    "JeffDean", "OfficialLoganK", "xai", "grok", "elonmusk", "karpathy",
+    "JeffDean", "OfficialLoganK", "xai", "grok", "karpathy",
     "ilyasut", "MiraMurati", "johnschulman2", "_jasonwei", "ylecun", "fchollet",
     "AndrewYNg", "emollick", "simonw", "swyx", "arena", "ArtificialAnlys",
     "METR_Evals", "EpochAIResearch", "SWEbench", "LiveCodeBench", "arcprize",
     "llmstats", "steph_palazzolo", "alexeheath", "haydenfield", "shiringhaffary",
-    "ZeffMax", "KylieRobison", "reckless", "caseynewton", "KevinRoose", "parmy",
-    "Aaron_Tilley", "tomwarren", "huggingface", "ClementDelangue", "Teknium",
+    "KylieRobison", "reckless", "caseynewton", "KevinRoose", "parmy",
+    "Aaron_Tilley", "huggingface", "ClementDelangue", "Teknium",
     "NousResearch", "Alibaba_Qwen", "deepseek_ai", "MistralAI", "AIatMeta",
     "OpenRouterAI", "ollama", "vllm_project", "modal_labs", "replicate",
     "cursor_ai", "anysphere", "Replit", "amasad", "windsurf_ai", "lovable_dev",
     "v0", "vercel", "latentspacepod",
+}
+
+EXCLUDED_NOISY_HANDLES = {
+    "AmandaAskell",
+    "elonmusk",
+    "therundownai",
+    "tomwarren",
+    "ZeffMax",
 }
 
 
@@ -109,6 +117,7 @@ class XTriggerScanTest(unittest.TestCase):
 
         self.assertEqual(len(configured), len(set(configured)))
         self.assertTrue({account_key(handle) for handle in REQUIRED_HANDLES}.issubset(set(configured)))
+        self.assertFalse({account_key(handle) for handle in EXCLUDED_NOISY_HANDLES} & set(configured))
 
     def test_load_accounts_deduplicates_handles_case_insensitively(self):
         from scripts.x_trigger_scan import load_accounts
@@ -413,6 +422,68 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertIn("거절 방법", body)
         self.assertIn("/approve-trigger", body)
         self.assertIn("/reject-trigger", body)
+
+    def test_issue_recommendation_matches_validated_x_post_text(self):
+        from bot import x_poster
+        from scripts.x_trigger_scan import build_issue_body
+
+        candidate = {
+            "id": "x-123",
+            "account": {"username": "OpenAI", "category": "official", "group": "OpenAI", "tier": "auto"},
+            "tweet": {
+                "id": "123",
+                "text": "Introducing a new realtime API for developers.",
+                "url": "https://x.com/OpenAI/status/123",
+                "created_at": "2026-05-04T00:00:00Z",
+            },
+            "summary": {
+                "title": "OpenAI ships a realtime API",
+                "body": (
+                    "This is the short comment that should be published. "
+                    "This second sentence is deliberately long and should be dropped "
+                    "instead of being clipped with an ellipsis before the issue is opened."
+                ),
+            },
+            "detected_at": "2026-05-04T00:01:00Z",
+        }
+
+        body = build_issue_body(candidate)
+        post_text = candidate["x_post_text"]
+
+        self.assertIn(post_text, body)
+        self.assertIn("X 길이 검사", body)
+        self.assertEqual(candidate["x_post_weight"], x_poster._tweet_weight(post_text))
+        self.assertLessEqual(candidate["x_post_weight"], x_poster.MAX_TWEET_WEIGHT)
+        self.assertNotIn("...", post_text)
+
+    def test_issue_recommendation_refits_existing_overlong_x_post_text(self):
+        from bot import x_poster
+        from scripts.x_trigger_scan import build_issue_body
+
+        candidate = {
+            "id": "x-123",
+            "account": {"username": "OpenAI", "category": "official", "group": "OpenAI", "tier": "auto"},
+            "tweet": {
+                "id": "123",
+                "text": "Introducing a new realtime API for developers.",
+                "url": "https://x.com/OpenAI/status/" + ("1234567890" * 6),
+                "created_at": "2026-05-04T00:00:00Z",
+            },
+            "summary": {
+                "title": "OpenAI ships a realtime API",
+                "body": "Short comment.",
+            },
+            "x_post_text": "OpenAI ships a realtime API\n" + ("Long stale reviewer note. " * 30),
+            "detected_at": "2026-05-04T00:01:00Z",
+        }
+
+        build_issue_body(candidate)
+        post_text = candidate["x_post_text"]
+
+        self.assertLessEqual(candidate["x_post_weight"], x_poster.MAX_TWEET_WEIGHT)
+        self.assertLessEqual(candidate["x_post_chars"], x_poster.MAX_TWEET_CHARS)
+        self.assertIn(candidate["tweet"]["url"], post_text)
+        self.assertNotIn("...", post_text)
 
     def test_summarize_tweet_uses_ai_json_when_available(self):
         from scripts.x_trigger_scan import summarize_tweet

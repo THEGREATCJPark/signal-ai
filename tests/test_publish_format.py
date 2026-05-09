@@ -96,6 +96,106 @@ class PublishFormatTest(unittest.TestCase):
         self.assertNotIn("\uc6d0\ubb38:", captured["text"])
         self.assertLessEqual(x_poster._tweet_weight(captured["text"]), 260)
 
+    def test_x_trigger_article_posts_reviewed_text_without_reformatting(self):
+        import bot.x_poster as x_poster
+
+        captured = {}
+
+        def fake_post_tweet(text):
+            captured["text"] = text
+            return {"id": "1"}
+
+        reviewed_text = (
+            "OpenAI ships a realtime model update\n"
+            "A short publisher note only.\n"
+            "https://x.com/OpenAI/status/2051453905343828350"
+        )
+        article = {
+            "source": "x_trigger",
+            "title": "This title should not be used when review text exists",
+            "summary": "This summary should not be used when review text exists.",
+            "url": "https://x.com/OpenAI/status/2051453905343828350",
+            "raw_json": {"x_post_text": reviewed_text},
+        }
+
+        with patch.object(x_poster, "post_tweet", side_effect=fake_post_tweet):
+            x_poster.post_article(article)
+
+        self.assertEqual(reviewed_text, captured["text"])
+        self.assertLessEqual(x_poster._tweet_weight(captured["text"]), 260)
+
+    def test_x_trigger_post_text_keeps_comment_short_and_untruncated(self):
+        import bot.x_poster as x_poster
+
+        article = {
+            "source": "x_trigger",
+            "title": "OpenAI ships a realtime model update",
+            "summary": (
+                "This is the only short comment that should fit. "
+                "This second sentence is intentionally very long and repeats details "
+                "about benchmarks, rollout windows, developer APIs, mobile clients, "
+                "and deployment notes until it would push the X post over the limit."
+            ),
+            "url": "https://x.com/OpenAI/status/2051453905343828350",
+        }
+
+        text = x_poster.build_trigger_post_text(article)
+
+        self.assertIn("OpenAI ships a realtime model update", text)
+        self.assertIn("This is the only short comment that should fit.", text)
+        self.assertIn("https://x.com/OpenAI/status/2051453905343828350", text)
+        self.assertLessEqual(len(text.splitlines()), 3)
+        self.assertLessEqual(x_poster._tweet_weight(text), 260)
+        self.assertNotIn("...", text)
+
+    def test_x_trigger_article_refits_overlong_review_text_before_posting(self):
+        import bot.x_poster as x_poster
+
+        captured = {}
+
+        def fake_post_tweet(text):
+            captured["text"] = text
+            return {"id": "1"}
+
+        article = {
+            "source": "x_trigger",
+            "title": "OpenAI ships a realtime model update",
+            "summary": "Short note.",
+            "url": "https://x.com/OpenAI/status/2051453905343828350",
+            "raw_json": {
+                "x_post_text": (
+                    "OpenAI ships a realtime model update\n"
+                    + "This stale issue payload has a very long reviewer note. " * 20
+                    + "\nhttps://x.com/OpenAI/status/2051453905343828350"
+                )
+            },
+        }
+
+        with patch.object(x_poster, "post_tweet", side_effect=fake_post_tweet):
+            x_poster.post_article(article)
+
+        self.assertIn("OpenAI ships a realtime model update", captured["text"])
+        self.assertIn("https://x.com/OpenAI/status/2051453905343828350", captured["text"])
+        self.assertLessEqual(x_poster._tweet_weight(captured["text"]), 260)
+        self.assertNotIn("...", captured["text"])
+
+    def test_x_trigger_post_text_also_respects_raw_character_limit(self):
+        import bot.x_poster as x_poster
+
+        article = {
+            "source": "x_trigger",
+            "title": "A" * 220,
+            "summary": "Short note.",
+            "url": "https://x.com/OpenAI/status/" + ("1234567890" * 6),
+        }
+
+        text = x_poster.build_trigger_post_text(article)
+
+        self.assertIn(article["url"], text)
+        self.assertLessEqual(len(text), x_poster.MAX_TWEET_CHARS)
+        self.assertLessEqual(x_poster._tweet_weight(text), x_poster.MAX_TWEET_WEIGHT)
+        self.assertNotIn("...", text)
+
     def test_telegram_article_formats_content_only(self):
         from bot.formatter import format_article
 

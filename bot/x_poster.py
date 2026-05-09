@@ -31,6 +31,7 @@ TOKEN_URL = os.getenv("X_TOKEN_URL", "https://api.x.com/2/oauth2/token")
 MAX_DAILY_SUMMARY_ITEMS = 5
 # Keep a small safety margin because X applies weighted tweet length rules.
 MAX_TWEET_WEIGHT = int(os.getenv("X_MAX_TWEET_WEIGHT", "260"))
+MAX_TWEET_CHARS = int(os.getenv("X_MAX_TWEET_CHARS", "260"))
 URL_WEIGHT = int(os.getenv("X_URL_WEIGHT", "23"))
 URL_RE = re.compile(r"https?://\S+")
 KST = ZoneInfo("Asia/Seoul")
@@ -211,35 +212,46 @@ def _tweet_weight(text: str) -> int:
     return weight
 
 
-def _fit_tweet(text: str, limit: int | None = None) -> str:
+def _tweet_fits(text: str, limit: int | None = None, char_limit: int | None = None) -> bool:
     limit = limit or MAX_TWEET_WEIGHT
+    char_limit = char_limit or MAX_TWEET_CHARS
+    return _tweet_weight(text) <= limit and len(text) <= char_limit
+
+
+def _fit_tweet(text: str, limit: int | None = None, char_limit: int | None = None) -> str:
+    limit = limit or MAX_TWEET_WEIGHT
+    char_limit = char_limit or MAX_TWEET_CHARS
     text = text.strip()
-    if _tweet_weight(text) <= limit:
+    if _tweet_fits(text, limit, char_limit):
         return text
     suffix = "..."
     suffix_weight = _tweet_weight(suffix)
     out = []
     weight = 0
+    char_count = 0
     pos = 0
     for match in URL_RE.finditer(text):
         for ch in text[pos:match.start()]:
             ch_weight = _char_weight(ch)
-            if weight + ch_weight + suffix_weight > limit:
+            if weight + ch_weight + suffix_weight > limit or char_count + 1 + len(suffix) > char_limit:
                 return "".join(out).rstrip() + suffix
             out.append(ch)
             weight += ch_weight
+            char_count += 1
         url = match.group(0)
-        if weight + URL_WEIGHT + suffix_weight > limit:
+        if weight + URL_WEIGHT + suffix_weight > limit or char_count + len(url) + len(suffix) > char_limit:
             return "".join(out).rstrip() + suffix
         out.append(url)
         weight += URL_WEIGHT
+        char_count += len(url)
         pos = match.end()
     for ch in text[pos:]:
         ch_weight = _char_weight(ch)
-        if weight + ch_weight + suffix_weight > limit:
+        if weight + ch_weight + suffix_weight > limit or char_count + 1 + len(suffix) > char_limit:
             return "".join(out).rstrip() + suffix
         out.append(ch)
         weight += ch_weight
+        char_count += 1
     return "".join(out).strip()
 
 
@@ -323,32 +335,93 @@ def _fit_trigger_post_text(
     *,
     limit: int = MAX_TWEET_WEIGHT,
 ) -> str:
+    headline = re.sub(r"\s+", " ", (headline or "").strip())
+    url = (url or "").strip()
     comments = [line.strip() for line in comment_lines if line and line.strip()]
-    lines = [line for line in [headline, *comments, url] if line]
-    text = "\n".join(lines)
-    if _tweet_weight(text) <= limit:
+
+    tail_lines = [url] if url else []
+    base_lines = [line for line in [headline, *tail_lines] if line]
+    if not _tweet_fits("\n".join(base_lines), limit):
+        tail_weight = _tweet_weight(url) + (1 if url and headline else 0)
+        tail_chars = len(url) + (1 if url and headline else 0)
+        headline_weight_limit = max(0, limit - tail_weight)
+        headline_char_limit = max(0, MAX_TWEET_CHARS - tail_chars)
+        headline = _fit_text_without_suffix(headline, headline_weight_limit, char_limit=headline_char_limit)
+
+    lines = [line for line in [headline] if line]
+    for comment in comments:
+        candidate_lines = [*lines, comment, *tail_lines]
+        if _tweet_fits("\n".join(candidate_lines), limit):
+            lines.append(comment)
+            continue
+        break
+
+    lines.extend(tail_lines)
+    text = "\n".join(line for line in lines if line).strip()
+    if not _tweet_fits(text, limit):
+        raise ValueError(f"trigger X post exceeds limit: weight={_tweet_weight(text)}/{limit}, chars={len(text)}/{MAX_TWEET_CHARS}")
+    return text
+
+
+def _fit_text_without_suffix(text: str, limit: int, *, char_limit: int | None = None) -> str:
+    text = re.sub(r"\s+", " ", (text or "").strip())
+    char_limit = char_limit if char_limit is not None else MAX_TWEET_CHARS
+    if limit <= 0:
+        return ""
+    if _tweet_weight(text) <= limit and len(text) <= char_limit:
         return text
+    out = []
+    weight = 0
+    for ch in text:
+        ch_weight = _char_weight(ch)
+        if weight + ch_weight > limit or len(out) + 1 > char_limit:
+            break
+        out.append(ch)
+        weight += ch_weight
+    return "".join(out).rstrip()
 
-    if url:
-        remaining = limit - _tweet_weight(url) - 1
-        if remaining <= 0:
-            return _fit_tweet(url, limit)
-        fitted_headline = _fit_tweet(headline, remaining)
-        used = _tweet_weight(fitted_headline)
-        comment_budget = remaining - used - 1
-        comment = " ".join(comments)
-        fitted_comment = _fit_tweet(comment, comment_budget) if comment_budget > _tweet_weight("...") else ""
-        return "\n".join(line for line in [fitted_headline, fitted_comment, url] if line)
 
-    return _fit_tweet("\n".join([headline, *comments]), limit)
+def _trigger_comment_lines(summary: str, max_lines: int = 2) -> list[str]:
+    summary = re.sub(r"\s+", " ", (summary or "").strip())
+    if not summary:
+        return []
+    parts = [part.strip() for part in re.split(r"(?<=[.!?。！？])\s+", summary) if part.strip()]
+    if not parts:
+        parts = [summary]
+    return parts[:max_lines]
+
+
+def _refit_reviewed_trigger_text(article: dict, reviewed_text: str) -> str:
+    lines = [line.strip() for line in reviewed_text.splitlines() if line.strip()]
+    urls = URL_RE.findall(reviewed_text)
+    url = _article_url(article) or (urls[-1] if urls else "")
+
+    non_url_lines = [line for line in lines if not URL_RE.fullmatch(line)]
+    headline = _article_title(article) or (non_url_lines[0] if non_url_lines else "")
+    comments: list[str] = []
+    for line in non_url_lines:
+        if line == headline:
+            continue
+        comments.extend(_trigger_comment_lines(line, max_lines=2 - len(comments)))
+        if len(comments) >= 2:
+            break
+    if not comments:
+        summary = str(article.get("summary") or article.get("body") or "").strip()
+        comments = _trigger_comment_lines(summary, max_lines=2)
+    return _fit_trigger_post_text(headline, comments, url)
 
 
 def build_trigger_post_text(article: dict) -> str:
-    """Build magazine-style headline/comment/source text for trigger X posts."""
+    """Build headline, one or two short comment lines, and the original source URL."""
+    raw_json = article.get("raw_json") if isinstance(article.get("raw_json"), dict) else {}
+    reviewed_text = str(raw_json.get("x_post_text") or "").strip()
+    if reviewed_text:
+        return reviewed_text if _tweet_fits(reviewed_text) else _refit_reviewed_trigger_text(article, reviewed_text)
+
     headline = _article_title(article)
     url = _article_url(article)
     summary = str(article.get("summary") or article.get("body") or "").strip()
-    comments = [re.sub(r"\s+", " ", summary)] if summary else []
+    comments = _trigger_comment_lines(summary, max_lines=2)
     return _fit_trigger_post_text(headline, comments, url)
 
 

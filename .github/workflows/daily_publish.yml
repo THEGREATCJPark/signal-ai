@@ -2,8 +2,9 @@ name: Daily AI Frontier News Publish
 
 on:
   schedule:
-    # 08:30 KST (23:30 UTC previous day).
-    - cron: "30 23 * * *"
+    # 08:37/08:45 KST backup slots (23:37/23:45 UTC previous day).
+    - cron: "37 23 * * *"
+    - cron: "45 23 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -92,7 +93,12 @@ jobs:
 
       - name: Validate articles
         if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-        run: python scripts/validate_articles.py
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            python scripts/validate_articles.py --require-fresh-kst
+          else
+            python scripts/validate_articles.py
+          fi
 
       - name: Sync generated articles to Supabase
         if: >-

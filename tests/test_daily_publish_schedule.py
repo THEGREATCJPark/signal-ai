@@ -45,6 +45,17 @@ class DailyPublishScheduleTest(unittest.TestCase):
         self.assertIn("python run_hourly.py", workflow)
         self.assertIn("git push", workflow)
 
+    def test_manual_publish_smoke_keeps_telegram_required_and_x_optional(self):
+        workflow = (ROOT / ".github" / "workflows" / "manual-publish-smoke.yml").read_text(encoding="utf-8")
+
+        self.assertIn(".github/manual-daily-publish-smoke.txt", workflow)
+        self.assertIn("Publish one Telegram article", workflow)
+        self.assertIn("--platform telegram", workflow)
+        self.assertIn("Publish one X summary optionally", workflow)
+        self.assertIn("continue-on-error: true", workflow)
+        self.assertIn("--platform x", workflow)
+        self.assertIn("TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}", workflow)
+
     def test_daily_freshness_rejects_previous_day_articles(self):
         from scripts.validate_articles import is_fresh_for_daily_publish
 

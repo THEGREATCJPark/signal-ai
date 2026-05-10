@@ -409,6 +409,16 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertIn("TRIGGER_AUTO_PUBLISH_PLATFORM: ${{ vars.TRIGGER_AUTO_PUBLISH_PLATFORM || 'telegram' }}", workflow)
         self.assertIn("X_API_KEY: ${{ secrets.X_API_KEY }}", workflow)
 
+    def test_manual_trigger_issue_publish_workflow_uses_issue_file_and_telegram_default(self):
+        workflow = Path(".github/workflows/manual-trigger-issue-publish.yml").read_text(encoding="utf-8")
+        issue_file = Path(".github/manual-trigger-issues.txt").read_text(encoding="utf-8")
+
+        self.assertIn(".github/manual-trigger-issues.txt", workflow)
+        self.assertIn("scripts/publish_trigger_issues.py", workflow)
+        self.assertIn("--platform telegram", workflow)
+        self.assertIn("TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}", workflow)
+        self.assertIn("314", issue_file)
+
     def test_build_candidate_issue_body_round_trips_payload_and_instructions(self):
         from scripts.x_trigger_scan import build_issue_body, extract_candidate_from_issue_body
 

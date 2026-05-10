@@ -1,0 +1,71 @@
+name: Manual Trigger Issue Publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/manual-trigger-issues.txt
+  workflow_dispatch:
+    inputs:
+      issues:
+        description: "Comma-separated x-trigger issue numbers"
+        required: true
+      platform:
+        description: "Publish platform"
+        required: false
+        default: "telegram"
+        type: choice
+        options:
+          - telegram
+          - x
+          - both
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: manual-trigger-issue-publish
+  cancel-in-progress: false
+
+jobs:
+  publish-trigger-issues:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      USE_DB: "true"
+      GITHUB_TOKEN: ${{ github.token }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+      X_API_KEY: ${{ secrets.X_API_KEY }}
+      X_API_SECRET: ${{ secrets.X_API_SECRET }}
+      X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+      X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+      X_TWEET_URL: https://api.x.com/2/tweets
+      X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
+      X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+      X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Publish selected trigger issues
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            python scripts/publish_trigger_issues.py --issues "${{ github.event.inputs.issues }}" --platform "${{ github.event.inputs.platform || 'telegram' }}"
+          else
+            python scripts/publish_trigger_issues.py --issues-file .github/manual-trigger-issues.txt --platform telegram
+          fi

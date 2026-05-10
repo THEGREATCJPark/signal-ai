@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GEMINI_API_KEYS_CJ: ${{ secrets.GEMINI_API_KEYS_CJ }}
+      DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
       AI_FRONTIER_PUBLISH_BRANCH: main
 
     steps:

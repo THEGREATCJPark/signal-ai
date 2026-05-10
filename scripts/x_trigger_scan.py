@@ -73,6 +73,7 @@ AUTO_PUBLISH_KEYWORDS = (
     "shipping",
     "upgrade",
 )
+AUTO_PUBLISH_SCORE_THRESHOLD = int(os.getenv("TRIGGER_AUTO_PUBLISH_SCORE_THRESHOLD", "80"))
 
 DEFAULT_ACCOUNTS = [
     {"username": "OpenAI", "category": "official", "group": "공식 발표"},
@@ -570,11 +571,24 @@ def enrich_candidate(raw_candidate: dict[str, Any], account: dict[str, Any]) -> 
     }
 
 
-def should_auto_publish_candidate(candidate: dict[str, Any]) -> bool:
-    account = candidate.get("account") or {}
-    if str(account.get("category") or "").strip().lower() != "official":
-        return False
+def _explicit_candidate_score(candidate: dict[str, Any]) -> int | None:
+    for source in (candidate, candidate.get("summary") or {}, candidate.get("tweet") or {}):
+        value = source.get("score") if isinstance(source, dict) else None
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
 
+
+def score_trigger_candidate(candidate: dict[str, Any]) -> int:
+    explicit = _explicit_candidate_score(candidate)
+    if explicit is not None:
+        return max(0, min(100, explicit))
+
+    account = candidate.get("account") or {}
     tweet = candidate.get("tweet") or {}
     summary = candidate.get("summary") or {}
     haystack = " ".join(
@@ -586,7 +600,22 @@ def should_auto_publish_candidate(candidate: dict[str, Any]) -> bool:
             summary.get("body"),
         )
     ).lower()
-    return any(keyword in haystack for keyword in AUTO_PUBLISH_KEYWORDS)
+    score = 0
+    if str(account.get("category") or "").strip().lower() == "official":
+        score += 50
+    if str(account.get("tier") or "").strip().lower() in {"auto", "core"}:
+        score += 10
+    if str(summary.get("confidence") or "").strip().lower() == "official":
+        score += 20
+    if any(keyword in haystack for keyword in AUTO_PUBLISH_KEYWORDS):
+        score += 30
+    return max(0, min(100, score))
+
+
+def should_auto_publish_candidate(candidate: dict[str, Any]) -> bool:
+    score = score_trigger_candidate(candidate)
+    candidate["auto_publish_score"] = score
+    return score >= AUTO_PUBLISH_SCORE_THRESHOLD
 
 
 def publish_trigger_candidate(candidate: dict[str, Any], *, platform: str = "both", dry_run: bool = False) -> list[str]:
@@ -684,6 +713,8 @@ def build_issue_body(candidate: dict[str, Any]) -> str:
     x_post_limit = candidate.get("x_post_limit")
     x_post_chars = candidate.get("x_post_chars")
     x_post_char_limit = candidate.get("x_post_char_limit")
+    auto_score = score_trigger_candidate(candidate)
+    candidate["auto_publish_score"] = auto_score
     return f"""## X 트리거 검수
 
 **계정:** @{account['username']}
@@ -692,6 +723,7 @@ def build_issue_body(candidate: dict[str, Any]) -> str:
 **게시 시각:** {tweet.get('created_at', '')}
 **감지 시각:** {candidate.get('detected_at', '')}
 **X 길이 검사:** weight {x_post_weight}/{x_post_limit}, chars {x_post_chars}/{x_post_char_limit}
+**자동 배포 점수:** {auto_score}/{AUTO_PUBLISH_SCORE_THRESHOLD}
 
 ### 한국어 요약
 **{summary.get('title', '')}**
@@ -863,7 +895,7 @@ def run_scan(args: argparse.Namespace) -> int:
         print(f"[trigger] opened review issue: {issue_url}")
         if should_auto_publish_candidate(candidate):
             try:
-                platform = os.getenv("TRIGGER_AUTO_PUBLISH_PLATFORM", "both").strip().lower() or "both"
+                platform = os.getenv("TRIGGER_AUTO_PUBLISH_PLATFORM", "telegram").strip().lower() or "telegram"
                 published = publish_trigger_candidate(candidate, platform=platform)
                 record_auto_publish_on_issue(issue_url, candidate, published)
                 print(f"[trigger] auto-published: {candidate['id']} -> {', '.join(published) or 'no new target'}")

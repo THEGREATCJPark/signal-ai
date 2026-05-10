@@ -120,21 +120,36 @@ def publish_trigger_candidate(candidate: dict[str, Any], *, platform: str = "bot
     article_id = article_key(article)
     upsert_generated_articles([article])
     published: list[str] = []
+    critical_failures: list[str] = []
+    optional_failures: list[str] = []
 
     for target in _platforms(platform):
         if state.is_published(article_id, target):
             print(f"[trigger] already published to {target}: {article_id}")
             continue
-        if target == "telegram":
-            send_article(article)
-        elif target == "x":
-            post_article(article)
-        else:
-            raise ValueError(f"unsupported platform: {target}")
-        state.mark_published(article_id, target)
-        published.append(target)
+        try:
+            if target == "telegram":
+                send_article(article)
+            elif target == "x":
+                post_article(article)
+            else:
+                raise ValueError(f"unsupported platform: {target}")
+            state.mark_published(article_id, target)
+            published.append(target)
+        except Exception as exc:
+            message = f"{target} failed: {exc}"
+            if target == "x" and "telegram" in published:
+                optional_failures.append(message)
+                print(f"[trigger] optional publish failure: {message}")
+                continue
+            critical_failures.append(message)
+            print(f"[trigger] publish failure: {message}")
 
     state.save()
+    if optional_failures:
+        print(f"[trigger] non-fatal publish failures: {'; '.join(optional_failures)}")
+    if critical_failures or (not published and optional_failures):
+        raise RuntimeError("; ".join(critical_failures or optional_failures))
     return published
 
 

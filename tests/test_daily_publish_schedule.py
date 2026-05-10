@@ -15,10 +15,8 @@ class DailyPublishScheduleTest(unittest.TestCase):
         self.assertNotIn('- cron: "30 23 * * *"', workflow)
         self.assertIn('- cron: "37 23 * * *"', workflow)
         self.assertIn('- cron: "45 23 * * *"', workflow)
-        self.assertIn("PLATFORM=both", workflow)
-        self.assertIn("DRY_RUN=false", workflow)
-        self.assertIn("FORCE=false", workflow)
-        self.assertIn("LIMIT=0", workflow)
+        self.assertIn("--platform telegram", workflow)
+        self.assertIn("--platform x", workflow)
         self.assertIn('--allow-partial', workflow)
 
     def test_scheduled_publish_syncs_generated_articles_to_supabase_before_publish(self):
@@ -28,11 +26,22 @@ class DailyPublishScheduleTest(unittest.TestCase):
         self.assertIn("python scripts/validate_articles.py --require-fresh-kst", workflow)
         self.assertIn("python scripts/sync_articles_to_supabase.py --input docs/articles.json", workflow)
 
+    def test_scheduled_publish_runs_telegram_even_when_validation_fails_and_x_is_optional(self):
+        workflow = (ROOT / ".github" / "workflows" / "daily_publish.yml").read_text(encoding="utf-8")
+
+        self.assertIn("continue-on-error: true", workflow)
+        self.assertIn("id: validate", workflow)
+        self.assertIn("Run scheduled Telegram publish", workflow)
+        self.assertIn("--platform telegram", workflow)
+        self.assertIn("Run scheduled X publish", workflow)
+        self.assertIn("--platform x", workflow)
+
     def test_github_daily_articles_uses_cj_gemini_secret(self):
         workflow = (ROOT / ".github" / "workflows" / "daily_articles.yml").read_text(encoding="utf-8")
 
         self.assertIn('- cron: "0 23 * * *"', workflow)
         self.assertIn("GEMINI_API_KEYS_CJ: ${{ secrets.GEMINI_API_KEYS_CJ }}", workflow)
+        self.assertIn("DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}", workflow)
         self.assertIn("python run_hourly.py", workflow)
         self.assertIn("git push", workflow)
 

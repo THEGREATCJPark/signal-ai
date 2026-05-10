@@ -390,6 +390,25 @@ class XTriggerScanTest(unittest.TestCase):
 
         self.assertFalse(should_auto_publish_candidate(candidate))
 
+    def test_candidate_with_explicit_high_score_should_auto_publish(self):
+        from scripts.x_trigger_scan import score_trigger_candidate, should_auto_publish_candidate
+
+        candidate = {
+            "account": {"username": "testingcatalog", "category": "fast_signal"},
+            "tweet": {"text": "A strong AI launch signal."},
+            "summary": {"title": "High signal", "body": "High signal", "score": 85},
+        }
+
+        self.assertGreaterEqual(score_trigger_candidate(candidate), 80)
+        self.assertTrue(should_auto_publish_candidate(candidate))
+
+    def test_trigger_scan_workflow_auto_publishes_to_telegram_by_default(self):
+        workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")
+
+        self.assertIn("TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}", workflow)
+        self.assertIn("TRIGGER_AUTO_PUBLISH_PLATFORM: ${{ vars.TRIGGER_AUTO_PUBLISH_PLATFORM || 'telegram' }}", workflow)
+        self.assertIn("X_API_KEY: ${{ secrets.X_API_KEY }}", workflow)
+
     def test_build_candidate_issue_body_round_trips_payload_and_instructions(self):
         from scripts.x_trigger_scan import build_issue_body, extract_candidate_from_issue_body
 
@@ -644,7 +663,7 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertEqual(0, rc)
         self.assertEqual([
             ("issue", "x-101"),
-            ("publish", "x-101", "both"),
+            ("publish", "x-101", "telegram"),
             ("update", "https://github.com/owner/repo/issues/9", ("telegram", "x")),
         ], calls)
         save.assert_called_once()
@@ -749,6 +768,49 @@ class XTriggerReviewTest(unittest.TestCase):
         self.assertIn(("x", "trigger-x-123"), calls)
         self.assertIn(("mark", "trigger-x-123", "telegram"), calls)
         self.assertIn(("mark", "trigger-x-123", "x"), calls)
+
+    def test_publish_trigger_candidate_keeps_telegram_when_x_fails(self):
+        from scripts.x_trigger_review import publish_trigger_candidate
+
+        calls = []
+
+        class FakeState:
+            def is_published(self, article_id, platform):
+                return False
+
+            def mark_published(self, article_id, platform):
+                calls.append(("mark", article_id, platform))
+
+            def save(self):
+                calls.append(("save",))
+
+        candidate = {
+            "id": "x-789",
+            "account": {"username": "OpenAI", "category": "official"},
+            "tweet": {"id": "789", "url": "https://x.com/OpenAI/status/789"},
+            "summary": {"title": "Launch", "body": "Launch summary"},
+        }
+
+        fake_telegram = types.ModuleType("bot.telegram_bot")
+        fake_telegram.send_article = lambda article: calls.append(("telegram", article["id"]))
+        fake_x = types.ModuleType("bot.x_poster")
+        fake_x.post_article = lambda article: (_ for _ in ()).throw(RuntimeError("x failed"))
+        fake_state = types.ModuleType("publisher.state")
+        fake_state.article_key = lambda article: article["id"]
+        fake_state.get_state = lambda: FakeState()
+
+        with patch.dict(sys.modules, {
+            "bot.telegram_bot": fake_telegram,
+            "bot.x_poster": fake_x,
+            "publisher.state": fake_state,
+        }), patch("db.articles.upsert_generated_articles", return_value=1):
+            published = publish_trigger_candidate(candidate, platform="both")
+
+        self.assertEqual(["telegram"], published)
+        self.assertIn(("telegram", "trigger-x-789"), calls)
+        self.assertIn(("mark", "trigger-x-789", "telegram"), calls)
+        self.assertNotIn(("mark", "trigger-x-789", "x"), calls)
+        self.assertIn(("save",), calls)
 
     def test_publish_trigger_candidate_does_not_pre_escape_telegram_article(self):
         from scripts.x_trigger_review import publish_trigger_candidate

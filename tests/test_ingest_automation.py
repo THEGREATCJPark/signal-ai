@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -88,11 +89,11 @@ class IngestAutomationTests(unittest.TestCase):
     def test_discord_crawler_uses_linux_exporter_without_powershell(self) -> None:
         import crawlers.discord as discord_crawler
 
-        completed = type("Completed", (), {"returncode": 1})()
-        with patch.object(discord_crawler.subprocess, "run", return_value=completed):
+        with patch.object(discord_crawler.os, "name", "posix"), \
+             patch.object(discord_crawler.shutil, "which", return_value=None):
             command = discord_crawler.export_command("2026-05-05")
 
-        self.assertEqual(command[0], "python3")
+        self.assertEqual(command[0], sys.executable)
         self.assertTrue(command[1].endswith("discord_export_linux.py"))
         self.assertIn("--after-kst", command)
 

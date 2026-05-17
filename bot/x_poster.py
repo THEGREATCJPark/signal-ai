@@ -138,10 +138,32 @@ def _oauth1_auth() -> OAuth1:
     )
 
 
+def _post_tweet_with_oauth2(payload: dict) -> requests.Response:
+    access_token = _get_access_token()
+    return requests.post(
+        TWEET_URL,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        json=payload,
+        timeout=30,
+    )
+
+
 def post_tweet(text: str) -> dict:
-    """Post a tweet using OAuth 1.0a User Context only."""
+    """Post a tweet using configured X user-context credentials."""
     payload = {"text": _fit_tweet(text)}
     print(f"[x] Payload chars: {len(payload['text'])}, weighted: {_tweet_weight(payload['text'])}")
+
+    if not _has_oauth1_credentials():
+        if not _has_oauth2_refresh_credentials():
+            raise RuntimeError("X posting credentials are incomplete")
+        print("[x] Auth mode: OAuth 2.0 User Context")
+        resp = _post_tweet_with_oauth2(payload)
+        print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
+        resp.raise_for_status()
+        return _tweet_response_data(resp)
 
     print("[x] Auth mode: OAuth 1.0a User Context")
     resp = requests.post(
@@ -158,16 +180,7 @@ def post_tweet(text: str) -> dict:
         if _has_oauth2_refresh_credentials():
             print("[x] OAuth 1.0a was rejected; retrying with OAuth 2.0 User Context")
             try:
-                access_token = _get_access_token()
-                resp = requests.post(
-                    TWEET_URL,
-                    headers={
-                        "Authorization": f"Bearer {access_token}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                    timeout=30,
-                )
+                resp = _post_tweet_with_oauth2(payload)
                 print(f"[x] Status: {resp.status_code}, Response: {resp.text[:300]}")
                 if resp.ok:
                     return _tweet_response_data(resp)

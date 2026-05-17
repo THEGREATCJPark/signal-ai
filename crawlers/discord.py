@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Discord — runs discord_export_text_only.py for last N days, parses messages."""
-import sys, os, subprocess, re, hashlib
+import sys, os, subprocess, re, hashlib, shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -26,21 +26,23 @@ def parse_kst(y, mo, d, ampm, h, mi):
 
 
 def use_linux_exporter() -> bool:
-    return subprocess.run(["which", "powershell.exe"], capture_output=True).returncode != 0
+    if os.name == "nt":
+        return False
+    return shutil.which("powershell.exe") is None
 
 
 def export_command(after: str) -> list[str]:
     if use_linux_exporter():
         script = ROOT / "discord_export_linux.py"
         return [
-            "python3", str(script),
+            sys.executable, str(script),
             "--channel", CHANNEL_ID,
             "--after-kst", after,
         ]
     else:
         script = ROOT / "discord_export_text_only.py"
         return [
-            "python3", str(script),
+            sys.executable, str(script),
             "--channel", CHANNEL_ID,
             "--after-kst", after,
             "--no-upload",

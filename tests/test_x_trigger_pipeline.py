@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 import tempfile
 import types
@@ -402,11 +403,15 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertGreaterEqual(score_trigger_candidate(candidate), 80)
         self.assertTrue(should_auto_publish_candidate(candidate))
 
-    def test_trigger_scan_workflow_auto_publishes_to_telegram_by_default(self):
+    def test_trigger_scan_workflow_auto_publishes_to_both_platforms_by_default(self):
         workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")
 
         self.assertIn("TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}", workflow)
-        self.assertIn("TRIGGER_AUTO_PUBLISH_PLATFORM: ${{ vars.TRIGGER_AUTO_PUBLISH_PLATFORM || 'telegram' }}", workflow)
+        self.assertIn("TRIGGER_AUTO_PUBLISH_SCORE_THRESHOLD: ${{ vars.TRIGGER_AUTO_PUBLISH_SCORE_THRESHOLD || '60' }}", workflow)
+        self.assertIn("TRIGGER_REVIEW_SCORE_THRESHOLD: ${{ vars.TRIGGER_REVIEW_SCORE_THRESHOLD || '65' }}", workflow)
+        self.assertIn("TRIGGER_MIN_ISSUE_SCORE: ${{ vars.TRIGGER_MIN_ISSUE_SCORE || '45' }}", workflow)
+        self.assertIn("TRIGGER_AUTO_PUBLISH_PLATFORM: ${{ vars.TRIGGER_AUTO_PUBLISH_PLATFORM || 'both' }}", workflow)
+        self.assertIn("TRIGGER_CREATE_LOW_SIGNAL_ISSUES: ${{ vars.TRIGGER_CREATE_LOW_SIGNAL_ISSUES || 'false' }}", workflow)
         self.assertIn("X_API_KEY: ${{ secrets.X_API_KEY }}", workflow)
 
     def test_manual_trigger_issue_publish_workflow_uses_issue_file_and_telegram_default(self):
@@ -449,6 +454,9 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertIn("추천 발행문", body)
         self.assertIn("승인 방법", body)
         self.assertIn("거절 방법", body)
+        self.assertIn("### Scoring v2", body)
+        self.assertIn("story_key", body)
+        self.assertIn("decision", body)
         self.assertIn("/approve-trigger", body)
         self.assertIn("/reject-trigger", body)
 
@@ -584,6 +592,8 @@ class XTriggerScanTest(unittest.TestCase):
             url = x_trigger_scan.create_github_issue(candidate, token="token", repo="owner/repo")
 
         self.assertEqual("https://github.com/example/issues/1", url)
+        self.assertIn("trigger-auto-candidate", posted["labels"])
+        self.assertIn("### Scoring v2", posted["body"])
         self.assertTrue(posted["title"].startswith("[X 트리거 검수] @OpenAI:"))
         self.assertIn("## X 트리거 검수", posted["body"])
 
@@ -614,6 +624,156 @@ class XTriggerScanTest(unittest.TestCase):
 
         self.assertEqual(0, rc)
         save.assert_not_called()
+
+    def test_run_scan_skips_low_signal_candidates_by_default(self):
+        from scripts import x_trigger_scan
+
+        class FakeClient:
+            def __init__(self, **kwargs):
+                pass
+
+            def fetch_recent_by_accounts(self, accounts, *, max_results, state):
+                return {
+                    "OpenAI": [{
+                        "id": "201",
+                        "text": "TSMC and Intel stock sentiment is weak after AI capex fears.",
+                        "tweet_kind": "post",
+                        "url": "https://x.com/OpenAI/status/201",
+                    }]
+                }, state
+
+        args = types.SimpleNamespace(
+            accounts=None,
+            scope="auto",
+            state=None,
+            max_results=1,
+            backfill=False,
+            force_latest=False,
+            dry_run=False,
+            feed_mode="nitter",
+        )
+
+        with patch.object(x_trigger_scan, "FreeXFeedClient", FakeClient), \
+             patch.object(x_trigger_scan, "load_trigger_state", return_value={"last_seen_ids": {"openai": "200"}}), \
+             patch.object(x_trigger_scan, "save_trigger_state") as save, \
+             patch.object(x_trigger_scan, "summarize_tweet", return_value={
+                 "title": "TSMC and Intel market reaction",
+                 "body": "The post is mainly about stock sentiment and market reaction.",
+                 "confidence": "unknown",
+             }), \
+             patch.object(x_trigger_scan, "create_github_issue") as create_issue:
+            rc = x_trigger_scan.run_scan(args)
+
+        self.assertEqual(0, rc)
+        create_issue.assert_not_called()
+        save.assert_called_once()
+
+    def test_run_scan_can_keep_low_signal_issues_when_enabled(self):
+        from scripts import x_trigger_scan
+
+        calls = []
+
+        class FakeClient:
+            def __init__(self, **kwargs):
+                pass
+
+            def fetch_recent_by_accounts(self, accounts, *, max_results, state):
+                return {
+                    "OpenAI": [{
+                        "id": "202",
+                        "text": "TSMC and Intel stock sentiment is weak after AI capex fears.",
+                        "tweet_kind": "post",
+                        "url": "https://x.com/OpenAI/status/202",
+                    }]
+                }, state
+
+        args = types.SimpleNamespace(
+            accounts=None,
+            scope="auto",
+            state=None,
+            max_results=1,
+            backfill=False,
+            force_latest=False,
+            dry_run=False,
+            feed_mode="nitter",
+        )
+
+        def fake_issue(candidate, **kwargs):
+            calls.append((candidate["id"], candidate["scoring"]["decision"]))
+            return "https://github.com/owner/repo/issues/22"
+
+        with patch.dict(os.environ, {"TRIGGER_CREATE_LOW_SIGNAL_ISSUES": "true"}), \
+             patch.object(x_trigger_scan, "FreeXFeedClient", FakeClient), \
+             patch.object(x_trigger_scan, "load_trigger_state", return_value={"last_seen_ids": {"openai": "201"}}), \
+             patch.object(x_trigger_scan, "save_trigger_state"), \
+             patch.object(x_trigger_scan, "summarize_tweet", return_value={
+                 "title": "TSMC and Intel market reaction",
+                 "body": "The post is mainly about stock sentiment and market reaction.",
+                 "confidence": "unknown",
+             }), \
+             patch.object(x_trigger_scan, "create_github_issue", side_effect=fake_issue), \
+             patch.object(x_trigger_scan, "maybe_notify_telegram"):
+            rc = x_trigger_scan.run_scan(args)
+
+        self.assertEqual(0, rc)
+        self.assertEqual([("x-202", "watch")], calls)
+
+    def test_run_scan_auto_both_publishes_x_and_telegram_at_sixty_plus(self):
+        from scripts import x_trigger_scan
+
+        calls = []
+
+        class FakeClient:
+            def __init__(self, **kwargs):
+                pass
+
+            def fetch_recent_by_accounts(self, accounts, *, max_results, state):
+                return {
+                    "OpenAI": [{
+                        "id": "203",
+                        "text": "OpenAI ships a useful API improvement for developers.",
+                        "tweet_kind": "post",
+                        "url": "https://x.com/OpenAI/status/203",
+                    }]
+                }, state
+
+        args = types.SimpleNamespace(
+            accounts=None,
+            scope="auto",
+            state=None,
+            max_results=1,
+            backfill=False,
+            force_latest=False,
+            dry_run=False,
+            feed_mode="nitter",
+        )
+
+        def fake_issue(candidate, **kwargs):
+            calls.append(("issue", candidate["scoring"]["decision"]))
+            return "https://github.com/owner/repo/issues/23"
+
+        def fake_publish(candidate, **kwargs):
+            calls.append(("publish", kwargs.get("platform")))
+            return ["telegram"]
+
+        with patch.object(x_trigger_scan, "FreeXFeedClient", FakeClient), \
+             patch.object(x_trigger_scan, "load_trigger_state", return_value={"last_seen_ids": {"openai": "202"}}), \
+             patch.object(x_trigger_scan, "save_trigger_state"), \
+             patch.object(x_trigger_scan, "summarize_tweet", return_value={
+                 "title": "OpenAI API improvement",
+                 "body": "OpenAI ships a useful API improvement for developers.",
+                 "confidence": "verified",
+                 "score": 85,
+             }), \
+             patch.object(x_trigger_scan, "create_github_issue", side_effect=fake_issue), \
+             patch.object(x_trigger_scan, "maybe_notify_telegram"), \
+             patch.object(x_trigger_scan, "publish_trigger_candidate", side_effect=fake_publish), \
+             patch.object(x_trigger_scan, "record_auto_publish_on_issue") as record_auto:
+            rc = x_trigger_scan.run_scan(args)
+
+        self.assertEqual(0, rc)
+        self.assertEqual([("issue", "auto_both"), ("publish", "both")], calls)
+        record_auto.assert_called_once()
 
     def test_run_scan_auto_publishes_official_high_signal_candidate_after_issue(self):
         from scripts import x_trigger_scan
@@ -673,7 +833,7 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertEqual(0, rc)
         self.assertEqual([
             ("issue", "x-101"),
-            ("publish", "x-101", "telegram"),
+            ("publish", "x-101", "both"),
             ("update", "https://github.com/owner/repo/issues/9", ("telegram", "x")),
         ], calls)
         save.assert_called_once()

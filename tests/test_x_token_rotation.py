@@ -96,6 +96,39 @@ class XOAuth1PublishTest(unittest.TestCase):
         self.assertEqual(post.call_args_list[1].kwargs["headers"]["Authorization"], "Bearer oauth2-access")
         self.assertNotIn("auth", post.call_args_list[1].kwargs)
 
+    def test_oauth2_only_credentials_can_post_without_oauth1(self):
+        env = {
+            "X_CLIENT_ID": "client-id",
+            "X_CLIENT_SECRET": "client-secret",
+            "X_REFRESH_TOKEN": "refresh-token",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            import bot.x_poster as x_poster
+
+            x_poster = importlib.reload(x_poster)
+
+            class SuccessResponse:
+                ok = True
+                status_code = 201
+                text = '{"data":{"id":"3"}}'
+
+                def json(self):
+                    return {"data": {"id": "3"}}
+
+                def raise_for_status(self):
+                    return None
+
+            with patch.object(x_poster, "_get_access_token", return_value="oauth2-access") as get_access_token, \
+                 patch.object(x_poster.requests, "post", return_value=SuccessResponse()) as post:
+                result = x_poster.post_tweet("hello")
+
+        self.assertEqual({"id": "3"}, result)
+        get_access_token.assert_called_once()
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(post.call_args.args[0], "https://api.x.com/2/tweets")
+        self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Bearer oauth2-access")
+        self.assertNotIn("auth", post.call_args.kwargs)
+
     def test_oauth1_v2_forbidden_retries_oauth1_v1_status_update(self):
         env = {
             "X_API_KEY": "api-key",

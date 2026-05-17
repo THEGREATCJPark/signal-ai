@@ -23,6 +23,15 @@ load_dotenv()
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from scripts.x_trigger_scoring import (
+    AUTO_PUBLISH_SCORE_THRESHOLD,
+    MIN_ISSUE_SCORE,
+    build_story_key,
+    score_trigger_candidate as score_trigger_candidate_v2,
+    score_trigger_candidate_detail,
+    should_auto_publish_candidate as should_auto_publish_candidate_v2,
+)
+
 for stream in (sys.stdout, sys.stderr):
     if hasattr(stream, "reconfigure"):
         stream.reconfigure(encoding="utf-8")
@@ -35,6 +44,11 @@ ISSUE_LABEL_COLORS = {
     "trigger-approved": "0e8a16",
     "trigger-rejected": "b60205",
     "trigger-auto-published": "0e8a16",
+    "trigger-watch": "cfd3d7",
+    "trigger-review": "fbca04",
+    "trigger-auto-candidate": "0e8a16",
+    "trigger-low-signal": "d4c5f9",
+    "trigger-hard-blocked": "b60205",
 }
 ISSUE_PAYLOAD_PREFIX = "x-trigger-payload:"
 DEFAULT_FREE_FEED_BASE_URLS = [
@@ -52,28 +66,8 @@ PER_ACCOUNT_DELAY_SECONDS = max(0.0, float(os.getenv("X_TRIGGER_PER_ACCOUNT_DELA
 DEFAULT_FEED_MODE = os.getenv("X_TRIGGER_FEED_MODE", "nitter-first").strip().lower() or "nitter-first"
 DEFAULT_SUMMARY_MODEL = "gemini-3.1-flash-lite-preview"
 GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-AUTO_PUBLISH_KEYWORDS = (
-    "gpt",
-    "chatgpt",
-    "claude",
-    "gemini",
-    "grok",
-    "model",
-    "api",
-    "instant",
-    "roll out",
-    "rollout",
-    "starting to roll",
-    "release",
-    "released",
-    "launch",
-    "launched",
-    "available",
-    "ships",
-    "shipping",
-    "upgrade",
-)
-AUTO_PUBLISH_SCORE_THRESHOLD = int(os.getenv("TRIGGER_AUTO_PUBLISH_SCORE_THRESHOLD", "80"))
+def create_low_signal_issues_enabled() -> bool:
+    return os.getenv("TRIGGER_CREATE_LOW_SIGNAL_ISSUES", "false").strip().lower() in {"1", "true", "yes", "y"}
 
 DEFAULT_ACCOUNTS = [
     {"username": "OpenAI", "category": "official", "group": "공식 발표"},
@@ -571,51 +565,12 @@ def enrich_candidate(raw_candidate: dict[str, Any], account: dict[str, Any]) -> 
     }
 
 
-def _explicit_candidate_score(candidate: dict[str, Any]) -> int | None:
-    for source in (candidate, candidate.get("summary") or {}, candidate.get("tweet") or {}):
-        value = source.get("score") if isinstance(source, dict) else None
-        if value is None:
-            continue
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            continue
-    return None
+def score_trigger_candidate(candidate: dict[str, Any], *, now: datetime | None = None, state: dict | None = None) -> int:
+    return score_trigger_candidate_v2(candidate, now=now, state=state)
 
 
-def score_trigger_candidate(candidate: dict[str, Any]) -> int:
-    explicit = _explicit_candidate_score(candidate)
-    if explicit is not None:
-        return max(0, min(100, explicit))
-
-    account = candidate.get("account") or {}
-    tweet = candidate.get("tweet") or {}
-    summary = candidate.get("summary") or {}
-    haystack = " ".join(
-        str(value or "")
-        for value in (
-            tweet.get("text"),
-            tweet.get("title"),
-            summary.get("title"),
-            summary.get("body"),
-        )
-    ).lower()
-    score = 0
-    if str(account.get("category") or "").strip().lower() == "official":
-        score += 50
-    if str(account.get("tier") or "").strip().lower() in {"auto", "core"}:
-        score += 10
-    if str(summary.get("confidence") or "").strip().lower() == "official":
-        score += 20
-    if any(keyword in haystack for keyword in AUTO_PUBLISH_KEYWORDS):
-        score += 30
-    return max(0, min(100, score))
-
-
-def should_auto_publish_candidate(candidate: dict[str, Any]) -> bool:
-    score = score_trigger_candidate(candidate)
-    candidate["auto_publish_score"] = score
-    return score >= AUTO_PUBLISH_SCORE_THRESHOLD
+def should_auto_publish_candidate(candidate: dict[str, Any], *, now: datetime | None = None, state: dict | None = None) -> bool:
+    return should_auto_publish_candidate_v2(candidate, now=now, state=state)
 
 
 def publish_trigger_candidate(candidate: dict[str, Any], *, platform: str = "both", dry_run: bool = False) -> list[str]:
@@ -704,6 +659,56 @@ def _payload_token(candidate: dict[str, Any]) -> str:
     return base64.b64encode(raw).decode("ascii")
 
 
+def issue_labels_for_candidate(candidate: dict[str, Any]) -> list[str]:
+    detail = candidate.get("scoring") or score_trigger_candidate_detail(candidate)
+    decision = str(detail.get("decision") or "")
+    labels = list(ISSUE_LABELS)
+    if decision == "watch":
+        labels.append("trigger-watch")
+    elif decision == "review":
+        labels.append("trigger-review")
+    elif decision in {"auto_telegram_review_x", "auto_both"}:
+        labels.append("trigger-auto-candidate")
+    if decision in {"drop", "watch"} or int(detail.get("score") or 0) < MIN_ISSUE_SCORE:
+        labels.append("trigger-low-signal")
+    if detail.get("hard_blocks"):
+        labels.append("trigger-hard-blocked")
+    return list(dict.fromkeys(labels))
+
+
+def _format_scoring_detail(detail: dict[str, Any]) -> str:
+    breakdown = detail.get("breakdown") or {}
+    penalties = detail.get("penalties") or []
+    hard_blocks = detail.get("hard_blocks") or []
+    reasons = detail.get("reasons") or []
+    breakdown_text = ", ".join(
+        f"{name} {breakdown.get(name, 0)}"
+        for name in ("source", "event", "impact", "freshness", "evidence", "publish_fit")
+    )
+    penalty_text = "\n".join(
+        f"- {item.get('name')}: {item.get('points')} ({item.get('reason')})"
+        for item in penalties
+    ) or "- none"
+    block_text = ", ".join(str(item) for item in hard_blocks) if hard_blocks else "none"
+    reason_text = "\n".join(f"- {reason}" for reason in reasons[:6]) or "- none"
+    return f"""### Scoring v2
+**version:** {detail.get('version')}
+**score:** {detail.get('score')}/100
+**decision:** {detail.get('decision')}
+**confidence:** {detail.get('confidence')}
+**event_type:** {detail.get('event_type')}
+**story_key:** {detail.get('story_key')}
+**breakdown:** {breakdown_text}
+**hard_blocks:** {block_text}
+
+**penalties**
+{penalty_text}
+
+**reasons**
+{reason_text}
+"""
+
+
 def build_issue_body(candidate: dict[str, Any]) -> str:
     account = candidate["account"]
     tweet = candidate["tweet"]
@@ -713,8 +718,7 @@ def build_issue_body(candidate: dict[str, Any]) -> str:
     x_post_limit = candidate.get("x_post_limit")
     x_post_chars = candidate.get("x_post_chars")
     x_post_char_limit = candidate.get("x_post_char_limit")
-    auto_score = score_trigger_candidate(candidate)
-    candidate["auto_publish_score"] = auto_score
+    scoring = candidate.get("scoring") or score_trigger_candidate_detail(candidate)
     return f"""## X 트리거 검수
 
 **계정:** @{account['username']}
@@ -723,7 +727,9 @@ def build_issue_body(candidate: dict[str, Any]) -> str:
 **게시 시각:** {tweet.get('created_at', '')}
 **감지 시각:** {candidate.get('detected_at', '')}
 **X 길이 검사:** weight {x_post_weight}/{x_post_limit}, chars {x_post_chars}/{x_post_char_limit}
-**자동 배포 점수:** {auto_score}/{AUTO_PUBLISH_SCORE_THRESHOLD}
+**자동 배포 점수:** {scoring.get('score')}/{AUTO_PUBLISH_SCORE_THRESHOLD}
+
+{_format_scoring_detail(scoring)}
 
 ### 한국어 요약
 **{summary.get('title', '')}**
@@ -825,12 +831,13 @@ def create_github_issue(candidate: dict[str, Any], *, token: str | None = None, 
     if not token or not repo:
         raise RuntimeError("GITHUB_TOKEN and GITHUB_REPOSITORY are required to create review issues")
     ensure_candidate_x_post_text(candidate)
-    ensure_github_labels(ISSUE_LABELS, token=token, repo=repo)
+    labels = issue_labels_for_candidate(candidate)
+    ensure_github_labels(labels, token=token, repo=repo)
     title = f"[X 트리거 검수] @{candidate['account']['username']}: {candidate['summary']['title']}"
     response = requests.post(
         f"https://api.github.com/repos/{repo}/issues",
         headers=_github_headers(token),
-        json={"title": title[:256], "body": build_issue_body(candidate), "labels": ISSUE_LABELS},
+        json={"title": title[:256], "body": build_issue_body(candidate), "labels": labels},
         timeout=45,
     )
     if not response.ok:
@@ -886,21 +893,39 @@ def run_scan(args: argparse.Namespace) -> int:
         if candidate["id"] in seen_candidates:
             continue
         seen_candidates.add(candidate["id"])
+        scoring = score_trigger_candidate_detail(candidate, state=previous_state)
+        top_reasons = "; ".join(str(reason) for reason in scoring.get("reasons", [])[:2])
+        print(
+            f"[trigger] scored {candidate['id']}: score={scoring['score']} "
+            f"decision={scoring['decision']} story_key={scoring['story_key']} reasons={top_reasons}"
+        )
         if args.dry_run:
             print(json.dumps(candidate, ensure_ascii=False, indent=2))
+            continue
+        if scoring["decision"] in {"drop", "watch"} and not create_low_signal_issues_enabled():
+            print(f"[trigger] skipped low-signal candidate: {candidate['id']} ({scoring['decision']})")
             continue
         issue_url = create_github_issue(candidate)
         maybe_notify_telegram(candidate, issue_url)
         opened.append(issue_url)
         print(f"[trigger] opened review issue: {issue_url}")
-        if should_auto_publish_candidate(candidate):
+        if scoring["decision"] == "auto_both":
             try:
-                platform = os.getenv("TRIGGER_AUTO_PUBLISH_PLATFORM", "telegram").strip().lower() or "telegram"
-                published = publish_trigger_candidate(candidate, platform=platform)
+                published = publish_trigger_candidate(candidate, platform="both")
+                if published:
+                    next_state.setdefault("published_story_keys", {})[scoring["story_key"]] = datetime.now(timezone.utc).isoformat()
                 record_auto_publish_on_issue(issue_url, candidate, published)
                 print(f"[trigger] auto-published: {candidate['id']} -> {', '.join(published) or 'no new target'}")
             except Exception as exc:
                 print(f"[trigger] auto-publish failed for {candidate['id']}: {exc}", file=sys.stderr)
+        elif scoring["decision"] == "auto_telegram_review_x":
+            try:
+                published = publish_trigger_candidate(candidate, platform="telegram")
+                if published:
+                    next_state.setdefault("published_story_keys", {})[scoring["story_key"]] = datetime.now(timezone.utc).isoformat()
+                print(f"[trigger] auto-published telegram only: {candidate['id']} -> {', '.join(published) or 'no new target'}")
+            except Exception as exc:
+                print(f"[trigger] telegram auto-publish failed for {candidate['id']}: {exc}", file=sys.stderr)
     if not args.dry_run:
         save_trigger_state(next_state, args.state)
     print(f"[trigger] candidates: {len(raw_candidates)}, issues: {len(opened)}")

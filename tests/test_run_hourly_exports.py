@@ -275,6 +275,38 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(articles, [])
         self.assertEqual(call_gemma.call_count, 7)
 
+    def test_scan_chunks_uses_ten_attempt_budget_before_splitting(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        chunk = (
+            "[2026. 6. 11. 오전 8:00] user\n"
+            + ("Gemma API 쿨다운 확인 " * 650)
+            + "\n\n\n[2026. 6. 11. 오전 8:10] user\n"
+            + ("청크 분할 확인 " * 650)
+        )
+
+        with patch.object(
+            run_hourly,
+            "call_gemma",
+            side_effect=[
+                RuntimeError("API failed after 10 attempts"),
+                '{"articles":[]}',
+                '{"articles":[]}',
+            ],
+        ) as call_gemma:
+            articles = run_hourly.scan_chunks_for_articles(
+                [chunk],
+                titles=[],
+                now=run_at,
+                sched=object(),
+                min_chars=10_000,
+            )
+
+        self.assertEqual(articles, [])
+        self.assertTrue(call_gemma.call_args_list)
+        self.assertTrue(
+            all(call.kwargs["max_attempts"] == 10 for call in call_gemma.call_args_list)
+        )
+
     def test_generate_model_focus_article_uses_devmode_24h_prompt(self):
         run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
         chat = (

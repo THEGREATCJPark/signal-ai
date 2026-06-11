@@ -34,6 +34,7 @@ DEVMODE_CHANNEL_ID = CHANNEL_ID
 
 CHUNK_MAX_CHARS = 80_000
 MIN_SCAN_SPLIT_CHARS = 10_000
+SCAN_GEMMA_MAX_ATTEMPTS = 10
 MODEL_FOCUS_LOOKBACK_HOURS = 24
 MODEL_FOCUS_MAX_CHARS = 100_000
 MODEL_FOCUS_HEADLINE = "최신 모델 위주 정보"
@@ -101,7 +102,7 @@ def load_keys():
             return [k.strip() for k in line.split("=", 1)[1].split(",") if k.strip()]
     raise RuntimeError("No API keys found")
 
-def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False):
+def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False, max_attempts=20):
     endpoint = ENDPOINT_TPL.format(model=MODEL)
     gen_cfg = {"temperature": temp, "maxOutputTokens": max_tok}
     if json_mode:
@@ -113,7 +114,7 @@ def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False):
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": gen_cfg,
     }
-    for attempt in range(20):
+    for attempt in range(max_attempts):
         key = sched.acquire()
         try:
             r = requests.post(f"{endpoint}?key={key}", json=body, timeout=240)
@@ -136,7 +137,7 @@ def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False):
             time.sleep(3); continue
         except Exception:
             time.sleep(3); continue
-    raise RuntimeError("API failed after 20 attempts")
+    raise RuntimeError(f"API failed after {max_attempts} attempts")
 
 
 # ── Parsers ─────────────────────────────────────────────────────
@@ -1354,7 +1355,13 @@ def _scan_chunk_once(chunk: str, titles: list[str], sched, label: str) -> tuple[
     # 재시도: 파싱 결과 0개인데 raw에 'articles' 언급 있으면 garbled 가능성 → 재시도
     for attempt in range(1, 6):
         try:
-            raw = call_gemma(prompt_scan_chunk(chunk, titles), sched, temp=0.3, json_mode=True)
+            raw = call_gemma(
+                prompt_scan_chunk(chunk, titles),
+                sched,
+                temp=0.3,
+                json_mode=True,
+                max_attempts=SCAN_GEMMA_MAX_ATTEMPTS,
+            )
         except Exception as e:
             LOG(f"  {label} scan API fail (attempt {attempt}): {e}")
             return [], False

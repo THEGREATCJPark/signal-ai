@@ -43,7 +43,7 @@ def dce_cmd() -> list[str]:
     override = os.environ.get("DCE_BIN")
     if override:
         return shlex.split(override)
-    for name in ("discordchatexporter-cli", "dce"):
+    for name in ("DiscordChatExporter.Cli", "discordchatexporter-cli", "dce"):
         p = shutil.which(name)
         if p: return [p]
     # dotnet tool global: ~/.dotnet/tools/

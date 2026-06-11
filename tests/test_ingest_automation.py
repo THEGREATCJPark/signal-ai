@@ -100,6 +100,22 @@ class IngestAutomationTest(unittest.TestCase):
         self.assertEqual("2026-04-27 02:36", cmd[after_idx + 1])
         self.assertNotIn("--utc", cmd)
 
+    def test_linux_discord_exporter_finds_canonical_dce_name_on_path(self):
+        mod = importlib.import_module("discord_export_linux")
+
+        def fake_which(name):
+            if name == "DiscordChatExporter.Cli":
+                return "/home/pineapple/bin/DiscordChatExporter.Cli"
+            return None
+
+        with tempfile.TemporaryDirectory() as td:
+            with (
+                patch.dict(os.environ, {}, clear=True),
+                patch.object(mod.shutil, "which", side_effect=fake_which),
+                patch.object(mod.Path, "home", return_value=Path(td)),
+            ):
+                self.assertEqual(mod.dce_cmd(), ["/home/pineapple/bin/DiscordChatExporter.Cli"])
+
     def test_local_discord_ingest_refuses_github_actions(self):
         mod = importlib.import_module("scripts.local_discord_ingest")
 

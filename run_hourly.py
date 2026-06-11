@@ -30,8 +30,14 @@ MODEL = "gemma-4-26b-a4b-it"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 KST = timezone(timedelta(hours=9))
 CHANNEL_ID = "1365049274068631644"
+DEVMODE_CHANNEL_ID = CHANNEL_ID
 
 CHUNK_MAX_CHARS = 80_000
+MIN_SCAN_SPLIT_CHARS = 10_000
+MODEL_FOCUS_LOOKBACK_HOURS = 24
+MODEL_FOCUS_MAX_CHARS = 100_000
+MODEL_FOCUS_HEADLINE = "최신 모델 위주 정보"
+MODEL_FOCUS_KIND = "model_focus"
 MAX_MAIN = 6
 FRONT_PAGE_SLOTS = 1 + MAX_MAIN
 DECISION_LOG_HOURS = 3
@@ -551,19 +557,19 @@ def write_daily_new_articles_export(new_articles: list, run_at: datetime, daily_
 
 # ── Discord ─────────────────────────────────────────────────────
 
-def discord_export(since_iso: str) -> Path:
+def discord_export(since_iso: str, channel_id: str = CHANNEL_ID) -> Path:
     """WSL면 기존 discord_export_text_only.py (PowerShell 의존), Linux면 discord_export_linux.py (dotnet DCE)."""
     since = datetime.fromisoformat(since_iso).astimezone(KST)
     after_kst = since.strftime("%Y-%m-%d %H:%M:%S")
-    LOG(f"[discord] --after-kst '{after_kst}'")
+    LOG(f"[discord] channel {channel_id} --after-kst '{after_kst}'")
     # powershell.exe 있으면 WSL 스크립트, 아니면 linux 스크립트
     use_linux = subprocess.run(["which", "powershell.exe"], capture_output=True).returncode != 0
     if use_linux:
         script = ROOT / "discord_export_linux.py"
-        cmd = ["python3", str(script), "--channel", CHANNEL_ID, "--after-kst", after_kst]
+        cmd = ["python3", str(script), "--channel", channel_id, "--after-kst", after_kst]
     else:
         script = ROOT / "discord_export_text_only.py"
-        cmd = ["python3", str(script), "--channel", CHANNEL_ID, "--after-kst", after_kst, "--no-upload"]
+        cmd = ["python3", str(script), "--channel", channel_id, "--after-kst", after_kst, "--no-upload"]
     LOG(f"  using: {script.name}")
     r = subprocess.run(cmd, capture_output=True, timeout=1800)
     stdout = r.stdout.decode("utf-8", errors="replace") if r.stdout else ""
@@ -578,22 +584,60 @@ def discord_export(since_iso: str) -> Path:
             return Path(line.split("=", 1)[1].strip())
     raise RuntimeError(f"final_file not found:\n{stdout[-400:]}")
 
+
+def generate_devmode_model_focus_article(now: datetime, sched) -> dict | None:
+    since = now - timedelta(hours=MODEL_FOCUS_LOOKBACK_HOURS)
+    try:
+        export_path = discord_export(since.isoformat(), channel_id=DEVMODE_CHANNEL_ID)
+        chat = read_chat_text(export_path).strip()
+    except Exception as e:
+        LOG(f"model focus export failed: {e}; skipping model-focus article")
+        return None
+    LOG(f"model focus chat: {len(chat):,} chars")
+    return generate_model_focus_article(chat, now, sched)
+
+
+def upsert_model_focus_article(state: dict, new_articles: list, article: dict | None) -> list:
+    if not article:
+        return new_articles
+    article_id = article["id"]
+    state["articles"] = [a for a in state.get("articles", []) if a.get("id") != article_id]
+    kept_new = [a for a in new_articles if a.get("id") != article_id]
+    kept_new.append(article)
+    LOG(f"model focus article added: {article_id}")
+    return kept_new
+
 def read_chat_text(path: Path) -> str:
     text = path.read_text(encoding="utf-8")
     parts = text.split("=" * 62)
     return parts[2] if len(parts) >= 3 else text
 
 MSG_HDR = re.compile(r'(^\[\d{4}\. \d{1,2}\. \d{1,2}\. (?:오전|오후) \d{1,2}:\d{2}\][^\n]*\n)', re.M)
+MODEL_FOCUS_KEYWORD_RE = re.compile(
+    r"출시|릴리즈|공개|발표|성능|벤치|benchmark|eval|leaderboard|가격|price|API|"
+    r"모델|루머|찌라시|미확인|곧|나올|preview|release|launch|date|roadmap",
+    re.I,
+)
 
-def chunk_by_messages(text: str, max_chars: int = CHUNK_MAX_CHARS) -> list[str]:
+
+def split_message_blocks(text: str) -> list[str]:
     parts = MSG_HDR.split(text)
     blocks = []
     i = 1
     while i < len(parts):
         hdr = parts[i]
         body = parts[i + 1] if i + 1 < len(parts) else ""
-        blocks.append(hdr + body)
+        block = (hdr + body).strip()
+        if block:
+            blocks.append(block)
         i += 2
+    if blocks:
+        return blocks
+    return [b.strip() for b in re.split(r"\n{3,}", text) if b.strip()]
+
+
+def chunk_by_messages(text: str, max_chars: int = CHUNK_MAX_CHARS) -> list[str]:
+    blocks = split_message_blocks(text)
     chunks, cur = [], ""
     for b in blocks:
         if cur and len(cur) + len(b) > max_chars:
@@ -602,6 +646,27 @@ def chunk_by_messages(text: str, max_chars: int = CHUNK_MAX_CHARS) -> list[str]:
             cur += b
     if cur.strip(): chunks.append(cur)
     return chunks
+
+
+def split_chunk_for_retry(chunk: str) -> tuple[str, str]:
+    mid = len(chunk) // 2
+    separators = []
+    before = chunk.rfind("\n\n\n", 0, mid)
+    after = chunk.find("\n\n\n", mid)
+    if before > 0:
+        separators.append((abs(before - mid), before, 3))
+    if after > 0:
+        separators.append((abs(after - mid), after, 3))
+    if separators:
+        _, split_at, sep_len = min(separators)
+        left = chunk[:split_at].strip()
+        right = chunk[split_at + sep_len:].strip()
+    else:
+        left = chunk[:mid].strip()
+        right = chunk[mid:].strip()
+    if not left or not right:
+        return chunk[:mid].strip(), chunk[mid:].strip()
+    return left, right
 
 
 # ── Prompts ─────────────────────────────────────────────────────
@@ -639,6 +704,93 @@ def prompt_scan_chunk(chunk: str, titles: list[str]) -> str:
 {chunk}
 
 JSON만 출력:"""
+
+
+def prepare_model_focus_source(chat: str, max_chars: int = MODEL_FOCUS_MAX_CHARS) -> str:
+    blocks = split_message_blocks(chat)
+    relevant = [
+        b for b in blocks
+        if MODEL_NAME_RE.search(b) or MODEL_FOCUS_KEYWORD_RE.search(b)
+    ]
+    selected = relevant or blocks
+    out_reversed = []
+    total = 0
+    for block in reversed(selected):
+        block = block.strip()
+        if not block:
+            continue
+        sep = 3 if out_reversed else 0
+        if total + sep + len(block) > max_chars:
+            remaining = max_chars - total - sep
+            if remaining > 500:
+                out_reversed.append(block[-remaining:].strip())
+            break
+        out_reversed.append(block)
+        total += sep + len(block)
+    return "\n\n\n".join(reversed(out_reversed)).strip()
+
+
+def prompt_model_focus_article(source_text: str) -> str:
+    return f"""역할: First Light AI 모델 정보 분석 에디터.
+아래 Dev Mode 최근 24시간 채팅 중 모델 관련 메시지를 한 번에 읽고, 다음 사용자 요청을 수행하세요.
+
+사용자 요청:
+"이 내용을 자세히 분석해서 최신 또는 곧 나올 모델의 성능, 정보, 출시일에 대해서 언급된걸 모두 정리좀. 또한 찌라시나 흥미로운 내용도 모두 정리해줘."
+
+## 작성 규칙
+- 기사 제목은 반드시 "{MODEL_FOCUS_HEADLINE}".
+- 한국어 본문 900~1800자.
+- 최신 또는 곧 나올 모델의 성능, 정보, 출시일 언급을 최대한 빠짐없이 정리.
+- 공식 확인, 여러 언급, 단일 루머, 농담/찌라시 가능성을 구분.
+- 출시일·성능 수치·모델명은 채팅에 나온 범위에서만 쓰고, 확정되지 않은 것은 "미확인", "루머", "관측"으로 표시.
+- 흥미로운 찌라시나 작은 단서도 버리지 말되, 확정 기사처럼 쓰지 말 것.
+- 출력은 JSON 객체 하나만. 마크다운 코드펜스 금지.
+
+## 스키마
+{{"body":"{MODEL_FOCUS_HEADLINE} 기사 본문"}}
+
+## Dev Mode 24시간 모델 관련 채팅
+{source_text}
+
+JSON만 출력:"""
+
+
+def parse_model_focus_response(text: str) -> str:
+    s = text.strip()
+    s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
+    start = s.find('{'); end = s.rfind('}')
+    if start != -1 and end > start:
+        obj = json.loads(s[start:end+1])
+        body = obj.get("body") or obj.get("summary") or obj.get("article") or ""
+        return str(body).strip()
+    return s
+
+
+def generate_model_focus_article(chat: str, now: datetime, sched) -> dict | None:
+    source = prepare_model_focus_source(chat)
+    if not source or sched is None:
+        return None
+    try:
+        raw = call_gemma(prompt_model_focus_article(source), sched, max_tok=4096, temp=0.25, json_mode=True)
+        body = parse_model_focus_response(raw)
+    except Exception as e:
+        LOG(f"model focus fallback: {e}; skipping model-focus article")
+        return None
+    if len(body) < 40:
+        LOG("model focus fallback: response too short; skipping model-focus article")
+        return None
+    date_key = now.astimezone(KST).strftime("%Y%m%d")
+    return {
+        "id": f"model-focus-{date_key}",
+        "headline": MODEL_FOCUS_HEADLINE,
+        "body": body,
+        "category": "news",
+        "trust": "high",
+        "kind": MODEL_FOCUS_KIND,
+        "created_at": now.isoformat(),
+        "placement": None,
+        "placed_at": now.isoformat(),
+    }
 
 
 def prompt_classify(active: list, new: list, decision_log: list) -> tuple[str, dict]:
@@ -742,6 +894,10 @@ def _is_low_trust_rumor(article: dict) -> bool:
     return article.get("category") == "rumor" and article.get("trust") == "low"
 
 
+def _is_model_focus_article(article: dict) -> bool:
+    return article.get("kind") == MODEL_FOCUS_KIND or str(article.get("id", "")).startswith("model-focus-")
+
+
 def prioritize_new_articles_for_front_page(all_articles: list, new_articles: list, placement_map: dict) -> tuple[dict, list]:
     """Force the front page to show fresh updates first while preserving archive dates."""
     if not new_articles:
@@ -750,6 +906,12 @@ def prioritize_new_articles_for_front_page(all_articles: list, new_articles: lis
     original_index = {a["id"]: i for i, a in enumerate(all_articles)}
     new_ids = {a["id"] for a in new_articles}
     placement_rank = {"top": 0, "main": 1, "side": 2}
+    model_focus_articles = sorted(
+        [a for a in all_articles if _is_model_focus_article(a)],
+        key=lambda a: (-_created_at_sort_value(a), original_index.get(a["id"], 10**9)),
+    )
+    front_model_focus = model_focus_articles[0] if model_focus_articles else None
+    model_focus_ids = {a["id"] for a in model_focus_articles}
 
     def editorial_rank(article):
         return (
@@ -770,11 +932,22 @@ def prioritize_new_articles_for_front_page(all_articles: list, new_articles: lis
             bucket = 3
         return (bucket, *editorial_rank(article))
 
-    front = sorted(all_articles, key=front_rank)[:FRONT_PAGE_SLOTS]
+    normal_candidates = [a for a in all_articles if a["id"] not in model_focus_ids]
+    model_focus_slot_count = 1 if front_model_focus else 0
+    normal_front = sorted(normal_candidates, key=front_rank)[:FRONT_PAGE_SLOTS - model_focus_slot_count]
+    if front_model_focus:
+        if normal_front:
+            front = [normal_front[0], front_model_focus] + normal_front[1:]
+        else:
+            front = [front_model_focus]
+    else:
+        front = normal_front
     front_ids = {a["id"] for a in front}
 
     final_map = {a["id"]: "side" for a in all_articles}
-    if front:
+    if front_model_focus and not normal_front:
+        final_map[front_model_focus["id"]] = "main"
+    elif front:
         final_map[front[0]["id"]] = "top"
         for article in front[1:FRONT_PAGE_SLOTS]:
             final_map[article["id"]] = "main"
@@ -1176,26 +1349,50 @@ def merge_candidates(candidates, sched, rounds=MERGE_ROUNDS, preserve_ids=None):
     return result
 
 
-def scan_chunks_for_articles(chunks, titles, now, sched):
+def _scan_chunk_once(chunk: str, titles: list[str], sched, label: str) -> tuple[list, bool]:
+    arts = []
+    # 재시도: 파싱 결과 0개인데 raw에 'articles' 언급 있으면 garbled 가능성 → 재시도
+    for attempt in range(1, 6):
+        try:
+            raw = call_gemma(prompt_scan_chunk(chunk, titles), sched, temp=0.3, json_mode=True)
+        except Exception as e:
+            LOG(f"  {label} scan API fail (attempt {attempt}): {e}")
+            return [], False
+        arts = parse_chunk_articles(raw)
+        if arts:
+            return arts, True
+        # 빈 응답이지만 legitimately empty인지 check
+        if re.search(r'"articles"\s*:\s*\[\s*\]', raw):
+            LOG(f"  {label} legitimately empty (attempt {attempt})")
+            return [], True
+        LOG(f"  {label} attempt {attempt} parse fail, retry")
+    return [], False
+
+
+def _scan_chunk_with_splitting(chunk: str, titles: list[str], sched, label: str, min_chars: int) -> list:
+    LOG(f"{label} scan chunk ({len(chunk):,} chars)")
+    arts, ok = _scan_chunk_once(chunk, titles, sched, label)
+    if ok:
+        LOG(f"  {label} → {len(arts)} articles")
+        return arts
+    if len(chunk) <= min_chars:
+        LOG(f"  {label} failed at <= {min_chars:,} chars — dropping this chunk fragment")
+        return []
+    left, right = split_chunk_for_retry(chunk)
+    if not left or not right:
+        LOG(f"  {label} split produced empty fragment — dropping this chunk fragment")
+        return []
+    LOG(f"  {label} failed — splitting into {len(left):,} + {len(right):,} chars")
+    return (
+        _scan_chunk_with_splitting(left, titles, sched, f"{label}.1", min_chars)
+        + _scan_chunk_with_splitting(right, titles, sched, f"{label}.2", min_chars)
+    )
+
+
+def scan_chunks_for_articles(chunks, titles, now, sched, min_chars: int = MIN_SCAN_SPLIT_CHARS):
     new_articles = []
     for i, ch in enumerate(chunks):
-        LOG(f"[{i+1}/{len(chunks)}] scan chunk ({len(ch):,} chars)")
-        arts = []
-        # 재시도: 파싱 결과 0개인데 raw에 'articles' 언급 있으면 garbled 가능성 → 재시도
-        for attempt in range(1, 6):
-            try:
-                raw = call_gemma(prompt_scan_chunk(ch, titles), sched, temp=0.3, json_mode=True)
-            except Exception as e:
-                LOG(f"  scan API fail (attempt {attempt}): {e}; skipping this chunk")
-                break
-            arts = parse_chunk_articles(raw)
-            if arts:
-                break
-            # 빈 응답이지만 legitimately empty인지 check
-            if re.search(r'"articles"\s*:\s*\[\s*\]', raw):
-                LOG(f"  legitimately empty (attempt {attempt})")
-                break
-            LOG(f"  attempt {attempt} parse fail, retry")
+        arts = _scan_chunk_with_splitting(ch, titles, sched, f"[{i+1}/{len(chunks)}]", min_chars)
         for a in arts:
             new_articles.append({
                 "id": new_id(now, len(new_articles) + 1),
@@ -1207,7 +1404,6 @@ def scan_chunks_for_articles(chunks, titles, now, sched):
                 "placement": None,
                 "placed_at": now.isoformat(),
             })
-        LOG(f"  → {len(arts)} articles")
     return new_articles
 
 
@@ -1245,6 +1441,11 @@ def main():
     LOG(f"chat: {len(chat):,} chars")
 
     if not chat:
+        model_focus_article = generate_devmode_model_focus_article(now, sched)
+        if model_focus_article:
+            new_articles = upsert_model_focus_article(state, [], model_focus_article)
+            _classify_and_save(state, new_articles, now, sched)
+            return
         LOG("empty chat — no-op except last_run_at bump")
         state["last_run_at"] = now.isoformat()
         state["generated_at"] = now.isoformat()
@@ -1300,6 +1501,9 @@ def main():
     # Step B: cross-existing dedup (new vs 기존 활성 기사. 같은 내용만 drop)
     if new_articles and state.get("articles"):
         new_articles, _ = cross_existing_dedup(new_articles, state["articles"], sched)
+
+    model_focus_article = generate_devmode_model_focus_article(now, sched)
+    new_articles = upsert_model_focus_article(state, new_articles, model_focus_article)
 
     # Step C: classify (기존 + new 모두 TOP/MAIN/SIDE 배치)
     _classify_and_save(state, new_articles, now, sched)

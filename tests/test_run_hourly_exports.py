@@ -203,6 +203,140 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(articles[0]["headline"], "살아남은 청크 기사")
         self.assertEqual(articles[0]["placement"], None)
 
+    def test_scan_chunks_splits_failed_chunk_and_keeps_successful_halves(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        chunk = (
+            "[2026. 6. 11. 오전 8:00] user\n"
+            + ("Gemini 성능 소식 " * 800)
+            + "\n\n\n[2026. 6. 11. 오전 8:10] user\n"
+            + ("Claude 출시일 소식 " * 800)
+        )
+        first_half = {
+            "articles": [{
+                "headline": "Gemini 성능 개선 소식",
+                "body": "첫 번째 반쪽 청크에서 나온 성능 관련 소식입니다. 충분히 긴 본문으로 기사 후보가 유지됩니다.",
+                "category": "news",
+                "trust": "high",
+            }]
+        }
+        second_half = {
+            "articles": [{
+                "headline": "Claude 출시일 관측",
+                "body": "두 번째 반쪽 청크에서 나온 출시일 관련 관측입니다. 충분히 긴 본문으로 기사 후보가 유지됩니다.",
+                "category": "rumor",
+                "trust": "low",
+            }]
+        }
+
+        with patch.object(
+            run_hourly,
+            "call_gemma",
+            side_effect=[
+                RuntimeError("API failed after 20 attempts"),
+                json.dumps(first_half, ensure_ascii=False),
+                json.dumps(second_half, ensure_ascii=False),
+            ],
+        ) as call_gemma:
+            articles = run_hourly.scan_chunks_for_articles(
+                [chunk],
+                titles=[],
+                now=run_at,
+                sched=object(),
+                min_chars=10_000,
+            )
+
+        self.assertEqual(call_gemma.call_count, 3)
+        self.assertEqual([a["id"] for a in articles], ["art-202606110800-01", "art-202606110800-02"])
+        self.assertEqual(articles[0]["headline"], "Gemini 성능 개선 소식")
+        self.assertEqual(articles[1]["headline"], "미확인: Claude 출시일 관측")
+
+    def test_scan_chunks_drops_poison_chunk_after_minimum_split_size(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        chunk = (
+            "[2026. 6. 11. 오전 8:00] user\n"
+            + ("검열될 수 있는 이상한 청크 " * 700)
+            + "\n\n\n[2026. 6. 11. 오전 8:10] user\n"
+            + ("계속 실패하는 이상한 청크 " * 700)
+        )
+
+        with patch.object(
+            run_hourly,
+            "call_gemma",
+            side_effect=RuntimeError("API failed after 20 attempts"),
+        ) as call_gemma:
+            articles = run_hourly.scan_chunks_for_articles(
+                [chunk],
+                titles=[],
+                now=run_at,
+                sched=object(),
+                min_chars=10_000,
+            )
+
+        self.assertEqual(articles, [])
+        self.assertEqual(call_gemma.call_count, 7)
+
+    def test_generate_model_focus_article_uses_devmode_24h_prompt(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        chat = (
+            "[2026. 6. 10. 오후 9:00] user\n"
+            "Gemini 3.5가 곧 나올 수 있다는 루머와 벤치마크 이야기가 나왔다.\n\n\n"
+            "[2026. 6. 10. 오후 9:05] user\n"
+            "잡담은 포함하지 않는다."
+        )
+        response = json.dumps({
+            "body": "Dev Mode 24시간 채팅에서는 Gemini 3.5 루머와 벤치마크 관측이 중심이었다. 출시일은 확정되지 않았고, 성능 이야기는 흥미로운 찌라시로 분류해야 한다.",
+        }, ensure_ascii=False)
+
+        with patch.object(run_hourly, "call_gemma", return_value=response) as call_gemma:
+            article = run_hourly.generate_model_focus_article(chat, run_at, sched=object())
+
+        self.assertIsNotNone(article)
+        self.assertEqual(article["id"], "model-focus-20260611")
+        self.assertEqual(article["headline"], "최신 모델 위주 정보")
+        self.assertEqual(article["kind"], "model_focus")
+        self.assertIn("Gemini 3.5", article["body"])
+        prompt = call_gemma.call_args.args[0]
+        self.assertIn("이 내용을 자세히 분석해서 최신 또는 곧 나올 모델의 성능", prompt)
+        self.assertIn("Gemini 3.5", prompt)
+        self.assertNotIn("잡담은 포함하지 않는다", prompt)
+
+    def test_model_focus_article_is_forced_to_first_main_slot(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        model_focus = {
+            "id": "model-focus-20260611",
+            "headline": "최신 모델 위주 정보",
+            "body": "Dev Mode 24시간 모델 관련 분석입니다.",
+            "category": "news",
+            "trust": "high",
+            "kind": "model_focus",
+            "created_at": run_at.isoformat(),
+            "placement": None,
+            "placed_at": run_at.isoformat(),
+        }
+        new_articles = [model_focus] + [
+            {
+                "id": f"new-{i}",
+                "headline": f"신규 기사 {i}",
+                "body": "새로 들어온 기사 본문",
+                "category": "news",
+                "trust": "high",
+                "created_at": run_at.isoformat(),
+                "placement": None,
+                "placed_at": run_at.isoformat(),
+            }
+            for i in range(1, 8)
+        ]
+        placement_map, ordered = run_hourly.prioritize_new_articles_for_front_page(
+            new_articles,
+            new_articles,
+            {a["id"]: "side" for a in new_articles},
+        )
+
+        self.assertEqual(placement_map["new-1"], "top")
+        self.assertEqual(placement_map["model-focus-20260611"], "main")
+        self.assertEqual([a["id"] for a in ordered[:3]], ["new-1", "model-focus-20260611", "new-2"])
+        self.assertEqual(sum(1 for p in placement_map.values() if p == "main"), 6)
+
     def test_classify_save_publishes_with_fallback_when_gemma_is_unavailable(self):
         run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
         state = {

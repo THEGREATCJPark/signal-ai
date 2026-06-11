@@ -46,11 +46,11 @@ def dce_cmd() -> list[str]:
     for name in ("DiscordChatExporter.Cli", "discordchatexporter-cli", "dce"):
         p = shutil.which(name)
         if p: return [p]
-    # dotnet tool global: ~/.dotnet/tools/
-    home = Path.home() / ".dotnet" / "tools"
-    for name in ("DiscordChatExporter.Cli", "discordchatexporter-cli"):
-        p = home / name
-        if p.exists(): return [str(p)]
+    home = Path.home()
+    for directory in (home / "bin", home / ".local" / "bin", home / ".dotnet" / "tools"):
+        for name in ("DiscordChatExporter.Cli", "discordchatexporter-cli", "dce"):
+            p = directory / name
+            if p.exists(): return [str(p)]
     raise RuntimeError(
         "DiscordChatExporter.Cli를 못 찾음. 'dotnet tool install --global DiscordChatExporter.Cli' 설치 필요 "
         "또는 DCE_BIN 환경변수로 경로 지정."

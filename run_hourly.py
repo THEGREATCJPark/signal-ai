@@ -1322,8 +1322,9 @@ def _classify_and_save(state, new_articles, now, sched):
             attempt += 1
             prompt, short2real = prompt_classify(state["articles"], new_articles, recent_log)
             valid_shorts = set(short2real.keys())
-            raw = call_gemma(prompt, sched, max_tok=16384, temp=0.2, json_mode=True)
+            raw = ""
             try:
+                raw = call_gemma(prompt, sched, max_tok=16384, temp=0.2, json_mode=True)
                 p = parse_placement_json(raw)
                 err = validate_placement(p, valid_shorts)
                 if err:
@@ -1336,10 +1337,10 @@ def _classify_and_save(state, new_articles, now, sched):
             except Exception as e:
                 LOG(f"  classify fail ({attempt}): {e}; retry")
                 # dump raw for post-mortem on first few failures
-                if attempt <= 3:
+                if raw and attempt <= 3:
                     dbg = ROOT / "data" / f"classify_raw_{attempt}.txt"
                     dbg.write_text(raw, encoding="utf-8")
-                if attempt >= 8:
+                if not raw or attempt >= 8:
                     LOG(f"  giving up classify after {attempt} attempts — fallback: all new → side")
                     placement_map_real = {a["id"]: (a.get("placement") or "side") for a in state["articles"]}
                     for a in new_articles:

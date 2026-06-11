@@ -203,6 +203,49 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(articles[0]["headline"], "살아남은 청크 기사")
         self.assertEqual(articles[0]["placement"], None)
 
+    def test_classify_save_publishes_with_fallback_when_gemma_is_unavailable(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        state = {
+            "schema_version": 2,
+            "journal": "First Light AI",
+            "articles": [],
+            "decision_log": [],
+        }
+        new_articles = [
+            {
+                "id": "art-202606110800-01",
+                "headline": "새 기사",
+                "body": "Gemma API가 장애여도 이 후보는 버리지 않고 공개 상태에 남아야 합니다.",
+                "category": "news",
+                "trust": "high",
+                "created_at": run_at.isoformat(),
+                "placement": None,
+                "placed_at": run_at.isoformat(),
+            }
+        ]
+
+        with tempfile.TemporaryDirectory() as td:
+            docs_path = Path(td) / "docs" / "articles.json"
+            pages_path = Path(td) / "articles.json"
+            exports_dir = Path(td) / "exports" / "articles"
+            docs_path.parent.mkdir(parents=True)
+            with (
+                patch.object(run_hourly, "ARTICLES_PATH", docs_path),
+                patch.object(run_hourly, "PAGES_ARTICLES_PATH", pages_path),
+                patch.object(run_hourly, "EXPORTS_ARTICLES_DIR", exports_dir),
+                patch.object(run_hourly, "call_gemma", side_effect=RuntimeError("API failed after 20 attempts")),
+                patch.object(run_hourly.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="gist ok\n", stderr="")),
+                patch.object(run_hourly, "publish_after_run") as publish_after_run,
+            ):
+                run_hourly._classify_and_save(state, new_articles, run_at, sched=object())
+
+            saved = json.loads(docs_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(saved["generated_at"], run_at.isoformat())
+        self.assertEqual(saved["articles"][0]["id"], "art-202606110800-01")
+        self.assertIn(saved["articles"][0]["placement"], {"top", "main", "side"})
+        publish_after_run.assert_called_once()
+
     def test_write_daily_new_articles_export_uses_date_folder_and_metadata(self):
         run_at = datetime(2026, 4, 20, 12, 0, tzinfo=KST)
         articles = [

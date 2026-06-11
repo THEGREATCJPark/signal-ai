@@ -279,6 +279,10 @@
     pointer-events: none;
   }
   .daily-ribbon-stage[hidden] { display: none; }
+  .model-ribbon-stage {
+    left: 20px;
+    right: auto;
+  }
   .summary-physics {
     position: relative;
     width: 100%;
@@ -294,6 +298,10 @@
     height: 222px;
     pointer-events: none;
     overflow: visible;
+  }
+  .model-ribbon-stage .summary-strings {
+    left: 0;
+    right: auto;
   }
   .summary-string {
     fill: none;
@@ -440,6 +448,14 @@
     pointer-events: auto;
     transform: translateX(0) translateY(0);
   }
+  .model-ribbon-stage .summary-sheet {
+    left: 96px;
+    right: auto;
+    transform: translateX(-18px) translateY(-8px);
+  }
+  .model-ribbon-stage .summary-physics.open .summary-sheet {
+    transform: translateX(0) translateY(0);
+  }
   .summary-sheet-head {
     display: flex;
     justify-content: space-between;
@@ -508,6 +524,10 @@
       width: 56px;
       height: 242px;
     }
+    .model-ribbon-stage {
+      left: 0;
+      right: auto;
+    }
     .summary-strings {
       height: 178px;
     }
@@ -537,8 +557,16 @@
       -webkit-overflow-scrolling: touch;
       transform: translateY(-8px);
     }
+    .model-ribbon-stage .summary-sheet {
+      left: 8px;
+      right: 8px;
+      transform: translateY(-8px);
+    }
     .summary-physics.open .summary-sheet {
       padding: 18px 18px max(56px, calc(34px + env(safe-area-inset-bottom)));
+    }
+    .model-ribbon-stage .summary-physics.open .summary-sheet {
+      transform: translateY(0);
     }
     .summary-sheet-head {
       display: block;
@@ -756,6 +784,7 @@
     <span class="dot">·</span>
     <span>VOL. 001</span>
   </div>
+  <section class="daily-ribbon-stage model-ribbon-stage" id="model-focus-stage" hidden></section>
   <section class="daily-ribbon-stage" id="daily-summary-stage" hidden></section>
 </header>
 
@@ -845,14 +874,23 @@
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
   }
-  function renderDailyRibbon(summary) {
-    const stage = $('daily-summary-stage');
+  function renderPullRibbon(summary, opts) {
+    const stage = $(opts.stageId);
     if (!stage || !summary || !summary.body) return;
-    const title = summary.title || "오늘의 AI 업데이트";
+    const title = summary.title || opts.fallbackTitle;
+    const prefix = opts.prefix;
+    const physicsId = `${prefix}-physics`;
+    const stringsId = `${prefix}-strings`;
+    const ribbonId = `${prefix}-ribbon-pull`;
+    const sheetId = `${prefix}-sheet`;
+    const closeId = `${prefix}-close`;
+    const line = opts.line;
+    const kicker = opts.kicker;
+    const ariaLabel = opts.ariaLabel;
     stage.hidden = false;
     stage.innerHTML = `
-      <div class="summary-physics" id="summary-physics">
-        <svg class="summary-strings" id="summary-strings" aria-hidden="true">
+      <div class="summary-physics" id="${physicsId}">
+        <svg class="summary-strings" id="${stringsId}" aria-hidden="true">
           <path class="summary-string shadow" data-cord="0"></path>
           <path class="summary-string" data-cord="0"></path>
           <path class="summary-string shadow" data-cord="1"></path>
@@ -863,19 +901,19 @@
           <circle class="summary-bead" data-bead="1" r="4"></circle>
           <circle class="summary-bead" data-bead="2" r="4"></circle>
         </svg>
-        <button class="summary-ribbon-pull" id="summary-ribbon-pull" type="button" aria-expanded="false" aria-controls="summary-sheet" aria-label="Don't Die. 요약 열기">
+        <button class="summary-ribbon-pull" id="${ribbonId}" type="button" aria-expanded="false" aria-controls="${sheetId}" aria-label="${esc(ariaLabel)}">
           <span class="ribbon-title">${esc(title)}</span>
-          <span class="ribbon-line">Don't Die.</span>
+          <span class="ribbon-line">${esc(line)}</span>
           <span class="ribbon-meta" aria-hidden="true"></span>
           <span class="ribbon-handle">PULL</span>
         </button>
-        <article class="summary-sheet" id="summary-sheet" aria-hidden="true">
+        <article class="summary-sheet" id="${sheetId}" aria-hidden="true">
           <div class="summary-sheet-head">
             <div>
-              <div class="summary-sheet-kicker">Don't Die. · ${esc(summary.date || '')}</div>
+              <div class="summary-sheet-kicker">${esc(kicker)} · ${esc(summary.date || '')}</div>
               <h2 class="summary-sheet-title">${formatInlineText(title)}</h2>
             </div>
-            <button class="summary-close" id="summary-close" type="button">접기</button>
+            <button class="summary-close" id="${closeId}" type="button">접기</button>
           </div>
           <div class="summary-copy">
             ${paragraphs(summary.body).map(p => `<p>${formatInlineText(p)}</p>`).join('')}
@@ -884,11 +922,11 @@
       </div>
     `;
 
-    const physics = $('summary-physics');
-    const ribbon = $('summary-ribbon-pull');
-    const sheet = $('summary-sheet');
-    const close = $('summary-close');
-    const svg = $('summary-strings');
+    const physics = $(physicsId);
+    const ribbon = $(ribbonId);
+    const sheet = $(sheetId);
+    const close = $(closeId);
+    const svg = $(stringsId);
     const cords = [...svg.querySelectorAll('[data-cord]')];
     const beads = [...svg.querySelectorAll('[data-bead]')];
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1032,6 +1070,26 @@
     draw();
     requestAnimationFrame(tick);
   }
+  function renderDailyRibbon(summary) {
+    renderPullRibbon(summary, {
+      stageId: 'daily-summary-stage',
+      prefix: 'summary',
+      fallbackTitle: '오늘의 AI 업데이트',
+      line: "Don't Die.",
+      kicker: "Don't Die.",
+      ariaLabel: "Don't Die. 요약 열기",
+    });
+  }
+  function renderModelFocusRibbon(summary) {
+    renderPullRibbon(summary, {
+      stageId: 'model-focus-stage',
+      prefix: 'model-summary',
+      fallbackTitle: '최신 모델 위주 정보',
+      line: 'Models',
+      kicker: 'Dev Mode 24H',
+      ariaLabel: '최신 모델 위주 정보 열기',
+    });
+  }
 
   let data;
   const inlineEl = document.getElementById('articles-data');
@@ -1058,6 +1116,7 @@
   $('masthead-source').textContent = `${all.length} STORIES · UPDATED ${fmtTime(gen)}`;
   $('footer-meta').textContent = `GENERATED ${fmtTime(gen)}`;
   renderDailyRibbon(data.daily_summary);
+  renderModelFocusRibbon(data.model_focus_summary);
 
   if (!all.length) {
     $('center').innerHTML = `<div class="empty">표시할 기사가 없습니다.</div>`;

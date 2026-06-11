@@ -307,7 +307,7 @@ class DailyExportsTest(unittest.TestCase):
             all(call.kwargs["max_attempts"] == 10 for call in call_gemma.call_args_list)
         )
 
-    def test_generate_model_focus_article_uses_devmode_24h_prompt(self):
+    def test_generate_model_focus_article_uses_full_devmode_24h_prompt(self):
         run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
         chat = (
             "[2026. 6. 10. 오후 9:00] user\n"
@@ -330,7 +330,64 @@ class DailyExportsTest(unittest.TestCase):
         prompt = call_gemma.call_args.args[0]
         self.assertIn("이 내용을 자세히 분석해서 최신 또는 곧 나올 모델의 성능", prompt)
         self.assertIn("Gemini 3.5", prompt)
-        self.assertNotIn("잡담은 포함하지 않는다", prompt)
+        self.assertIn("잡담은 포함하지 않는다", prompt)
+
+    def test_generate_model_focus_article_splits_and_merges_when_full_24h_fails(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        chat = (
+            "[2026. 6. 10. 오전 8:00] user\n"
+            + ("Gemini 3.5 성능 루머 " * 700)
+            + "\n\n\n[2026. 6. 10. 오후 8:00] user\n"
+            + ("Claude Opus 출시일 관측 " * 700)
+        )
+        left_summary = json.dumps({"body": "Gemini 3.5 성능 루머와 벤치마크 관측 정리"}, ensure_ascii=False)
+        right_summary = json.dumps({"body": "Claude Opus 출시일 관측과 미확인 일정 정리"}, ensure_ascii=False)
+        merged_summary = json.dumps({
+            "body": "Gemini 3.5 성능 루머와 Claude Opus 출시일 관측을 누락 없이 병합한 24시간 요약입니다."
+        }, ensure_ascii=False)
+
+        with patch.object(
+            run_hourly,
+            "call_gemma",
+            side_effect=[
+                RuntimeError("API failed after 10 attempts"),
+                left_summary,
+                right_summary,
+                merged_summary,
+            ],
+        ) as call_gemma:
+            article = run_hourly.generate_model_focus_article(chat, run_at, sched=object(), min_chars=10_000)
+
+        self.assertIsNotNone(article)
+        self.assertIn("누락 없이 병합", article["body"])
+        prompts = [call.args[0] for call in call_gemma.call_args_list]
+        self.assertIn("Gemini 3.5 성능 루머", prompts[0])
+        self.assertIn("Claude Opus 출시일 관측", prompts[0])
+        self.assertIn("Gemini 3.5 성능 루머와 벤치마크 관측 정리", prompts[-1])
+        self.assertIn("Claude Opus 출시일 관측과 미확인 일정 정리", prompts[-1])
+        self.assertIn("누락 없이", prompts[-1])
+
+    def test_model_focus_article_updates_ribbon_summary_payload(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        state = {"articles": []}
+        article = {
+            "id": "model-focus-20260611",
+            "headline": "최신 모델 위주 정보",
+            "body": "Dev Mode 24시간 전체 요약입니다.",
+            "category": "news",
+            "trust": "high",
+            "kind": "model_focus",
+            "created_at": run_at.isoformat(),
+            "placement": None,
+            "placed_at": run_at.isoformat(),
+        }
+
+        new_articles = run_hourly.upsert_model_focus_article(state, [], article)
+
+        self.assertEqual(new_articles, [article])
+        self.assertEqual(state["model_focus_summary"]["title"], "최신 모델 위주 정보")
+        self.assertEqual(state["model_focus_summary"]["body"], "Dev Mode 24시간 전체 요약입니다.")
+        self.assertEqual(state["model_focus_summary"]["date"], "2026-06-11")
 
     def test_model_focus_article_is_forced_to_first_main_slot(self):
         run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)

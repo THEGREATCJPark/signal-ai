@@ -49,6 +49,27 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertNotIn("updates</span>", html)
         self.assertNotIn("오늘의 모든 업데이트를 한 번에 읽기", html)
 
+    def test_model_focus_summary_renders_as_left_pull_ribbon(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        model_stage = css_block(html, ".model-ribbon-stage {")
+        model_sheet = css_block(html, ".model-ribbon-stage .summary-sheet {")
+        mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]
+        mobile_model_stage = css_block(mobile, ".model-ribbon-stage {")
+        header_start = html.index("<header class=\"masthead\">")
+        stage_start = html.index("<section class=\"daily-ribbon-stage model-ribbon-stage\"")
+        header_end = html.index("</header>")
+
+        self.assertLess(header_start, stage_start)
+        self.assertLess(stage_start, header_end)
+        self.assertIn('id="model-focus-stage"', html)
+        self.assertIn("left: 20px;", model_stage)
+        self.assertIn("right: auto;", model_stage)
+        self.assertIn("left: 96px;", model_sheet)
+        self.assertIn("right: auto;", model_sheet)
+        self.assertIn("left: 0;", mobile_model_stage)
+        self.assertIn("renderModelFocusRibbon(data.model_focus_summary);", html)
+        self.assertIn("Models", html)
+
     def test_daily_summary_sheet_uses_left_aligned_editorial_text(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         sheet = css_block(html, ".summary-sheet {")

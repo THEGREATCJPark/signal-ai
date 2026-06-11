@@ -36,7 +36,8 @@ CHUNK_MAX_CHARS = 80_000
 MIN_SCAN_SPLIT_CHARS = 10_000
 SCAN_GEMMA_MAX_ATTEMPTS = 10
 MODEL_FOCUS_LOOKBACK_HOURS = 24
-MODEL_FOCUS_MAX_CHARS = 100_000
+MODEL_FOCUS_MIN_SPLIT_CHARS = 10_000
+MODEL_FOCUS_GEMMA_MAX_ATTEMPTS = 10
 MODEL_FOCUS_HEADLINE = "최신 모델 위주 정보"
 MODEL_FOCUS_KIND = "model_focus"
 MAX_MAIN = 6
@@ -598,6 +599,21 @@ def generate_devmode_model_focus_article(now: datetime, sched) -> dict | None:
     return generate_model_focus_article(chat, now, sched)
 
 
+def model_focus_summary_payload(article: dict) -> dict:
+    generated_at = article.get("created_at") or article.get("placed_at") or datetime.now(KST).isoformat()
+    try:
+        run_at = datetime.fromisoformat(generated_at).astimezone(KST)
+    except Exception:
+        run_at = datetime.now(KST)
+    return {
+        "schema_version": 1,
+        "title": MODEL_FOCUS_HEADLINE,
+        "date": run_at.date().isoformat(),
+        "generated_at": run_at.isoformat(),
+        "body": article.get("body", ""),
+    }
+
+
 def upsert_model_focus_article(state: dict, new_articles: list, article: dict | None) -> list:
     if not article:
         return new_articles
@@ -605,6 +621,7 @@ def upsert_model_focus_article(state: dict, new_articles: list, article: dict | 
     state["articles"] = [a for a in state.get("articles", []) if a.get("id") != article_id]
     kept_new = [a for a in new_articles if a.get("id") != article_id]
     kept_new.append(article)
+    state["model_focus_summary"] = model_focus_summary_payload(article)
     LOG(f"model focus article added: {article_id}")
     return kept_new
 
@@ -614,11 +631,6 @@ def read_chat_text(path: Path) -> str:
     return parts[2] if len(parts) >= 3 else text
 
 MSG_HDR = re.compile(r'(^\[\d{4}\. \d{1,2}\. \d{1,2}\. (?:오전|오후) \d{1,2}:\d{2}\][^\n]*\n)', re.M)
-MODEL_FOCUS_KEYWORD_RE = re.compile(
-    r"출시|릴리즈|공개|발표|성능|벤치|benchmark|eval|leaderboard|가격|price|API|"
-    r"모델|루머|찌라시|미확인|곧|나올|preview|release|launch|date|roadmap",
-    re.I,
-)
 
 
 def split_message_blocks(text: str) -> list[str]:
@@ -707,33 +719,9 @@ def prompt_scan_chunk(chunk: str, titles: list[str]) -> str:
 JSON만 출력:"""
 
 
-def prepare_model_focus_source(chat: str, max_chars: int = MODEL_FOCUS_MAX_CHARS) -> str:
-    blocks = split_message_blocks(chat)
-    relevant = [
-        b for b in blocks
-        if MODEL_NAME_RE.search(b) or MODEL_FOCUS_KEYWORD_RE.search(b)
-    ]
-    selected = relevant or blocks
-    out_reversed = []
-    total = 0
-    for block in reversed(selected):
-        block = block.strip()
-        if not block:
-            continue
-        sep = 3 if out_reversed else 0
-        if total + sep + len(block) > max_chars:
-            remaining = max_chars - total - sep
-            if remaining > 500:
-                out_reversed.append(block[-remaining:].strip())
-            break
-        out_reversed.append(block)
-        total += sep + len(block)
-    return "\n\n\n".join(reversed(out_reversed)).strip()
-
-
-def prompt_model_focus_article(source_text: str) -> str:
+def prompt_model_focus_article(source_text: str, source_label: str = "Dev Mode 최근 24시간 전체 채팅") -> str:
     return f"""역할: First Light AI 모델 정보 분석 에디터.
-아래 Dev Mode 최근 24시간 채팅 중 모델 관련 메시지를 한 번에 읽고, 다음 사용자 요청을 수행하세요.
+아래 {source_label}을 통째로 읽고, 다음 사용자 요청을 수행하세요.
 
 사용자 요청:
 "이 내용을 자세히 분석해서 최신 또는 곧 나올 모델의 성능, 정보, 출시일에 대해서 언급된걸 모두 정리좀. 또한 찌라시나 흥미로운 내용도 모두 정리해줘."
@@ -745,13 +733,42 @@ def prompt_model_focus_article(source_text: str) -> str:
 - 공식 확인, 여러 언급, 단일 루머, 농담/찌라시 가능성을 구분.
 - 출시일·성능 수치·모델명은 채팅에 나온 범위에서만 쓰고, 확정되지 않은 것은 "미확인", "루머", "관측"으로 표시.
 - 흥미로운 찌라시나 작은 단서도 버리지 말되, 확정 기사처럼 쓰지 말 것.
+- 모델 관련 메시지만 사전 필터링되었다고 가정하지 말고, 잡담 속 단서도 전체 맥락에서 확인.
 - 출력은 JSON 객체 하나만. 마크다운 코드펜스 금지.
 
 ## 스키마
 {{"body":"{MODEL_FOCUS_HEADLINE} 기사 본문"}}
 
-## Dev Mode 24시간 모델 관련 채팅
+## {source_label}
 {source_text}
+
+JSON만 출력:"""
+
+
+def prompt_model_focus_merge(part_summaries: list[str]) -> str:
+    parts = "\n\n".join(
+        f"[부분 {i}]\n{summary.strip()}"
+        for i, summary in enumerate(part_summaries, 1)
+        if summary.strip()
+    )
+    return f"""역할: First Light AI 모델 정보 분석 에디터.
+아래는 Dev Mode 최근 24시간 전체 채팅을 나누어 요약한 결과입니다.
+각 부분 요약을 함께 읽고, 최신 또는 곧 나올 모델의 성능, 정보, 출시일, 찌라시, 흥미로운 단서를 누락 없이 병합하세요.
+
+## 병합 규칙
+- 기사 제목은 반드시 "{MODEL_FOCUS_HEADLINE}".
+- 한국어 본문 900~1800자.
+- 부분 요약에 있는 모델명, 성능 주장, 출시일/시점 언급, API/가격/벤치마크/로드맵 단서를 빠뜨리지 말 것.
+- 같은 내용은 중복 제거하되, 서로 다른 루머나 작은 단서는 합치며 보존.
+- 공식 확인, 여러 언급, 단일 루머, 농담/찌라시 가능성을 구분.
+- 부분 요약에 없는 새 사실을 만들지 말 것.
+- 출력은 JSON 객체 하나만. 마크다운 코드펜스 금지.
+
+## 스키마
+{{"body":"부분 요약들을 누락 없이 병합한 {MODEL_FOCUS_HEADLINE} 기사 본문"}}
+
+## 부분 요약
+{parts}
 
 JSON만 출력:"""
 
@@ -767,16 +784,74 @@ def parse_model_focus_response(text: str) -> str:
     return s
 
 
-def generate_model_focus_article(chat: str, now: datetime, sched) -> dict | None:
-    source = prepare_model_focus_source(chat)
+def call_model_focus_summary(prompt: str, sched) -> str:
+    raw = call_gemma(
+        prompt,
+        sched,
+        max_tok=4096,
+        temp=0.25,
+        json_mode=True,
+        max_attempts=MODEL_FOCUS_GEMMA_MAX_ATTEMPTS,
+    )
+    return parse_model_focus_response(raw)
+
+
+def merge_model_focus_summaries(part_summaries: list[str], sched) -> str:
+    summaries = [s.strip() for s in part_summaries if s and s.strip()]
+    if not summaries:
+        return ""
+    if len(summaries) == 1:
+        return summaries[0]
+    try:
+        body = call_model_focus_summary(prompt_model_focus_merge(summaries), sched)
+        if len(body) >= 40:
+            return body
+        LOG("model focus merge fallback: response too short; joining partial summaries")
+    except Exception as e:
+        LOG(f"model focus merge fallback: {e}; joining partial summaries")
+    return "\n\n".join(summaries)
+
+
+def summarize_model_focus_source(
+    source_text: str,
+    sched,
+    source_label: str = "Dev Mode 최근 24시간 전체 채팅",
+    min_chars: int = MODEL_FOCUS_MIN_SPLIT_CHARS,
+    min_body_chars: int = 40,
+) -> str:
+    source = source_text.strip()
+    if not source or sched is None:
+        return ""
+    try:
+        body = call_model_focus_summary(prompt_model_focus_article(source, source_label), sched)
+        if len(body) >= min_body_chars:
+            return body
+        LOG(f"model focus fallback: response too short for {source_label}")
+    except Exception as e:
+        LOG(f"model focus fallback: {e}; splitting {source_label}")
+    if len(source) <= min_chars:
+        LOG(f"model focus fallback: dropping {source_label} after reaching {len(source):,} chars")
+        return ""
+    left, right = split_chunk_for_retry(source)
+    part_summaries = []
+    for idx, part in enumerate((left, right), 1):
+        label = f"{source_label} / 부분 {idx}"
+        summary = summarize_model_focus_source(part, sched, label, min_chars=min_chars, min_body_chars=16)
+        if summary:
+            part_summaries.append(summary)
+    return merge_model_focus_summaries(part_summaries, sched)
+
+
+def generate_model_focus_article(
+    chat: str,
+    now: datetime,
+    sched,
+    min_chars: int = MODEL_FOCUS_MIN_SPLIT_CHARS,
+) -> dict | None:
+    source = chat.strip()
     if not source or sched is None:
         return None
-    try:
-        raw = call_gemma(prompt_model_focus_article(source), sched, max_tok=4096, temp=0.25, json_mode=True)
-        body = parse_model_focus_response(raw)
-    except Exception as e:
-        LOG(f"model focus fallback: {e}; skipping model-focus article")
-        return None
+    body = summarize_model_focus_source(source, sched, min_chars=min_chars)
     if len(body) < 40:
         LOG("model focus fallback: response too short; skipping model-focus article")
         return None

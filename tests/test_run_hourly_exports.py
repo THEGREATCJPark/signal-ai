@@ -159,6 +159,50 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(kept[0]["id"], "new-benchmark")
         self.assertTrue(kept[0]["headline"].startswith("후속: "))
 
+    def test_dedup_cluster_keeps_all_candidates_when_gemma_is_unavailable(self):
+        candidates = [
+            {"id": "art-202606110800-01", "headline": "첫 기사", "body": "본문 A"},
+            {"id": "art-202606110800-02", "headline": "둘째 기사", "body": "본문 B"},
+        ]
+
+        with patch.object(run_hourly, "call_gemma", side_effect=RuntimeError("API failed after 20 attempts")):
+            kept, dropped = run_hourly.dedup_cluster(candidates, sched=object())
+
+        self.assertEqual(kept, candidates)
+        self.assertEqual(dropped, [])
+
+    def test_scan_chunks_continues_after_one_chunk_gemma_exhaustion(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+
+        with patch.object(
+            run_hourly,
+            "call_gemma",
+            side_effect=[
+                RuntimeError("API failed after 20 attempts"),
+                json.dumps({
+                    "articles": [
+                        {
+                            "headline": "살아남은 청크 기사",
+                            "body": "두 번째 청크에서 뽑은 기사입니다. API 장애가 있어도 이 기사 후보는 보존되어야 합니다.",
+                            "category": "news",
+                            "trust": "high",
+                        }
+                    ]
+                }, ensure_ascii=False),
+            ],
+        ):
+            articles = run_hourly.scan_chunks_for_articles(
+                ["첫 청크", "둘째 청크"],
+                titles=[],
+                now=run_at,
+                sched=object(),
+            )
+
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]["id"], "art-202606110800-01")
+        self.assertEqual(articles[0]["headline"], "살아남은 청크 기사")
+        self.assertEqual(articles[0]["placement"], None)
+
     def test_write_daily_new_articles_export_uses_date_folder_and_metadata(self):
         run_at = datetime(2026, 4, 20, 12, 0, tzinfo=KST)
         articles = [

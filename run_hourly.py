@@ -855,7 +855,11 @@ def dedup_cluster(candidates, sched):
     dropped = set()
     parsed_ok = False
     for attempt in range(1, 4):
-        raw = call_gemma(prompt, sched, max_tok=8192, temp=0.2, json_mode=True)
+        try:
+            raw = call_gemma(prompt, sched, max_tok=8192, temp=0.2, json_mode=True)
+        except Exception as e:
+            LOG(f"  dedup API fail (attempt {attempt}): {e}; 전체 유지")
+            break
         s = raw.strip()
         s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
         start = s.find('{'); end = s.rfind('}')
@@ -922,7 +926,11 @@ def cross_existing_dedup(new_candidates, existing_articles, sched):
     drop_new = set()
     parsed_ok = False
     for attempt in range(1, 4):
-        raw = call_gemma(prompt, sched, max_tok=4096, temp=0.2, json_mode=True)
+        try:
+            raw = call_gemma(prompt, sched, max_tok=4096, temp=0.2, json_mode=True)
+        except Exception as e:
+            LOG(f"  cross dedup API fail (attempt {attempt}): {e}; new 전부 유지")
+            break
         s = raw.strip()
         s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
         start = s.find('{'); end = s.rfind('}')
@@ -1167,6 +1175,42 @@ def merge_candidates(candidates, sched, rounds=MERGE_ROUNDS, preserve_ids=None):
         f"(preserved {len(used_existing_ids)} existing ids)")
     return result
 
+
+def scan_chunks_for_articles(chunks, titles, now, sched):
+    new_articles = []
+    for i, ch in enumerate(chunks):
+        LOG(f"[{i+1}/{len(chunks)}] scan chunk ({len(ch):,} chars)")
+        arts = []
+        # 재시도: 파싱 결과 0개인데 raw에 'articles' 언급 있으면 garbled 가능성 → 재시도
+        for attempt in range(1, 6):
+            try:
+                raw = call_gemma(prompt_scan_chunk(ch, titles), sched, temp=0.3, json_mode=True)
+            except Exception as e:
+                LOG(f"  scan API fail (attempt {attempt}): {e}; skipping this chunk")
+                break
+            arts = parse_chunk_articles(raw)
+            if arts:
+                break
+            # 빈 응답이지만 legitimately empty인지 check
+            if re.search(r'"articles"\s*:\s*\[\s*\]', raw):
+                LOG(f"  legitimately empty (attempt {attempt})")
+                break
+            LOG(f"  attempt {attempt} parse fail, retry")
+        for a in arts:
+            new_articles.append({
+                "id": new_id(now, len(new_articles) + 1),
+                "headline": a["headline"],
+                "body": a["body"],
+                "category": a.get("category", "rumor"),
+                "trust": a.get("trust", "low"),
+                "created_at": now.isoformat(),
+                "placement": None,
+                "placed_at": now.isoformat(),
+            })
+        LOG(f"  → {len(arts)} articles")
+    return new_articles
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--since", help="override since ISO")
@@ -1220,33 +1264,7 @@ def main():
     existing_sorted = sorted(state["articles"], key=lambda a: a["created_at"], reverse=True)
     titles = [a["headline"] for a in existing_sorted[:TITLES_FOR_DEDUP]]
 
-    new_articles = []
-    for i, ch in enumerate(chunks):
-        LOG(f"[{i+1}/{len(chunks)}] scan chunk ({len(ch):,} chars)")
-        arts = []
-        # 재시도: 파싱 결과 0개인데 raw에 'articles' 언급 있으면 garbled 가능성 → 재시도
-        for attempt in range(1, 6):
-            raw = call_gemma(prompt_scan_chunk(ch, titles), sched, temp=0.3, json_mode=True)
-            arts = parse_chunk_articles(raw)
-            if arts:
-                break
-            # 빈 응답이지만 legitimately empty인지 check
-            if re.search(r'"articles"\s*:\s*\[\s*\]', raw):
-                LOG(f"  legitimately empty (attempt {attempt})")
-                break
-            LOG(f"  attempt {attempt} parse fail, retry")
-        for a in arts:
-            new_articles.append({
-                "id": new_id(now, len(new_articles) + 1),
-                "headline": a["headline"],
-                "body": a["body"],
-                "category": a.get("category", "rumor"),
-                "trust": a.get("trust", "low"),
-                "created_at": now.isoformat(),
-                "placement": None,
-                "placed_at": now.isoformat(),
-            })
-        LOG(f"  → {len(arts)} articles")
+    new_articles = scan_chunks_for_articles(chunks, titles, now, sched)
 
     # inter-chunk dedup: first exact title, then Jaccard ≥ 0.4
     seen = set()

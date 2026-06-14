@@ -599,8 +599,110 @@
   }
   .card:hover { background: var(--paper-alt); }
   .card:nth-child(2n) { border-right: none; }
+  .model-focus-live-card {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    border: 1px solid rgba(185,28,28,.48);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.62), rgba(255,255,255,0) 46%),
+      radial-gradient(circle at 18% 0%, rgba(185,28,28,.12), transparent 34%),
+      var(--paper);
+    box-shadow:
+      inset 0 0 0 1px rgba(185,28,28,.16),
+      0 18px 42px rgba(20,20,20,.08);
+    animation: model-live-frame 4.8s ease-in-out infinite;
+  }
+  .model-focus-live-card:hover {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,0) 50%),
+      radial-gradient(circle at 82% 12%, rgba(185,28,28,.14), transparent 32%),
+      var(--paper-alt);
+    box-shadow:
+      inset 0 0 0 1px rgba(185,28,28,.28),
+      0 22px 48px rgba(20,20,20,.12);
+  }
+  .model-focus-live-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 0 38%, rgba(255,255,255,.72) 48%, transparent 58% 100%);
+    transform: translateX(-125%);
+    transition: transform .65s ease;
+  }
+  .model-focus-live-card:hover::before { transform: translateX(125%); }
+  .model-focus-live-card::after {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    z-index: 0;
+    pointer-events: none;
+    border: 1px solid rgba(185,28,28,.24);
+    border-radius: 4px;
+  }
+  .model-focus-live-card > * {
+    position: relative;
+    z-index: 1;
+  }
+  .model-live-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .model-live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 4px rgba(185,28,28,.12);
+    animation: model-live-dot 1.35s ease-in-out infinite;
+  }
+  .model-live-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .model-live-cta::after {
+    content: '→';
+    transition: transform .2s ease;
+  }
+  .model-focus-live-card:hover .model-live-cta::after { transform: translateX(4px); }
+  @keyframes model-live-frame {
+    0%, 100% { box-shadow: inset 0 0 0 1px rgba(185,28,28,.16), 0 18px 42px rgba(20,20,20,.08); }
+    50% { box-shadow: inset 0 0 0 1px rgba(185,28,28,.28), 0 18px 44px rgba(185,28,28,.12); }
+  }
+  @keyframes model-live-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .48; transform: scale(.78); }
+  }
   @media (max-width: 640px) {
     .card { border-right: none; padding: 24px 4px; }
+    .model-focus-live-card { padding: 24px 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .model-focus-live-card,
+    .model-live-dot,
+    .model-focus-live-card::before,
+    .model-live-cta::after {
+      animation: none;
+      transition: none;
+    }
   }
   .card .num {
     font-family: var(--mono);
@@ -1139,6 +1241,10 @@
     return out;
   }
 
+  function isModelFocusArticle(a) {
+    return String((a && a.id) || '').startsWith('model-focus-');
+  }
+
   function sideCard(a, n, withSnip) {
     const snip = withSnip ? `<div class="snip">${formatInlineText(excerpt(a.body, 120))}</div>` : '';
     return `
@@ -1171,11 +1277,16 @@
   if (main.length) {
     html += `<div class="section-label"><span>MAIN · ${main.length}/6</span></div><div class="grid">`;
     main.forEach((a, i) => {
+      const liveClass = isModelFocusArticle(a) ? ' model-focus-live-card' : '';
+      const liveEyebrow = isModelFocusArticle(a) ? `<div class="model-live-eyebrow"><span class="model-live-dot" aria-hidden="true"></span>LIVE · 최신 모델 상황</div>` : '';
+      const liveCta = isModelFocusArticle(a) ? `<div class="model-live-cta">Open live model briefing</div>` : '';
       html += `
-        <article class="card" data-id="${esc(a.id)}">
+        <article class="card${liveClass}" data-id="${esc(a.id)}">
+          ${liveEyebrow}
           <div class="num">No. ${String(i + 1).padStart(2, '0')} ${tagBadges(a)}</div>
           <h3>${formatInlineText(a.headline)}</h3>
           <p>${formatInlineText(excerpt(a.body, 180))}</p>
+          ${liveCta}
         </article>
       `;
     });

@@ -70,6 +70,24 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("renderModelFocusRibbon(data.model_focus_summary);", html)
         self.assertIn("Models", html)
 
+    def test_model_focus_main_card_gets_live_treatment(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        live_card = css_block(html, ".model-focus-live-card {")
+        live_card_hover = css_block(html, ".model-focus-live-card:hover {")
+
+        self.assertIn("function isModelFocusArticle(a)", html)
+        self.assertIn("const liveClass = isModelFocusArticle(a) ? ' model-focus-live-card' : '';", html)
+        self.assertIn("const liveEyebrow = isModelFocusArticle(a) ? `<div class=\"model-live-eyebrow\">", html)
+        self.assertIn("LIVE · 최신 모델 상황", html)
+        self.assertIn("const liveCta = isModelFocusArticle(a) ? `<div class=\"model-live-cta\">Open live model briefing</div>` : '';", html)
+        self.assertIn('<article class="card${liveClass}" data-id="${esc(a.id)}">', html)
+        self.assertIn("${liveEyebrow}", html)
+        self.assertIn("${liveCta}", html)
+        self.assertIn("position: relative;", live_card)
+        self.assertIn("overflow: hidden;", live_card)
+        self.assertIn("box-shadow:", live_card)
+        self.assertIn("background:", live_card_hover)
+
     def test_daily_summary_sheet_uses_left_aligned_editorial_text(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         sheet = css_block(html, ".summary-sheet {")

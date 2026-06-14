@@ -13,6 +13,26 @@ KST = timezone(timedelta(hours=9))
 
 
 class DailyExportsTest(unittest.TestCase):
+    def test_call_gemma_raises_immediately_on_input_token_limit(self):
+        class FakeScheduler:
+            def acquire(self):
+                return "key"
+
+        class FakeResponse:
+            status_code = 400
+            ok = False
+            text = '{"error":{"message":"The input token count exceeds the maximum number of tokens allowed 262144."}}'
+
+        with (
+            patch.object(run_hourly.requests, "post", return_value=FakeResponse()) as post,
+            patch.object(run_hourly.time, "sleep") as sleep,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "input token count exceeds"):
+                run_hourly.call_gemma("too large", FakeScheduler(), max_attempts=3)
+
+        self.assertEqual(post.call_count, 1)
+        sleep.assert_not_called()
+
     def test_default_publish_branch_uses_current_branch(self):
         def fake_run(cmd, **kwargs):
             if cmd[:3] == ["git", "branch", "--show-current"]:

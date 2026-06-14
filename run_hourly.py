@@ -126,7 +126,15 @@ def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False, max_attem
             time.sleep(60 - (time.time() % 60) + 0.5 + random.random())
             continue
         if not r.ok:
-            LOG(f"  err {r.status_code}: {r.text[:150]}"); time.sleep(10); continue
+            err_text = r.text[:150]
+            LOG(f"  err {r.status_code}: {err_text}")
+            lowered = r.text.lower()
+            if r.status_code == 400 and (
+                "input token count exceeds" in lowered
+                or "maximum number of tokens" in lowered
+            ):
+                raise RuntimeError(f"input token count exceeds model limit: {err_text}")
+            time.sleep(10); continue
         try:
             parts = r.json()["candidates"][0]["content"]["parts"]
             # Gemma는 thought=True 블록을 먼저 반환 — 실제 답변 part만 골라냄

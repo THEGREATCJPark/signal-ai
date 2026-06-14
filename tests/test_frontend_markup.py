@@ -49,26 +49,15 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertNotIn("updates</span>", html)
         self.assertNotIn("오늘의 모든 업데이트를 한 번에 읽기", html)
 
-    def test_model_focus_summary_renders_as_left_pull_ribbon(self):
+    def test_model_focus_summary_does_not_render_left_pull_ribbon(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-        model_stage = css_block(html, ".model-ribbon-stage {")
-        model_sheet = css_block(html, ".model-ribbon-stage .summary-sheet {")
-        mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]
-        mobile_model_stage = css_block(mobile, ".model-ribbon-stage {")
-        header_start = html.index("<header class=\"masthead\">")
-        stage_start = html.index("<section class=\"daily-ribbon-stage model-ribbon-stage\"")
-        header_end = html.index("</header>")
 
-        self.assertLess(header_start, stage_start)
-        self.assertLess(stage_start, header_end)
-        self.assertIn('id="model-focus-stage"', html)
-        self.assertIn("left: 20px;", model_stage)
-        self.assertIn("right: auto;", model_stage)
-        self.assertIn("left: 96px;", model_sheet)
-        self.assertIn("right: auto;", model_sheet)
-        self.assertIn("left: 0;", mobile_model_stage)
-        self.assertIn("renderModelFocusRibbon(data.model_focus_summary);", html)
-        self.assertIn("Models", html)
+        self.assertIn('id="daily-summary-stage"', html)
+        self.assertIn("renderDailyRibbon(data.daily_summary);", html)
+        self.assertNotIn('id="model-focus-stage"', html)
+        self.assertNotIn("model-ribbon-stage", html)
+        self.assertNotIn("renderModelFocusRibbon", html)
+        self.assertNotIn("Models", html)
 
     def test_model_focus_main_card_gets_live_treatment(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
@@ -87,6 +76,14 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("overflow: hidden;", live_card)
         self.assertIn("box-shadow:", live_card)
         self.assertIn("background:", live_card_hover)
+
+    def test_model_focus_card_omits_duplicate_body_line(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("function cardCopy(a)", html)
+        self.assertIn("if (isModelFocusArticle(a) && copy === String(a.headline || '').trim()) return '';", html)
+        self.assertIn("const copyHtml = cardCopy(a);", html)
+        self.assertIn("${copyHtml}", html)
+        self.assertNotIn("<p>${formatInlineText(excerpt(a.body, 180))}</p>", html)
 
     def test_daily_summary_sheet_uses_left_aligned_editorial_text(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")

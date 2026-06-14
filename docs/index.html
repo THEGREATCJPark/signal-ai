@@ -279,10 +279,6 @@
     pointer-events: none;
   }
   .daily-ribbon-stage[hidden] { display: none; }
-  .model-ribbon-stage {
-    left: 20px;
-    right: auto;
-  }
   .summary-physics {
     position: relative;
     width: 100%;
@@ -298,10 +294,6 @@
     height: 222px;
     pointer-events: none;
     overflow: visible;
-  }
-  .model-ribbon-stage .summary-strings {
-    left: 0;
-    right: auto;
   }
   .summary-string {
     fill: none;
@@ -448,14 +440,6 @@
     pointer-events: auto;
     transform: translateX(0) translateY(0);
   }
-  .model-ribbon-stage .summary-sheet {
-    left: 96px;
-    right: auto;
-    transform: translateX(-18px) translateY(-8px);
-  }
-  .model-ribbon-stage .summary-physics.open .summary-sheet {
-    transform: translateX(0) translateY(0);
-  }
   .summary-sheet-head {
     display: flex;
     justify-content: space-between;
@@ -524,10 +508,6 @@
       width: 56px;
       height: 242px;
     }
-    .model-ribbon-stage {
-      left: 0;
-      right: auto;
-    }
     .summary-strings {
       height: 178px;
     }
@@ -557,16 +537,8 @@
       -webkit-overflow-scrolling: touch;
       transform: translateY(-8px);
     }
-    .model-ribbon-stage .summary-sheet {
-      left: 8px;
-      right: 8px;
-      transform: translateY(-8px);
-    }
     .summary-physics.open .summary-sheet {
       padding: 18px 18px max(56px, calc(34px + env(safe-area-inset-bottom)));
-    }
-    .model-ribbon-stage .summary-physics.open .summary-sheet {
-      transform: translateY(0);
     }
     .summary-sheet-head {
       display: block;
@@ -886,7 +858,6 @@
     <span class="dot">·</span>
     <span>VOL. 001</span>
   </div>
-  <section class="daily-ribbon-stage model-ribbon-stage" id="model-focus-stage" hidden></section>
   <section class="daily-ribbon-stage" id="daily-summary-stage" hidden></section>
 </header>
 
@@ -1182,16 +1153,6 @@
       ariaLabel: "Don't Die. 요약 열기",
     });
   }
-  function renderModelFocusRibbon(summary) {
-    renderPullRibbon(summary, {
-      stageId: 'model-focus-stage',
-      prefix: 'model-summary',
-      fallbackTitle: '최신 모델 위주 정보',
-      line: 'Models',
-      kicker: 'Dev Mode 24H',
-      ariaLabel: '최신 모델 위주 정보 열기',
-    });
-  }
 
   let data;
   const inlineEl = document.getElementById('articles-data');
@@ -1218,7 +1179,6 @@
   $('masthead-source').textContent = `${all.length} STORIES · UPDATED ${fmtTime(gen)}`;
   $('footer-meta').textContent = `GENERATED ${fmtTime(gen)}`;
   renderDailyRibbon(data.daily_summary);
-  renderModelFocusRibbon(data.model_focus_summary);
 
   if (!all.length) {
     $('center').innerHTML = `<div class="empty">표시할 기사가 없습니다.</div>`;
@@ -1243,6 +1203,13 @@
 
   function isModelFocusArticle(a) {
     return String((a && a.id) || '').startsWith('model-focus-');
+  }
+
+  function cardCopy(a) {
+    const copy = excerpt(a.body, 180).trim();
+    if (!copy) return '';
+    if (isModelFocusArticle(a) && copy === String(a.headline || '').trim()) return '';
+    return `<p>${formatInlineText(copy)}</p>`;
   }
 
   function sideCard(a, n, withSnip) {
@@ -1280,12 +1247,13 @@
       const liveClass = isModelFocusArticle(a) ? ' model-focus-live-card' : '';
       const liveEyebrow = isModelFocusArticle(a) ? `<div class="model-live-eyebrow"><span class="model-live-dot" aria-hidden="true"></span>LIVE · 최신 모델 상황</div>` : '';
       const liveCta = isModelFocusArticle(a) ? `<div class="model-live-cta">Open live model briefing</div>` : '';
+      const copyHtml = cardCopy(a);
       html += `
         <article class="card${liveClass}" data-id="${esc(a.id)}">
           ${liveEyebrow}
           <div class="num">No. ${String(i + 1).padStart(2, '0')} ${tagBadges(a)}</div>
           <h3>${formatInlineText(a.headline)}</h3>
-          <p>${formatInlineText(excerpt(a.body, 180))}</p>
+          ${copyHtml}
           ${liveCta}
         </article>
       `;

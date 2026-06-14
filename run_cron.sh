@@ -13,7 +13,15 @@ if [ -z "${FIRST_LIGHT_PYTHON:-}" ]; then
   fi
 fi
 
-CONFIG="${DISCORD_EXPORT_CONFIG:-$SCRIPT_DIR/discord_export_config.env}"
+USER_CONFIG="${HOME}/.config/signal/discord_export_config.env"
+REPO_CONFIG="$SCRIPT_DIR/discord_export_config.env"
+if [ -n "${DISCORD_EXPORT_CONFIG:-}" ]; then
+  CONFIG="$DISCORD_EXPORT_CONFIG"
+elif [ -f "$USER_CONFIG" ]; then
+  CONFIG="$USER_CONFIG"
+else
+  CONFIG="$REPO_CONFIG"
+fi
 if [ -f "$CONFIG" ]; then
   set -a
   . <(grep -E '^DISCORD_TOKEN=' "$CONFIG")

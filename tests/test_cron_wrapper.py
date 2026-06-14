@@ -14,6 +14,16 @@ class CronWrapperTest(unittest.TestCase):
         self.assertNotIn("cd /home/pineapple/bunjum2/signal", text)
         self.assertNotIn("/home/pineapple/miniconda3/bin/python3 run_hourly.py", text)
 
+    def test_cron_wrapper_prefers_user_secret_env_over_repo_env(self):
+        text = Path("run_cron.sh").read_text(encoding="utf-8")
+
+        self.assertIn("${HOME}/.config/signal/discord_export_config.env", text)
+        self.assertLess(
+            text.index("${HOME}/.config/signal/discord_export_config.env"),
+            text.index("$SCRIPT_DIR/discord_export_config.env"),
+        )
+        self.assertIn("DISCORD_EXPORT_CONFIG", text)
+
     def test_task_wrapper_uses_catchup_gate(self):
         text = Path("run_cron_task.sh").read_text(encoding="utf-8")
         self.assertIn("scripts/automation_gate.py", text)
@@ -40,6 +50,11 @@ class CronWrapperTest(unittest.TestCase):
 
         self.assertIn("discord_export_config.env", text)
         self.assertIn("DISCORD_EXPORT_CONFIG", text)
+        self.assertIn("${HOME}/.config/signal/discord_export_config.env", text)
+        self.assertLess(
+            text.index("${HOME}/.config/signal/discord_export_config.env"),
+            text.index("$SCRIPT_DIR/discord_export_config.env"),
+        )
         self.assertIn("DISCORD_TOKEN", text)
         self.assertIn("set -a", text)
         self.assertIn("set +a", text)

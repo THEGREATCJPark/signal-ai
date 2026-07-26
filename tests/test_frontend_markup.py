@@ -107,7 +107,6 @@ class FrontendMarkupTest(unittest.TestCase):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
         mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]
         mobile_sheet = css_block(mobile, ".summary-sheet {")
-        mobile_open_sheet = css_block(mobile, ".summary-physics.open .summary-sheet {")
         title = css_block(html, ".summary-sheet-title {")
         self.assertIn("z-index: 88;", css_block(html, ".summary-sheet {"))
         self.assertIn("top: max(8px, env(safe-area-inset-top));", mobile_sheet)
@@ -118,7 +117,7 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - max(48px, env(safe-area-inset-bottom)));", mobile_sheet)
         self.assertIn("-webkit-overflow-scrolling: touch;", mobile_sheet)
         self.assertIn("border-radius: 6px;", mobile_sheet)
-        self.assertIn("padding: 18px 18px max(56px, calc(34px + env(safe-area-inset-bottom)));", mobile_open_sheet)
+        self.assertIn("padding: 18px 18px max(56px, calc(34px + env(safe-area-inset-bottom)));", mobile_sheet)
         self.assertIn("word-break: keep-all;", title)
         self.assertIn("overflow-wrap: break-word;", title)
         self.assertIn("text-wrap: balance;", title)
@@ -130,6 +129,27 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("e.stopPropagation();", html)
         self.assertIn("close.addEventListener('pointerdown', closeSummarySheet);", html)
         self.assertIn("close.addEventListener('click', closeSummarySheet);", html)
+
+    def test_open_close_animation_stays_on_compositor_and_sleeps_when_idle(self):
+        html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        sheet = css_block(html, ".summary-sheet {")
+        reader = css_block(html, ".reader {")
+        panel = css_block(html, ".reader-panel {")
+
+        self.assertIn("will-change: transform, opacity;", sheet)
+        self.assertIn("contain: layout paint style;", sheet)
+        self.assertIn("visibility: hidden;", sheet)
+        self.assertNotIn("padding .", sheet)
+        self.assertNotIn("backdrop-filter", reader)
+        self.assertIn("transition: opacity .18s ease-out", reader)
+        self.assertIn("will-change: transform;", panel)
+        self.assertIn("let rafId = 0;", html)
+        self.assertIn("function scheduleTick()", html)
+        self.assertIn("if (!rafId) rafId = requestAnimationFrame(tick);", html)
+        self.assertNotIn("draw();\n    requestAnimationFrame(tick);", html)
+        self.assertIn('aria-modal="true" aria-hidden="true"', html)
+        self.assertIn("reader.setAttribute('aria-hidden', 'false');", html)
+        self.assertIn("reader.setAttribute('aria-hidden', 'true');", html)
 
     def test_index_uses_created_at_for_article_dates_and_side_order(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
@@ -172,7 +192,7 @@ class FrontendMarkupTest(unittest.TestCase):
         mobile = html[html.index("@media (max-width: 720px) {\n    .daily-ribbon-stage"):]
         mobile_stage = css_block(mobile, ".daily-ribbon-stage {")
         mobile_sheet = css_block(mobile, ".summary-sheet {")
-        self.assertIn("html { scroll-behavior: smooth; overflow-x: hidden; }", html)
+        self.assertIn("html { scroll-behavior: smooth; overflow-x: hidden; scrollbar-gutter: stable; }", html)
         self.assertRegex(html, r"body \{[^}]*overflow-x: hidden;")
         self.assertIn("right: 0;", mobile_stage)
         self.assertIn("transform: translateY(-8px);", mobile_sheet)

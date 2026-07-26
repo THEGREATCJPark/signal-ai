@@ -25,7 +25,7 @@
     --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html { scroll-behavior: smooth; overflow-x: hidden; }
+  html { scroll-behavior: smooth; overflow-x: hidden; scrollbar-gutter: stable; }
   body {
     font-family: var(--sans);
     background: var(--paper);
@@ -418,7 +418,7 @@
     width: min(560px, calc(100vw - 132px));
     max-height: calc(100vh - 152px);
     margin: 0;
-    padding: 0 28px;
+    padding: 28px;
     border: 1px solid var(--rule);
     border-radius: 6px;
     background: color-mix(in srgb, var(--paper) 96%, white);
@@ -428,17 +428,22 @@
     pointer-events: none;
     text-align: left;
     transform: translateX(18px) translateY(-8px);
+    visibility: hidden;
+    backface-visibility: hidden;
+    contain: layout paint style;
+    will-change: transform, opacity;
     z-index: 88;
     transition:
-      opacity .28s ease,
-      transform .55s cubic-bezier(.18,.72,.18,1),
-      padding .55s cubic-bezier(.18,.72,.18,1);
+      opacity .18s ease-out,
+      transform .32s cubic-bezier(.2,.78,.2,1),
+      visibility 0s linear .32s;
   }
   .summary-physics.open .summary-sheet {
     opacity: 1;
-    padding: 28px;
     pointer-events: auto;
     transform: translateX(0) translateY(0);
+    visibility: visible;
+    transition-delay: 0s;
   }
   .summary-sheet-head {
     display: flex;
@@ -570,15 +575,13 @@
       width: auto;
       max-height: calc(100vh - max(8px, env(safe-area-inset-top)) - 48px);
       max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - max(48px, env(safe-area-inset-bottom)));
-      padding: 0 18px;
+      padding: 18px 18px max(56px, calc(34px + env(safe-area-inset-bottom)));
       border-radius: 6px;
       overscroll-behavior: contain;
       -webkit-overflow-scrolling: touch;
       transform: translateY(-8px);
     }
-    .summary-physics.open .summary-sheet {
-      padding: 18px 18px max(56px, calc(34px + env(safe-area-inset-bottom)));
-    }
+    .summary-physics.open .summary-sheet {}
     .summary-sheet-head {
       display: block;
     }
@@ -766,18 +769,25 @@
   /* ── Modal reader ── */
   .reader {
     position: fixed; inset: 0;
-    background: rgba(20, 20, 20, 0.55);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
-    display: none;
+    background: rgba(20, 20, 20, 0.62);
+    display: flex;
     align-items: flex-start;
     justify-content: center;
     z-index: 100;
     padding: 40px 20px;
     overflow-y: auto;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    contain: layout paint style;
+    transition: opacity .18s ease-out, visibility 0s linear .24s;
   }
-  .reader.open { display: flex; animation: fadein .25s ease; }
-  @keyframes fadein { from{opacity:0} to{opacity:1} }
+  .reader.open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+  }
   .reader-panel {
     background: var(--paper);
     max-width: 760px; width: 100%;
@@ -785,7 +795,12 @@
     border: 1px solid var(--rule-soft);
     box-shadow: 0 30px 80px rgba(0,0,0,0.25);
     position: relative;
+    transform: translateY(10px) scale(.992);
+    backface-visibility: hidden;
+    will-change: transform;
+    transition: transform .24s cubic-bezier(.2,.78,.2,1);
   }
+  .reader.open .reader-panel { transform: translateY(0) scale(1); }
   @media (max-width: 600px) {
     .reader-panel { padding: 40px 24px 48px; }
   }
@@ -935,7 +950,7 @@
   <a href="archive.html" id="archive-link-bottom" class="more-btn">더보기 →</a>
 </div>
 
-<div class="reader" id="reader" role="dialog" aria-modal="true">
+<div class="reader" id="reader" role="dialog" aria-modal="true" aria-hidden="true">
   <div class="reader-panel">
     <button class="reader-close" id="reader-close" aria-label="Close">×</button>
     <div class="kicker">FIRST LIGHT AI · FEATURE</div>
@@ -1087,6 +1102,7 @@
       physics.classList.remove('primed');
       ribbon.setAttribute('aria-expanded', String(next));
       sheet.setAttribute('aria-hidden', String(!next));
+      scheduleTick();
     }
     function draw() {
       const width = Math.max(54, physics.clientWidth);
@@ -1120,8 +1136,20 @@
       state.swinging = true;
       state.swingAngle = clamp(state.x / 38, -1.15, 1.15);
       state.swingVelocity = clamp(impulse * .018, -0.24, 0.24);
+      scheduleTick();
+    }
+    let rafId = 0;
+    function scheduleTick() {
+      if (reduced) {
+        state.y = state.targetY;
+        state.x = state.targetX;
+        draw();
+        return;
+      }
+      if (!rafId) rafId = requestAnimationFrame(tick);
     }
     function tick() {
+      rafId = 0;
       if (!state.dragging && !reduced) {
         state.vy += (state.targetY - state.y) * .115;
         state.vy *= .74;
@@ -1147,7 +1175,17 @@
         state.x = state.targetX;
       }
       draw();
-      requestAnimationFrame(tick);
+      const moving = state.dragging || state.swinging
+        || Math.abs(state.targetY - state.y) > .05 || Math.abs(state.vy) > .05
+        || Math.abs(state.targetX - state.x) > .05 || Math.abs(state.vx) > .05;
+      if (moving) scheduleTick();
+      else {
+        state.x = state.targetX;
+        state.y = state.targetY;
+        state.vx = 0;
+        state.vy = 0;
+        draw();
+      }
     }
 
     ribbon.addEventListener('pointerdown', (e) => {
@@ -1200,7 +1238,6 @@
     close.addEventListener('click', closeSummarySheet);
     window.addEventListener('resize', draw);
     draw();
-    requestAnimationFrame(tick);
   }
   function renderDailyRibbon(summary) {
     renderPullRibbon(summary, {
@@ -1357,10 +1394,12 @@
     $('reader-byline').textContent = `FIRST LIGHT AI · ${fmtDate(a.created_at || a.placed_at || gen)}`;
     $('reader-body').innerHTML = SignalMarkdown.render(a.body, { headline: a.headline });
     reader.classList.add('open');
+    reader.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   }
   function closeReader() {
     reader.classList.remove('open');
+    reader.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
   }
   $('reader-close').addEventListener('click', closeReader);

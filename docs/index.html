@@ -1206,10 +1206,10 @@
     renderPullRibbon(summary, {
       stageId: 'daily-summary-stage',
       prefix: 'summary',
-      fallbackTitle: '오늘의 AI 업데이트',
-      line: "Don't Die.",
-      kicker: "Don't Die.",
-      ariaLabel: "Don't Die. 요약 열기",
+      fallbackTitle: '일일 알짜배기',
+      line: '일일 알짜배기',
+      kicker: '일일 알짜배기',
+      ariaLabel: '일일 알짜배기 요약 열기',
     });
   }
 
@@ -1304,8 +1304,8 @@
     html += `<div class="section-label"><span>MAIN · ${main.length}/6</span></div><div class="grid">`;
     main.forEach((a, i) => {
       const liveClass = isModelFocusArticle(a) ? ' model-focus-live-card' : '';
-      const liveEyebrow = isModelFocusArticle(a) ? `<div class="model-live-eyebrow"><span class="model-live-dot" aria-hidden="true"></span>LIVE · 최신 모델 상황</div>` : '';
-      const liveCta = isModelFocusArticle(a) ? `<div class="model-live-cta">Open live model briefing</div>` : '';
+      const liveEyebrow = isModelFocusArticle(a) ? `<div class="model-live-eyebrow"><span class="model-live-dot" aria-hidden="true"></span>DAILY · 일일 알짜배기</div>` : '';
+      const liveCta = isModelFocusArticle(a) ? `<div class="model-live-cta">오늘의 알짜배기 열기</div>` : '';
       const copyHtml = cardCopy(a);
       html += `
         <article class="card${liveClass}" data-id="${esc(a.id)}">

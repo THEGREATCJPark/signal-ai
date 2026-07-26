@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,53 @@ KST = timezone(timedelta(hours=9))
 
 
 class DailyExportsTest(unittest.TestCase):
+    def test_general_pipeline_uses_gemini_35_flash_lite(self):
+        self.assertEqual(run_hourly.MODEL, "gemini-3.5-flash-lite")
+
+    def test_latest_gemini_call_omits_deprecated_sampling_and_uses_model_defaults(self):
+        class FakeScheduler:
+            def acquire(self):
+                return "key"
+
+        class FakeResponse:
+            status_code = 200
+            ok = True
+            text = ""
+
+            @staticmethod
+            def json():
+                return {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+
+        with patch.object(run_hourly.requests, "post", return_value=FakeResponse()) as post:
+            result = run_hourly.call_gemma(
+                "prompt",
+                FakeScheduler(),
+                model="gemini-3.6-flash",
+                temp=0.25,
+                max_attempts=1,
+            )
+
+        self.assertEqual(result, "ok")
+        url = post.call_args.args[0]
+        body = post.call_args.kwargs["json"]
+        self.assertIn("models/gemini-3.6-flash:generateContent", url)
+        self.assertNotIn("temperature", body["generationConfig"])
+        self.assertEqual(body["generationConfig"]["thinkingConfig"]["thinkingLevel"], "medium")
+
+    def test_resolve_run_at_uses_explicit_as_of_boundary(self):
+        self.assertEqual(
+            datetime(2026, 7, 24, 8, 0, tzinfo=KST),
+            run_hourly.resolve_run_at("2026-07-24T08:00:00+09:00"),
+        )
+
+    def test_load_keys_uses_config_env(self):
+        with tempfile.TemporaryDirectory() as td:
+            key_file = Path(td) / "keys.env"
+            key_file.write_text("# local runtime keys\nGEMINI_API_KEYS=key-a,key-b\n", encoding="utf-8")
+
+            with patch.dict(os.environ, {"GEMINI_KEYS_CONFIG": str(key_file)}):
+                self.assertEqual(run_hourly.load_keys(), ["key-a", "key-b"])
+
     def test_call_gemma_raises_immediately_on_input_token_limit(self):
         class FakeScheduler:
             def acquire(self):
@@ -32,6 +80,171 @@ class DailyExportsTest(unittest.TestCase):
 
         self.assertEqual(post.call_count, 1)
         sleep.assert_not_called()
+
+    def test_discord_export_uses_current_python_interpreter(self):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout=b"final_file=/tmp/export.txt\n", stderr=b"")
+
+        with patch.object(run_hourly.subprocess, "run", side_effect=fake_run):
+            result = run_hourly.discord_export("2026-06-21T08:00:02+09:00")
+
+        self.assertEqual(result, Path("/tmp/export.txt"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], sys.executable)
+        self.assertIn("discord_export_linux.py", calls[0][1])
+
+    def test_model_focus_uses_provided_chat_without_exporting_again(self):
+        now = datetime(2026, 6, 22, 17, 30, tzinfo=KST)
+        expected = {"id": "model-focus"}
+        sched = object()
+
+        with (
+            patch.object(run_hourly, "discord_export", side_effect=AssertionError("should not export")),
+            patch.object(run_hourly, "generate_model_focus_article", return_value=expected) as generate,
+        ):
+            article = run_hourly.generate_devmode_model_focus_article(now, sched, source_text="existing chat text")
+
+        self.assertEqual(article, expected)
+        generate.assert_called_once_with("existing chat text", now, sched)
+
+    def test_model_focus_reuses_primary_chat_when_it_covers_daily_window(self):
+        now = datetime(2026, 6, 23, 8, 0, tzinfo=KST)
+        source = run_hourly.model_focus_source_from_primary_chat(
+            "existing chat",
+            "2026-06-22T08:00:02+09:00",
+            now,
+            explicit_chat_file=False,
+        )
+        self.assertEqual(source, "existing chat")
+
+    def test_model_focus_does_not_reuse_short_catchup_chat(self):
+        now = datetime(2026, 6, 23, 0, 40, tzinfo=KST)
+        source = run_hourly.model_focus_source_from_primary_chat(
+            "short catchup chat",
+            "2026-06-22T17:27:34+09:00",
+            now,
+            explicit_chat_file=False,
+        )
+        self.assertIsNone(source)
+
+    def test_model_focus_reuses_explicit_chat_file_even_when_shorter_than_daily_window(self):
+        now = datetime(2026, 6, 23, 0, 40, tzinfo=KST)
+        source = run_hourly.model_focus_source_from_primary_chat(
+            "manual chat",
+            "2026-06-22T17:27:34+09:00",
+            now,
+            explicit_chat_file=True,
+        )
+        self.assertEqual(source, "manual chat")
+
+    def test_single_export_since_extends_to_model_focus_window(self):
+        now = datetime(2026, 6, 24, 9, 22, 53, tzinfo=KST)
+
+        since = run_hourly.single_export_since_for_run(
+            "2026-06-23T11:41:08+09:00",
+            now,
+        )
+
+        self.assertEqual(since, "2026-06-23T09:22:53+09:00")
+
+    def test_single_export_since_keeps_older_scan_since(self):
+        now = datetime(2026, 6, 24, 9, 22, 53, tzinfo=KST)
+
+        since = run_hourly.single_export_since_for_run(
+            "2026-06-22T08:00:00+09:00",
+            now,
+        )
+
+        self.assertEqual(since, "2026-06-22T08:00:00+09:00")
+
+    def test_filter_chat_since_trims_widened_export_for_scan(self):
+        chat = (
+            "[2026. 6. 23. 오전 9:24] old\n"
+            "older model chatter\n\n"
+            "[2026. 6. 23. 오전 11:41] user\n"
+            "first eligible message\n\n"
+            "[2026. 6. 23. 오후 12:00] user\n"
+            "later message\n"
+        )
+
+        filtered = run_hourly.filter_chat_since(chat, "2026-06-23T11:41:08+09:00")
+
+        self.assertNotIn("오전 9:24", filtered)
+        self.assertIn("오전 11:41", filtered)
+        self.assertIn("오후 12:00", filtered)
+
+    def test_main_uses_one_widened_export_for_scan_and_model_focus(self):
+        run_at = datetime(2026, 6, 24, 9, 22, 53, tzinfo=KST)
+
+        class FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return run_at.astimezone(tz) if tz else run_at.replace(tzinfo=None)
+
+            @classmethod
+            def fromisoformat(cls, value):
+                return datetime.fromisoformat(value)
+
+        export_chat = (
+            "[2026. 6. 23. 오전 9:24] old\n"
+            "model focus only\n\n"
+            "[2026. 6. 23. 오전 11:41] user\n"
+            "scan eligible\n\n"
+            "[2026. 6. 24. 오전 1:00] user\n"
+            "daily nuggets recent\n"
+        )
+        state = {
+            "schema_version": 2,
+            "last_run_at": "2026-06-23T11:41:08+09:00",
+            "generated_at": "2026-06-23T11:41:08+09:00",
+            "journal": "First Light AI",
+            "model": run_hourly.MODEL,
+            "articles": [],
+            "decision_log": [],
+        }
+        captured = {}
+
+        def fake_scan(chunks, titles, now, sched, min_chars=run_hourly.MIN_SCAN_SPLIT_CHARS):
+            captured["scan_text"] = "\n".join(chunks)
+            return []
+
+        model_article = {
+            "id": "model-focus-20260624",
+            "headline": run_hourly.MODEL_FOCUS_HEADLINE,
+            "body": "모델 위주 본문",
+            "category": "news",
+            "trust": "high",
+            "created_at": run_at.isoformat(),
+            "placement": None,
+            "placed_at": run_at.isoformat(),
+            "kind": run_hourly.MODEL_FOCUS_KIND,
+        }
+
+        with tempfile.TemporaryDirectory() as td:
+            with (
+                patch.object(sys, "argv", ["run_hourly.py"]),
+                patch.object(run_hourly, "ROOT", Path(td)),
+                patch.object(run_hourly, "datetime", FixedDatetime),
+                patch.object(run_hourly, "load_keys", return_value=["key"]),
+                patch.object(run_hourly, "load_state", return_value=state),
+                patch.object(run_hourly, "discord_export", return_value=Path("/tmp/one-export.txt")) as export,
+                patch.object(run_hourly, "read_chat_text", return_value=export_chat),
+                patch.object(run_hourly, "scan_chunks_for_articles", side_effect=fake_scan),
+                patch.object(run_hourly, "generate_model_focus_article", return_value=model_article) as model_focus,
+                patch.object(run_hourly, "_classify_and_save") as classify,
+            ):
+                run_hourly.main()
+
+        export.assert_called_once_with("2026-06-23T09:22:53+09:00")
+        self.assertNotIn("오전 9:24", captured["scan_text"])
+        self.assertIn("오전 11:41", captured["scan_text"])
+        self.assertNotIn("model focus only", model_focus.call_args.args[0])
+        self.assertIn("daily nuggets recent", model_focus.call_args.args[0])
+        classify.assert_called_once()
+        self.assertEqual(classify.call_args.args[1][0]["id"], "model-focus-20260624")
 
     def test_default_publish_branch_uses_current_branch(self):
         def fake_run(cmd, **kwargs):
@@ -191,6 +404,44 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(kept, candidates)
         self.assertEqual(dropped, [])
 
+    def test_cross_existing_dedup_batches_large_active_archive(self):
+        existing = [
+            {
+                "id": f"existing-{idx}",
+                "headline": f"기존 기사 {idx}",
+                "body": "기존 기사 본문 " * 30,
+            }
+            for idx in range(151)
+        ]
+        new = [{"id": "new-1", "headline": "새 기사", "body": "새 기사 본문"}]
+
+        with patch.object(
+            run_hourly,
+            "call_gemma",
+            return_value='{"drop_new":[]}',
+        ) as call_gemma:
+            kept, dropped = run_hourly.cross_existing_dedup(new, existing, sched=object())
+
+        self.assertEqual(kept, new)
+        self.assertEqual(dropped, [])
+        self.assertEqual(call_gemma.call_count, 3)
+        self.assertTrue(all(len(call.args[0]) < 40_000 for call in call_gemma.call_args_list))
+
+    def test_classification_pool_keeps_front_page_and_caps_archive(self):
+        active = [
+            {
+                "id": f"article-{idx}",
+                "placement": "top" if idx == 0 else ("main" if idx < 7 else "side"),
+                "created_at": f"2026-07-{(idx % 17) + 1:02d}T08:00:00+09:00",
+            }
+            for idx in range(1_124)
+        ]
+
+        selected = run_hourly.select_active_for_classification(active)
+
+        self.assertEqual(len(selected), 75)
+        self.assertTrue({f"article-{idx}" for idx in range(7)}.issubset({a["id"] for a in selected}))
+
     def test_scan_chunks_continues_after_one_chunk_gemma_exhaustion(self):
         run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
 
@@ -327,7 +578,18 @@ class DailyExportsTest(unittest.TestCase):
             all(call.kwargs["max_attempts"] == 10 for call in call_gemma.call_args_list)
         )
 
-    def test_generate_model_focus_article_uses_full_devmode_24h_prompt(self):
+    def test_default_scan_chunks_stay_within_direct_api_budget(self):
+        chat = "".join(
+            f"[2026. 7. 18. 오전 8:{minute % 60:02d}] user\n" + ("AI 소식 " * 120) + "\n\n\n"
+            for minute in range(100)
+        )
+
+        chunks = run_hourly.chunk_by_messages(chat)
+
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(len(chunk) <= 40_000 for chunk in chunks))
+
+    def test_generate_daily_nuggets_uses_exact_short_prompt_and_primary_model(self):
         run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
         chat = (
             "[2026. 6. 10. 오후 9:00] user\n"
@@ -335,24 +597,72 @@ class DailyExportsTest(unittest.TestCase):
             "[2026. 6. 10. 오후 9:05] user\n"
             "잡담은 포함하지 않는다."
         )
-        response = json.dumps({
-            "body": "Dev Mode 24시간 채팅에서는 Gemini 3.5 루머와 벤치마크 관측이 중심이었다. 출시일은 확정되지 않았고, 성능 이야기는 흥미로운 찌라시로 분류해야 한다.",
-        }, ensure_ascii=False)
+        response = "이것만 봐도 배부른 알짜배기만 모았습니다. Gemini 3.5 루머와 벤치마크 관측이 중심이었다."
 
         with patch.object(run_hourly, "call_gemma", return_value=response) as call_gemma:
             article = run_hourly.generate_model_focus_article(chat, run_at, sched=object())
 
         self.assertIsNotNone(article)
         self.assertEqual(article["id"], "model-focus-20260611")
-        self.assertEqual(article["headline"], "최신 모델 위주 정보")
+        self.assertEqual(article["headline"], "일일 알짜배기")
         self.assertEqual(article["kind"], "model_focus")
         self.assertIn("Gemini 3.5", article["body"])
         prompt = call_gemma.call_args.args[0]
-        self.assertIn("이 내용을 자세히 분석해서 최신 또는 곧 나올 모델의 성능", prompt)
+        self.assertTrue(prompt.startswith(run_hourly.MODEL_FOCUS_INSTRUCTION))
+        self.assertIn("자세히 정리좀, 찌라시 빠짐없이", prompt)
+        self.assertIn("디스코드 대화내용', 'devmode' 이런 용어는 쓰지말고", prompt)
+        self.assertIn("이것만 봐도 배부른 알짜배기만\n모았습니다라고 시작해줘.", prompt)
         self.assertIn("Gemini 3.5", prompt)
         self.assertIn("잡담은 포함하지 않는다", prompt)
+        self.assertEqual(call_gemma.call_args.kwargs["model"], "gemini-3.6-flash")
+        self.assertFalse(call_gemma.call_args.kwargs["json_mode"])
 
-    def test_generate_model_focus_article_splits_and_merges_when_full_24h_fails(self):
+    def test_daily_nuggets_derives_latest_12h_from_reused_24h_source(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        chat = (
+            "[2026. 6. 10. 오후 7:59] old\n"
+            "12시간 경계보다 오래된 내용\n\n"
+            "[2026. 6. 10. 오후 8:00] kept\n"
+            "정확한 12시간 경계 내용\n\n"
+            "[2026. 6. 11. 오전 7:59] kept\n"
+            "최신 내용\n"
+        )
+        expected = {"id": "daily-nuggets"}
+
+        with patch.object(run_hourly, "generate_model_focus_article", return_value=expected) as generate:
+            article = run_hourly.generate_devmode_model_focus_article(
+                run_at,
+                sched=object(),
+                source_text=chat,
+            )
+
+        self.assertEqual(article, expected)
+        derived = generate.call_args.args[0]
+        self.assertNotIn("오후 7:59", derived)
+        self.assertIn("오후 8:00", derived)
+        self.assertIn("오전 7:59", derived)
+
+    def test_daily_nuggets_falls_back_from_36_to_35_lite_before_splitting(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        chat = "[2026. 6. 11. 오전 7:00] user\n새 소식"
+
+        with patch.object(
+            run_hourly,
+            "call_gemma",
+            side_effect=[
+                RuntimeError("primary unavailable"),
+                "이것만 봐도 배부른 알짜배기만 모았습니다. 대체 모델이 충분히 자세한 결과를 반환했습니다.",
+            ],
+        ) as call_gemma:
+            article = run_hourly.generate_model_focus_article(chat, run_at, sched=object())
+
+        self.assertIsNotNone(article)
+        self.assertEqual(
+            [call.kwargs["model"] for call in call_gemma.call_args_list],
+            ["gemini-3.6-flash", "gemini-3.5-flash-lite"],
+        )
+
+    def test_generate_daily_nuggets_splits_only_after_both_full_context_models_fail(self):
         run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
         chat = (
             "[2026. 6. 10. 오전 8:00] user\n"
@@ -360,17 +670,16 @@ class DailyExportsTest(unittest.TestCase):
             + "\n\n\n[2026. 6. 10. 오후 8:00] user\n"
             + ("Claude Opus 출시일 관측 " * 700)
         )
-        left_summary = json.dumps({"body": "Gemini 3.5 성능 루머와 벤치마크 관측 정리"}, ensure_ascii=False)
-        right_summary = json.dumps({"body": "Claude Opus 출시일 관측과 미확인 일정 정리"}, ensure_ascii=False)
-        merged_summary = json.dumps({
-            "body": "Gemini 3.5 성능 루머와 Claude Opus 출시일 관측을 누락 없이 병합한 24시간 요약입니다."
-        }, ensure_ascii=False)
+        left_summary = "Gemini 3.5 성능 루머와 벤치마크 관측 정리"
+        right_summary = "Claude Opus 출시일 관측과 미확인 일정 정리"
+        merged_summary = "이것만 봐도 배부른 알짜배기만 모았습니다. 두 부분을 누락 없이 병합했습니다."
 
         with patch.object(
             run_hourly,
             "call_gemma",
             side_effect=[
-                RuntimeError("API failed after 10 attempts"),
+                RuntimeError("primary full-context failure"),
+                RuntimeError("fallback full-context failure"),
                 left_summary,
                 right_summary,
                 merged_summary,
@@ -385,15 +694,65 @@ class DailyExportsTest(unittest.TestCase):
         self.assertIn("Claude Opus 출시일 관측", prompts[0])
         self.assertIn("Gemini 3.5 성능 루머와 벤치마크 관측 정리", prompts[-1])
         self.assertIn("Claude Opus 출시일 관측과 미확인 일정 정리", prompts[-1])
-        self.assertIn("누락 없이", prompts[-1])
+        self.assertIn("자세히 정리좀, 찌라시 빠짐없이", prompts[-1])
+        self.assertEqual(
+            [call.kwargs["model"] for call in call_gemma.call_args_list],
+            [
+                "gemini-3.6-flash",
+                "gemini-3.5-flash-lite",
+                "gemini-3.6-flash",
+                "gemini-3.6-flash",
+                "gemini-3.6-flash",
+            ],
+        )
+
+    def test_daily_nuggets_does_not_publish_a_partial_summary_when_a_leaf_fails(self):
+        run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
+        chat = "왼쪽 자료 " * 2_000 + "\n\n\n" + "오른쪽 자료 " * 2_000
+
+        with patch.object(
+            run_hourly,
+            "call_gemma",
+            side_effect=RuntimeError("all models unavailable"),
+        ):
+            article = run_hourly.generate_model_focus_article(
+                chat,
+                run_at,
+                sched=object(),
+                min_chars=10_000,
+            )
+
+        self.assertIsNone(article)
+
+    def test_model_focus_pre_splits_oversized_source_before_api_call(self):
+        source = ("Gemini 성능 소식 " * 120) + "\n\n\n" + ("Claude 출시 소식 " * 120)
+        left_summary = "Gemini 성능 소식을 정리한 부분 요약입니다."
+        right_summary = "Claude 출시 소식을 정리한 부분 요약입니다."
+        merged_summary = "Gemini 성능과 Claude 출시 소식을 병합한 전체 요약이며 세부 내용을 함께 담았습니다."
+
+        with patch.object(
+            run_hourly,
+            "call_gemma",
+            side_effect=[left_summary, right_summary, merged_summary],
+        ) as call_gemma:
+            body = run_hourly.summarize_model_focus_source(
+                source,
+                sched=object(),
+                min_chars=100,
+                direct_max_chars=len(source) // 2 + 20,
+            )
+
+        self.assertIn("병합한", body)
+        self.assertEqual(call_gemma.call_count, 3)
+        self.assertTrue(all(len(call.args[0]) < len(source) for call in call_gemma.call_args_list[:2]))
 
     def test_model_focus_article_updates_ribbon_summary_payload(self):
         run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
         state = {"articles": []}
         article = {
             "id": "model-focus-20260611",
-            "headline": "최신 모델 위주 정보",
-            "body": "Dev Mode 24시간 전체 요약입니다.",
+            "headline": "일일 알짜배기",
+            "body": "이것만 봐도 배부른 알짜배기만 모았습니다. 오늘의 전체 요약입니다.",
             "category": "news",
             "trust": "high",
             "kind": "model_focus",
@@ -405,16 +764,19 @@ class DailyExportsTest(unittest.TestCase):
         new_articles = run_hourly.upsert_model_focus_article(state, [], article)
 
         self.assertEqual(new_articles, [article])
-        self.assertEqual(state["model_focus_summary"]["title"], "최신 모델 위주 정보")
-        self.assertEqual(state["model_focus_summary"]["body"], "Dev Mode 24시간 전체 요약입니다.")
+        self.assertEqual(state["model_focus_summary"]["title"], "일일 알짜배기")
+        self.assertEqual(
+            state["model_focus_summary"]["body"],
+            "이것만 봐도 배부른 알짜배기만 모았습니다. 오늘의 전체 요약입니다.",
+        )
         self.assertEqual(state["model_focus_summary"]["date"], "2026-06-11")
 
     def test_model_focus_article_is_forced_to_first_main_slot(self):
         run_at = datetime(2026, 6, 11, 8, 0, tzinfo=KST)
         model_focus = {
             "id": "model-focus-20260611",
-            "headline": "최신 모델 위주 정보",
-            "body": "Dev Mode 24시간 모델 관련 분석입니다.",
+            "headline": "일일 알짜배기",
+            "body": "이것만 봐도 배부른 알짜배기만 모았습니다. 오늘의 분석입니다.",
             "category": "news",
             "trust": "high",
             "kind": "model_focus",
@@ -488,6 +850,63 @@ class DailyExportsTest(unittest.TestCase):
         self.assertEqual(saved["articles"][0]["id"], "art-202606110800-01")
         self.assertIn(saved["articles"][0]["placement"], {"top", "main", "side"})
         publish_after_run.assert_called_once()
+
+    def test_validate_placement_discards_unknown_ids_and_fills_missing(self):
+        placement = {
+            "top": ["999"],
+            "main": ["2", "1000"],
+            "side": ["1", "2", "1001"],
+        }
+
+        err = run_hourly.validate_placement(placement, {"1", "2", "3"})
+
+        self.assertIsNone(err)
+        self.assertEqual(placement["top"], [])
+        self.assertEqual(placement["main"], ["2"])
+        self.assertEqual(placement["side"], ["1", "3"])
+
+    def test_classify_uses_bounded_gemini_retries_before_fail_open(self):
+        run_at = datetime(2026, 7, 1, 8, 0, tzinfo=KST)
+        state = {
+            "schema_version": 2,
+            "journal": "First Light AI",
+            "articles": [],
+            "decision_log": [],
+        }
+        new_articles = [
+            {
+                "id": "art-202607010800-01",
+                "headline": "새 기사",
+                "body": "classify API가 오래 붙잡혀도 publish는 fail-open 해야 합니다.",
+                "category": "news",
+                "trust": "high",
+                "created_at": run_at.isoformat(),
+                "placement": None,
+                "placed_at": run_at.isoformat(),
+            }
+        ]
+        calls = []
+
+        def fake_call_gemma(*args, **kwargs):
+            calls.append(kwargs)
+            raise RuntimeError("API failed after bounded attempts")
+
+        with tempfile.TemporaryDirectory() as td:
+            docs_path = Path(td) / "docs" / "articles.json"
+            pages_path = Path(td) / "articles.json"
+            exports_dir = Path(td) / "exports" / "articles"
+            docs_path.parent.mkdir(parents=True)
+            with (
+                patch.object(run_hourly, "ARTICLES_PATH", docs_path),
+                patch.object(run_hourly, "PAGES_ARTICLES_PATH", pages_path),
+                patch.object(run_hourly, "EXPORTS_ARTICLES_DIR", exports_dir),
+                patch.object(run_hourly, "call_gemma", side_effect=fake_call_gemma),
+                patch.object(run_hourly.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="gist ok\n", stderr="")),
+                patch.object(run_hourly, "publish_after_run"),
+            ):
+                run_hourly._classify_and_save(state, new_articles, run_at, sched=object())
+
+        self.assertEqual(calls[0]["max_attempts"], 2)
 
     def test_write_daily_new_articles_export_uses_date_folder_and_metadata(self):
         run_at = datetime(2026, 4, 20, 12, 0, tzinfo=KST)
@@ -682,6 +1101,39 @@ class DailyExportsTest(unittest.TestCase):
 
         self.assertEqual(state["daily_summary"]["title"], "새 모델 공개가 중심이 된 하루")
         self.assertEqual(state["daily_summary"]["body"], "오늘은 새 모델 공개가 중심입니다.")
+
+    def test_classify_and_save_reuses_current_daily_nuggets_for_ribbon(self):
+        run_at = datetime(2026, 7, 26, 8, 0, tzinfo=KST)
+        nugget_body = "이것만 봐도 배부른 알짜배기만 모았습니다. 오늘의 12시간 요약입니다."
+        state = {
+            "schema_version": 2,
+            "last_run_at": None,
+            "generated_at": run_at.isoformat(),
+            "journal": "First Light AI",
+            "model": "gemma-4-26b-a4b-it",
+            "articles": [],
+            "decision_log": [],
+            "model_focus_summary": {
+                "schema_version": 1,
+                "title": "일일 알짜배기",
+                "date": "2026-07-26",
+                "generated_at": run_at.isoformat(),
+                "body": nugget_body,
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as td:
+            with (
+                patch.object(run_hourly, "EXPORTS_ARTICLES_DIR", Path(td)),
+                patch.object(run_hourly, "save_state"),
+                patch.object(run_hourly, "generate_daily_summary", side_effect=AssertionError("must reuse nuggets")),
+                patch.object(run_hourly.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="gist ok\n", stderr="")),
+            ):
+                run_hourly._classify_and_save(state, [], run_at, sched=object())
+
+        self.assertEqual(state["daily_summary"]["title"], "일일 알짜배기")
+        self.assertEqual(state["daily_summary"]["body"], nugget_body)
+        self.assertEqual(state["model"], "gemini-3.5-flash-lite")
 
     def test_classify_and_save_promotes_new_articles_to_front_page_first(self):
         run_at = datetime(2026, 4, 24, 8, 0, tzinfo=KST)

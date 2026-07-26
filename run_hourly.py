@@ -26,20 +26,28 @@ PAGES_ARTICLES_PATH = ROOT / "articles.json"
 EXPORTS_ARTICLES_DIR = ROOT / "exports" / "articles"
 JOURNAL_NAME = "First Light AI"
 DAILY_SUMMARY_FALLBACK_TITLE = "오늘의 AI 업데이트"
-MODEL = "gemma-4-26b-a4b-it"
+MODEL = "gemini-3.5-flash-lite"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 KST = timezone(timedelta(hours=9))
 CHANNEL_ID = "1365049274068631644"
 DEVMODE_CHANNEL_ID = CHANNEL_ID
 
-CHUNK_MAX_CHARS = 80_000
+CHUNK_MAX_CHARS = 40_000
 MIN_SCAN_SPLIT_CHARS = 10_000
 SCAN_GEMMA_MAX_ATTEMPTS = 10
+CLASSIFY_GEMMA_MAX_ATTEMPTS = 2
 MODEL_FOCUS_LOOKBACK_HOURS = 24
+MODEL_FOCUS_RECENT_HOURS = 12
+MODEL_FOCUS_DIRECT_MAX_CHARS = 2_000_000
 MODEL_FOCUS_MIN_SPLIT_CHARS = 10_000
 MODEL_FOCUS_GEMMA_MAX_ATTEMPTS = 10
-MODEL_FOCUS_HEADLINE = "최신 모델 위주 정보"
+MODEL_FOCUS_REUSE_TOLERANCE = timedelta(minutes=10)
+MODEL_FOCUS_HEADLINE = "일일 알짜배기"
 MODEL_FOCUS_KIND = "model_focus"
+MODEL_FOCUS_MODELS = ("gemini-3.6-flash", "gemini-3.5-flash-lite")
+SAMPLING_DEPRECATED_MODELS = frozenset(MODEL_FOCUS_MODELS)
+CROSS_DEDUP_EXISTING_BATCH_SIZE = 75
+CLASSIFY_ACTIVE_LIMIT = 75
 MAX_MAIN = 6
 FRONT_PAGE_SLOTS = 1 + MAX_MAIN
 DECISION_LOG_HOURS = 3
@@ -49,6 +57,16 @@ MERGE_ROUNDS = 3
 ACTIVE_POOL_LIMIT = 200  # 이 이하면 existing+new 전체 merge, 이상이면 retrieval mode
 
 LOG = lambda m: print(f"[{datetime.now().strftime('%H:%M:%S')}] {m}", flush=True)
+
+
+def is_runtime_filesystem_error(exc: BaseException) -> bool:
+    text = str(exc)
+    lower = text.lower()
+    if "tls ca certificate bundle" in lower or "cacert.pem" in lower:
+        return True
+    if str(ROOT) in text and any(marker in lower for marker in ("permission denied", "no such file", "invalid path")):
+        return True
+    return False
 
 
 def default_publish_branch() -> str:
@@ -97,20 +115,56 @@ class KeyScheduler:
             return best
 
 def load_keys():
-    p = Path.home() / ".config" / "legal_evidence_rag" / "keys.env"
-    for line in p.read_text().splitlines():
-        if "=" in line and not line.startswith("#"):
-            return [k.strip() for k in line.split("=", 1)[1].split(",") if k.strip()]
+    candidates = []
+    if os.environ.get("GEMINI_KEYS_CONFIG"):
+        candidates.append(Path(os.environ["GEMINI_KEYS_CONFIG"]))
+    candidates.extend([
+        Path("/srv/first-light/secrets/gemini_keys.env"),
+        Path.home() / ".config" / "legal_evidence_rag" / "keys.env",
+    ])
+    tried = []
+    for p in candidates:
+        if p in tried:
+            continue
+        tried.append(p)
+        if not p.exists():
+            continue
+        for line in p.read_text().splitlines():
+            if "=" in line and not line.startswith("#"):
+                keys = [k.strip() for k in line.split("=", 1)[1].split(",") if k.strip()]
+                if keys:
+                    return keys
     raise RuntimeError("No API keys found")
 
-def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False, max_attempts=20):
-    endpoint = ENDPOINT_TPL.format(model=MODEL)
-    gen_cfg = {"temperature": temp, "maxOutputTokens": max_tok}
+def default_thinking_level(model: str) -> str:
+    lowered = model.lower()
+    if "gemma" in lowered or "flash-lite" in lowered:
+        return "minimal"
+    if model == "gemini-3.6-flash":
+        return "medium"
+    return "high"
+
+
+def call_gemma(
+    prompt,
+    sched,
+    max_tok=8192,
+    temp=0.5,
+    json_mode=False,
+    max_attempts=20,
+    model=None,
+    thinking_level=None,
+):
+    selected_model = model or MODEL
+    endpoint = ENDPOINT_TPL.format(model=selected_model)
+    gen_cfg = {"maxOutputTokens": max_tok}
+    if temp is not None and selected_model not in SAMPLING_DEPRECATED_MODELS:
+        gen_cfg["temperature"] = temp
     if json_mode:
         gen_cfg["responseMimeType"] = "application/json"
-    # Thinking Burn 방지: Gemma는 thinkingLevel=minimal, Gemini는 high
-    is_gemma = "gemma" in MODEL.lower()
-    gen_cfg["thinkingConfig"] = {"thinkingLevel": "minimal" if is_gemma else "high"}
+    gen_cfg["thinkingConfig"] = {
+        "thinkingLevel": thinking_level or default_thinking_level(selected_model)
+    }
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": gen_cfg,
@@ -120,6 +174,8 @@ def call_gemma(prompt, sched, max_tok=8192, temp=0.5, json_mode=False, max_attem
         try:
             r = requests.post(f"{endpoint}?key={key}", json=body, timeout=240)
         except Exception as e:
+            if is_runtime_filesystem_error(e):
+                raise RuntimeError(f"runtime filesystem unavailable; encrypted home may be locked: {e}") from e
             LOG(f"  net err: {e}"); time.sleep(30); continue
         if r.status_code == 429 or r.status_code >= 500:
             LOG(f"  {r.status_code} backoff")
@@ -568,20 +624,15 @@ def write_daily_new_articles_export(new_articles: list, run_at: datetime, daily_
 # ── Discord ─────────────────────────────────────────────────────
 
 def discord_export(since_iso: str, channel_id: str = CHANNEL_ID) -> Path:
-    """WSL면 기존 discord_export_text_only.py (PowerShell 의존), Linux면 discord_export_linux.py (dotnet DCE)."""
+    """Export Discord chat through the local browser-session collector."""
     since = datetime.fromisoformat(since_iso).astimezone(KST)
     after_kst = since.strftime("%Y-%m-%d %H:%M:%S")
     LOG(f"[discord] channel {channel_id} --after-kst '{after_kst}'")
-    # powershell.exe 있으면 WSL 스크립트, 아니면 linux 스크립트
-    use_linux = subprocess.run(["which", "powershell.exe"], capture_output=True).returncode != 0
-    if use_linux:
-        script = ROOT / "discord_export_linux.py"
-        cmd = ["python3", str(script), "--channel", channel_id, "--after-kst", after_kst]
-    else:
-        script = ROOT / "discord_export_text_only.py"
-        cmd = ["python3", str(script), "--channel", channel_id, "--after-kst", after_kst, "--no-upload"]
+    script = ROOT / "discord_export_linux.py"
+    cmd = [sys.executable, str(script), "--channel", channel_id, "--after-kst", after_kst]
     LOG(f"  using: {script.name}")
-    r = subprocess.run(cmd, capture_output=True, timeout=1800)
+    timeout = int(os.environ.get("DISCORD_EXPORT_TIMEOUT_SECONDS", "3600"))
+    r = subprocess.run(cmd, capture_output=True, timeout=timeout)
     stdout = r.stdout.decode("utf-8", errors="replace") if r.stdout else ""
     stderr = r.stderr.decode("utf-8", errors="replace") if r.stderr else ""
     if stderr:
@@ -595,16 +646,96 @@ def discord_export(since_iso: str, channel_id: str = CHANNEL_ID) -> Path:
     raise RuntimeError(f"final_file not found:\n{stdout[-400:]}")
 
 
-def generate_devmode_model_focus_article(now: datetime, sched) -> dict | None:
+def generate_devmode_model_focus_article(now: datetime, sched, source_text: str | None = None) -> dict | None:
+    if source_text is not None:
+        chat = filter_chat_since(
+            source_text,
+            (now - timedelta(hours=MODEL_FOCUS_RECENT_HOURS)).isoformat(),
+        ).strip()
+        LOG(
+            f"daily nuggets chat: {len(chat):,} chars "
+            f"(latest {MODEL_FOCUS_RECENT_HOURS}h derived from reused 24h source)"
+        )
+        return generate_model_focus_article(chat, now, sched)
+
     since = now - timedelta(hours=MODEL_FOCUS_LOOKBACK_HOURS)
     try:
         export_path = discord_export(since.isoformat(), channel_id=DEVMODE_CHANNEL_ID)
-        chat = read_chat_text(export_path).strip()
+        full_chat = read_chat_text(export_path).strip()
+        chat = filter_chat_since(
+            full_chat,
+            (now - timedelta(hours=MODEL_FOCUS_RECENT_HOURS)).isoformat(),
+        ).strip()
     except Exception as e:
-        LOG(f"model focus export failed: {e}; skipping model-focus article")
+        LOG(f"daily nuggets export failed: {e}; skipping daily-nuggets article")
         return None
-    LOG(f"model focus chat: {len(chat):,} chars")
+    LOG(f"daily nuggets chat: {len(chat):,} chars (latest {MODEL_FOCUS_RECENT_HOURS}h)")
     return generate_model_focus_article(chat, now, sched)
+
+
+def parse_kst_iso(value: str) -> datetime:
+    dt = datetime.fromisoformat(value)
+    return dt.replace(tzinfo=KST) if dt.tzinfo is None else dt.astimezone(KST)
+
+
+def resolve_run_at(as_of: str | None = None) -> datetime:
+    return parse_kst_iso(as_of) if as_of else datetime.now(KST)
+
+
+def single_export_since_for_run(scan_since_iso: str, now: datetime) -> str:
+    scan_since = parse_kst_iso(scan_since_iso)
+    model_since = now.astimezone(KST) - timedelta(hours=MODEL_FOCUS_LOOKBACK_HOURS)
+    return min(scan_since, model_since).isoformat()
+
+
+def model_focus_source_from_primary_chat(
+    chat: str,
+    since_iso: str,
+    now: datetime,
+    explicit_chat_file: bool = False,
+) -> str | None:
+    if explicit_chat_file:
+        return chat
+    try:
+        since = parse_kst_iso(since_iso)
+    except Exception:
+        return None
+    required_start = now - timedelta(hours=MODEL_FOCUS_LOOKBACK_HOURS) + MODEL_FOCUS_REUSE_TOLERANCE
+    if since <= required_start:
+        return chat
+    return None
+
+
+MSG_HEADER_TIME_RE = re.compile(
+    r"^\[(\d{4})\. (\d{1,2})\. (\d{1,2})\. (오전|오후) (\d{1,2}):(\d{2})\]"
+)
+
+
+def parse_message_header_time(block: str) -> datetime | None:
+    first_line = block.splitlines()[0] if block else ""
+    m = MSG_HEADER_TIME_RE.match(first_line)
+    if not m:
+        return None
+    year, month, day, period, hour, minute = m.groups()
+    hour_i = int(hour)
+    if period == "오전":
+        hour_i = 0 if hour_i == 12 else hour_i
+    else:
+        hour_i = hour_i if hour_i == 12 else hour_i + 12
+    return datetime(int(year), int(month), int(day), hour_i, int(minute), tzinfo=KST)
+
+
+def filter_chat_since(chat: str, since_iso: str) -> str:
+    blocks = split_message_blocks(chat)
+    if not blocks:
+        return chat
+    since = parse_kst_iso(since_iso).replace(second=0, microsecond=0)
+    kept = []
+    for block in blocks:
+        msg_time = parse_message_header_time(block)
+        if msg_time is None or msg_time >= since:
+            kept.append(block)
+    return "\n\n".join(kept)
 
 
 def model_focus_summary_payload(article: dict) -> dict:
@@ -620,6 +751,19 @@ def model_focus_summary_payload(article: dict) -> dict:
         "generated_at": run_at.isoformat(),
         "body": article.get("body", ""),
     }
+
+
+def current_model_focus_summary_for_daily(state: dict, run_at: datetime, article_count: int) -> dict | None:
+    summary = state.get("model_focus_summary")
+    if not isinstance(summary, dict) or not str(summary.get("body") or "").strip():
+        return None
+    expected_date = run_at.astimezone(KST).date().isoformat()
+    if summary.get("date") != expected_date:
+        return None
+    payload = dict(summary)
+    payload["title"] = MODEL_FOCUS_HEADLINE
+    payload["article_count"] = article_count
+    return payload
 
 
 def upsert_model_focus_article(state: dict, new_articles: list, article: dict | None) -> list:
@@ -727,31 +871,14 @@ def prompt_scan_chunk(chunk: str, titles: list[str]) -> str:
 JSON만 출력:"""
 
 
-def prompt_model_focus_article(source_text: str, source_label: str = "Dev Mode 최근 24시간 전체 채팅") -> str:
-    return f"""역할: First Light AI 모델 정보 분석 에디터.
-아래 {source_label}을 통째로 읽고, 다음 사용자 요청을 수행하세요.
+MODEL_FOCUS_INSTRUCTION = """자세히 정리좀, 찌라시 빠짐없이 디스코드 대화내용', 'devmode' 이런 용어는 쓰지말고 요약해줘 이것만 봐도 배부른 알짜배기만
+모았습니다라고 시작해줘."""
 
-사용자 요청:
-"이 내용을 자세히 분석해서 최신 또는 곧 나올 모델의 성능, 정보, 출시일에 대해서 언급된걸 모두 정리좀. 또한 찌라시나 흥미로운 내용도 모두 정리해줘."
 
-## 작성 규칙
-- 기사 제목은 반드시 "{MODEL_FOCUS_HEADLINE}".
-- 한국어 본문 900~1800자.
-- body 안에는 기사 제목을 다시 쓰지 말 것. 내용 구분에는 Markdown `###` 소제목과 목록을 사용해도 됨.
-- 최신 또는 곧 나올 모델의 성능, 정보, 출시일 언급을 최대한 빠짐없이 정리.
-- 공식 확인, 여러 언급, 단일 루머, 농담/찌라시 가능성을 구분.
-- 출시일·성능 수치·모델명은 채팅에 나온 범위에서만 쓰고, 확정되지 않은 것은 "미확인", "루머", "관측"으로 표시.
-- 흥미로운 찌라시나 작은 단서도 버리지 말되, 확정 기사처럼 쓰지 말 것.
-- 모델 관련 메시지만 사전 필터링되었다고 가정하지 말고, 잡담 속 단서도 전체 맥락에서 확인.
-- 출력은 JSON 객체 하나만. 마크다운 코드펜스 금지.
+def prompt_model_focus_article(source_text: str, source_label: str = "최신 12시간 자료") -> str:
+    return f"""{MODEL_FOCUS_INSTRUCTION}
 
-## 스키마
-{{"body":"{MODEL_FOCUS_HEADLINE} 기사 본문"}}
-
-## {source_label}
-{source_text}
-
-JSON만 출력:"""
+{source_text}"""
 
 
 def prompt_model_focus_merge(part_summaries: list[str]) -> str:
@@ -760,50 +887,46 @@ def prompt_model_focus_merge(part_summaries: list[str]) -> str:
         for i, summary in enumerate(part_summaries, 1)
         if summary.strip()
     )
-    return f"""역할: First Light AI 모델 정보 분석 에디터.
-아래는 Dev Mode 최근 24시간 전체 채팅을 나누어 요약한 결과입니다.
-각 부분 요약을 함께 읽고, 최신 또는 곧 나올 모델의 성능, 정보, 출시일, 찌라시, 흥미로운 단서를 누락 없이 병합하세요.
+    return f"""{MODEL_FOCUS_INSTRUCTION}
 
-## 병합 규칙
-- 기사 제목은 반드시 "{MODEL_FOCUS_HEADLINE}".
-- 한국어 본문 900~1800자.
-- body 안에는 기사 제목을 다시 쓰지 말 것. 내용 구분에는 Markdown `###` 소제목과 목록을 사용해도 됨.
-- 부분 요약에 있는 모델명, 성능 주장, 출시일/시점 언급, API/가격/벤치마크/로드맵 단서를 빠뜨리지 말 것.
-- 같은 내용은 중복 제거하되, 서로 다른 루머나 작은 단서는 합치며 보존.
-- 공식 확인, 여러 언급, 단일 루머, 농담/찌라시 가능성을 구분.
-- 부분 요약에 없는 새 사실을 만들지 말 것.
-- 출력은 JSON 객체 하나만. 마크다운 코드펜스 금지.
-
-## 스키마
-{{"body":"부분 요약들을 누락 없이 병합한 {MODEL_FOCUS_HEADLINE} 기사 본문"}}
-
-## 부분 요약
-{parts}
-
-JSON만 출력:"""
+{parts}"""
 
 
 def parse_model_focus_response(text: str) -> str:
     s = text.strip()
     s = re.sub(r'^```(?:json)?\s*|\s*```$', '', s, flags=re.M).strip()
     start = s.find('{'); end = s.rfind('}')
-    if start != -1 and end > start:
-        obj = json.loads(s[start:end+1])
+    if s.startswith("{") and s.endswith("}") and start != -1 and end > start:
+        try:
+            obj = json.loads(s[start:end+1])
+        except json.JSONDecodeError:
+            return s
         body = obj.get("body") or obj.get("summary") or obj.get("article") or ""
         return str(body).strip()
     return s
 
 
 def call_model_focus_summary(prompt: str, sched) -> str:
-    raw = call_gemma(
-        prompt,
-        sched,
-        max_tok=4096,
-        temp=0.25,
-        json_mode=True,
-        max_attempts=MODEL_FOCUS_GEMMA_MAX_ATTEMPTS,
-    )
-    return parse_model_focus_response(raw)
+    failures = []
+    for model in MODEL_FOCUS_MODELS:
+        try:
+            raw = call_gemma(
+                prompt,
+                sched,
+                max_tok=8192,
+                temp=None,
+                json_mode=False,
+                max_attempts=MODEL_FOCUS_GEMMA_MAX_ATTEMPTS,
+                model=model,
+            )
+            body = parse_model_focus_response(raw)
+            if body.strip():
+                return body
+            failures.append(f"{model}: empty response")
+        except Exception as e:
+            failures.append(f"{model}: {e}")
+            LOG(f"daily nuggets model fallback: {model} failed: {e}")
+    raise RuntimeError("all daily-nuggets models failed: " + " | ".join(failures))
 
 
 def merge_model_focus_summaries(part_summaries: list[str], sched) -> str:
@@ -825,28 +948,44 @@ def merge_model_focus_summaries(part_summaries: list[str], sched) -> str:
 def summarize_model_focus_source(
     source_text: str,
     sched,
-    source_label: str = "Dev Mode 최근 24시간 전체 채팅",
+    source_label: str = "최신 12시간 자료",
     min_chars: int = MODEL_FOCUS_MIN_SPLIT_CHARS,
     min_body_chars: int = 40,
+    direct_max_chars: int = MODEL_FOCUS_DIRECT_MAX_CHARS,
 ) -> str:
     source = source_text.strip()
     if not source or sched is None:
         return ""
-    try:
-        body = call_model_focus_summary(prompt_model_focus_article(source, source_label), sched)
-        if len(body) >= min_body_chars:
-            return body
-        LOG(f"model focus fallback: response too short for {source_label}")
-    except Exception as e:
-        LOG(f"model focus fallback: {e}; splitting {source_label}")
+    if len(source) <= direct_max_chars:
+        try:
+            body = call_model_focus_summary(prompt_model_focus_article(source, source_label), sched)
+            if len(body) >= min_body_chars:
+                return body
+            LOG(f"model focus fallback: response too short for {source_label}")
+        except Exception as e:
+            LOG(f"model focus fallback: {e}; splitting {source_label}")
+    else:
+        LOG(
+            f"model focus pre-split: {source_label} is {len(source):,} chars "
+            f"(direct limit {direct_max_chars:,})"
+        )
     if len(source) <= min_chars:
-        LOG(f"model focus fallback: dropping {source_label} after reaching {len(source):,} chars")
-        return ""
+        raise RuntimeError(
+            f"daily-nuggets fragment failed after all model/key attempts: "
+            f"{source_label} ({len(source):,} chars)"
+        )
     left, right = split_chunk_for_retry(source)
     part_summaries = []
     for idx, part in enumerate((left, right), 1):
         label = f"{source_label} / 부분 {idx}"
-        summary = summarize_model_focus_source(part, sched, label, min_chars=min_chars, min_body_chars=16)
+        summary = summarize_model_focus_source(
+            part,
+            sched,
+            label,
+            min_chars=min_chars,
+            min_body_chars=16,
+            direct_max_chars=direct_max_chars,
+        )
         if summary:
             part_summaries.append(summary)
     return merge_model_focus_summaries(part_summaries, sched)
@@ -861,7 +1000,11 @@ def generate_model_focus_article(
     source = chat.strip()
     if not source or sched is None:
         return None
-    body = summarize_model_focus_source(source, sched, min_chars=min_chars)
+    try:
+        body = summarize_model_focus_source(source, sched, min_chars=min_chars)
+    except Exception as e:
+        LOG(f"daily nuggets generation failed without dropping fragments: {e}")
+        return None
     if len(body) < 40:
         LOG("model focus fallback: response too short; skipping model-focus article")
         return None
@@ -936,6 +1079,22 @@ def prompt_classify(active: list, new: list, decision_log: list) -> tuple[str, d
     return prompt, short2real
 
 
+def select_active_for_classification(active: list, limit: int = CLASSIFY_ACTIVE_LIMIT) -> list:
+    """Keep the current front page and the newest archive items inside the LLM prompt budget."""
+    if limit <= 0:
+        raise ValueError("limit must be positive")
+    if len(active) <= limit:
+        return list(active)
+    front = [a for a in active if a.get("placement") in {"top", "main"}]
+    front_ids = {a["id"] for a in front}
+    archive = sorted(
+        (a for a in active if a["id"] not in front_ids),
+        key=_created_at_sort_value,
+        reverse=True,
+    )
+    return (front + archive)[:max(limit, len(front))]
+
+
 def short2real_get(m, k):
     return m.get(k, k)
 
@@ -958,10 +1117,9 @@ def validate_placement(p: dict, valid_shorts: set) -> str | None:
         overflow = p["main"][MAX_MAIN:]
         p["main"] = p["main"][:MAX_MAIN]
         p["side"] = list(dict.fromkeys(p["side"] + overflow))
+    for k in ("top", "main", "side"):
+        p[k] = [i for i in p[k] if i in valid_shorts]
     all_ids = p["top"] + p["main"] + p["side"]
-    unknown = [i for i in all_ids if i not in valid_shorts]
-    if unknown:
-        return f"unknown ids: {unknown[:3]}"
     # missing 자동 side로 추가
     missing = valid_shorts - set(all_ids)
     if missing:
@@ -1169,17 +1327,18 @@ CROSS_DEDUP_PROMPT = """기존 활성 기사와 새 후보 기사를 비교해 *
 
 확신 있는 중복만. 없으면 {{"drop_new": []}}"""
 
-def cross_existing_dedup(new_candidates, existing_articles, sched):
-    """new 중 기존과 '같은 내용'인 것만 drop. 비슷하지만 새 디테일은 keep."""
-    if not new_candidates or not existing_articles:
-        return list(new_candidates), []
+def _cross_existing_dedup_batch(new_candidates, existing_articles, sched, batch_label):
     def fmt_article(prefix, idx, a):
         body = (a.get("body") or "").replace("\n", " ")[:220]
-        return f"{prefix}{idx} | {a['headline']} | {body}"
+        headline = str(a.get("headline") or "")[:180]
+        return f"{prefix}{idx} | {headline} | {body}"
     ex_lines = [fmt_article("E", i+1, a) for i, a in enumerate(existing_articles)]
     nw_lines = [fmt_article("N", i+1, a) for i, a in enumerate(new_candidates)]
     prompt = CROSS_DEDUP_PROMPT.format(existing="\n".join(ex_lines), new="\n".join(nw_lines))
-    LOG(f"cross_existing_dedup: {len(existing_articles)} existing vs {len(new_candidates)} new, prompt {len(prompt):,} chars")
+    LOG(
+        f"cross_existing_dedup {batch_label}: {len(existing_articles)} existing "
+        f"vs {len(new_candidates)} new, prompt {len(prompt):,} chars"
+    )
 
     # 재시도: 파싱 실패면 최대 3회. 여전히 실패면 new 전부 유지(포기 없음)
     drop_new = set()
@@ -1211,8 +1370,44 @@ def cross_existing_dedup(new_candidates, existing_articles, sched):
         LOG(f"  cross dedup 모든 재시도 실패 — new 전부 유지(포기 없음)")
 
     kept = [c for c in new_candidates if c["id"] not in drop_new]
-    LOG(f"  → kept {len(kept)} new (dropped {len(drop_new)} as duplicates of existing)")
+    LOG(f"  → kept {len(kept)} new (dropped {len(drop_new)} in {batch_label})")
     return kept, sorted(drop_new)
+
+
+def cross_existing_dedup(
+    new_candidates,
+    existing_articles,
+    sched,
+    batch_size: int = CROSS_DEDUP_EXISTING_BATCH_SIZE,
+):
+    """new 중 기존과 '같은 내용'인 것만 drop. 기존 기사는 작은 묶음으로 비교한다."""
+    if not new_candidates or not existing_articles:
+        return list(new_candidates), []
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+
+    batches = [
+        existing_articles[i:i + batch_size]
+        for i in range(0, len(existing_articles), batch_size)
+    ]
+    LOG(
+        f"cross_existing_dedup: {len(existing_articles)} existing vs {len(new_candidates)} new "
+        f"in {len(batches)} batches"
+    )
+    remaining = list(new_candidates)
+    dropped = []
+    for idx, batch in enumerate(batches, 1):
+        if not remaining:
+            break
+        remaining, batch_dropped = _cross_existing_dedup_batch(
+            remaining,
+            batch,
+            sched,
+            f"[{idx}/{len(batches)}]",
+        )
+        dropped.extend(batch_dropped)
+    LOG(f"cross_existing_dedup total: kept {len(remaining)}, dropped {len(dropped)}")
+    return remaining, sorted(set(dropped))
 
 
 # ── Merge loop (consolidation + coverage-patch) ─────────────────
@@ -1503,18 +1698,24 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--since", help="override since ISO")
     ap.add_argument("--chat-file", help="reuse existing Discord export (skip re-export)")
+    ap.add_argument("--as-of", help="fixed KST run boundary; requires a prefiltered --chat-file")
     ap.add_argument("--skip-scan", action="store_true", help="load new articles from cache, skip chunk scan")
     args = ap.parse_args()
+    if args.as_of and not args.chat_file:
+        ap.error("--as-of requires a prefiltered --chat-file")
 
     keys = load_keys()
     sched = KeyScheduler(keys)
     LOG(f"loaded {len(keys)} keys")
 
     state = load_state()
-    now = datetime.now(KST)
+    now = resolve_run_at(args.as_of)
 
     since_iso = args.since or state.get("last_run_at") or (now - timedelta(hours=72)).isoformat()
     LOG(f"since = {since_iso}")
+    export_since_iso = since_iso if args.chat_file else single_export_since_for_run(since_iso, now)
+    if export_since_iso != since_iso:
+        LOG(f"single export widened for model focus: {since_iso} → {export_since_iso}")
 
     if args.skip_scan:
         cache_path = ROOT / "data" / "new_articles_cache.json"
@@ -1527,13 +1728,26 @@ def main():
         export_path = Path(args.chat_file)
         LOG(f"[discord] reusing {export_path}")
     else:
-        export_path = discord_export(since_iso)
-    chat = read_chat_text(export_path)
-    chat = chat.strip()
+        export_path = discord_export(export_since_iso)
+    export_chat = read_chat_text(export_path).strip()
+    chat = export_chat
+    if not args.chat_file and export_since_iso != since_iso:
+        chat = filter_chat_since(export_chat, since_iso).strip()
+        LOG(f"scan chat filtered from widened export: {len(export_chat):,} → {len(chat):,} chars")
     LOG(f"chat: {len(chat):,} chars")
 
     if not chat:
-        model_focus_article = generate_devmode_model_focus_article(now, sched)
+        model_focus_source = model_focus_source_from_primary_chat(
+            export_chat,
+            export_since_iso,
+            now,
+            explicit_chat_file=bool(args.chat_file),
+        )
+        if model_focus_source is None:
+            LOG("model focus skipped: primary export does not cover daily window")
+            model_focus_article = None
+        else:
+            model_focus_article = generate_devmode_model_focus_article(now, sched, source_text=model_focus_source)
         if model_focus_article:
             new_articles = upsert_model_focus_article(state, [], model_focus_article)
             _classify_and_save(state, new_articles, now, sched)
@@ -1542,6 +1756,7 @@ def main():
         state["last_run_at"] = now.isoformat()
         state["generated_at"] = now.isoformat()
         state["journal"] = JOURNAL_NAME
+        state["model"] = MODEL
         daily_summary = generate_daily_summary([], now, sched)
         state["daily_summary"] = daily_summary
         save_state(state)
@@ -1594,7 +1809,17 @@ def main():
     if new_articles and state.get("articles"):
         new_articles, _ = cross_existing_dedup(new_articles, state["articles"], sched)
 
-    model_focus_article = generate_devmode_model_focus_article(now, sched)
+    model_focus_source = model_focus_source_from_primary_chat(
+        export_chat,
+        export_since_iso,
+        now,
+        explicit_chat_file=bool(args.chat_file),
+    )
+    if model_focus_source is None:
+        LOG("model focus skipped: primary export does not cover daily window")
+        model_focus_article = None
+    else:
+        model_focus_article = generate_devmode_model_focus_article(now, sched, source_text=model_focus_source)
     new_articles = upsert_model_focus_article(state, new_articles, model_focus_article)
 
     # Step C: classify (기존 + new 모두 TOP/MAIN/SIDE 배치)
@@ -1614,18 +1839,31 @@ def _classify_and_save(state, new_articles, now, sched):
 
         placement_map_real = None
         attempt = 0
+        classify_active = select_active_for_classification(state["articles"])
+        if len(classify_active) != len(state["articles"]):
+            LOG(
+                f"classify prompt pool: {len(classify_active)} of "
+                f"{len(state['articles'])} active articles"
+            )
         while True:
             attempt += 1
-            prompt, short2real = prompt_classify(state["articles"], new_articles, recent_log)
+            prompt, short2real = prompt_classify(classify_active, new_articles, recent_log)
             valid_shorts = set(short2real.keys())
             raw = ""
             try:
-                raw = call_gemma(prompt, sched, max_tok=16384, temp=0.2, json_mode=True)
+                raw = call_gemma(
+                    prompt,
+                    sched,
+                    max_tok=16384,
+                    temp=0.2,
+                    json_mode=True,
+                    max_attempts=CLASSIFY_GEMMA_MAX_ATTEMPTS,
+                )
                 p = parse_placement_json(raw)
                 err = validate_placement(p, valid_shorts)
                 if err:
                     raise ValueError(err)
-                placement_map_real = {}
+                placement_map_real = {a["id"]: "side" for a in state["articles"]}
                 for iid in p["top"]: placement_map_real[short2real[iid]] = "top"
                 for iid in p["main"]: placement_map_real[short2real[iid]] = "main"
                 for iid in p["side"]: placement_map_real[short2real[iid]] = "side"
@@ -1667,7 +1905,12 @@ def _classify_and_save(state, new_articles, now, sched):
     state["last_run_at"] = now.isoformat()
     state["generated_at"] = now.isoformat()
     state["journal"] = JOURNAL_NAME
-    daily_summary = generate_daily_summary(new_articles, now, sched)
+    state["model"] = MODEL
+    daily_summary = current_model_focus_summary_for_daily(state, now, len(new_articles))
+    if daily_summary is None:
+        daily_summary = generate_daily_summary(new_articles, now, sched)
+    else:
+        LOG("daily ribbon uses the current daily-nuggets article")
     state["daily_summary"] = daily_summary
     save_state(state)
     LOG("state saved")

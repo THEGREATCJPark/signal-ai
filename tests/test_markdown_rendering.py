@@ -73,10 +73,12 @@ process.stdout.write(JSON.stringify({ ready: md.ready, html, plain }));
         self.assertFalse(rendered["plain"].startswith("최신 모델 위주 정보"))
         self.assertIn("1. OpenAI", rendered["plain"])
 
-    def test_model_focus_prompt_avoids_duplicate_title_but_allows_structure(self):
+    def test_daily_nuggets_prompt_is_the_exact_short_instruction(self):
         source = (ROOT / "run_hourly.py").read_text(encoding="utf-8")
-        rule = "body 안에는 기사 제목을 다시 쓰지 말 것. 내용 구분에는 Markdown `###` 소제목과 목록을 사용해도 됨."
-        self.assertEqual(2, source.count(rule))
+        instruction = """자세히 정리좀, 찌라시 빠짐없이 디스코드 대화내용', 'devmode' 이런 용어는 쓰지말고 요약해줘 이것만 봐도 배부른 알짜배기만
+모았습니다라고 시작해줘."""
+        self.assertIn(f'MODEL_FOCUS_INSTRUCTION = """{instruction}"""', source)
+        self.assertNotIn("body 안에는 기사 제목을 다시 쓰지 말 것", source)
 
 
 if __name__ == "__main__":

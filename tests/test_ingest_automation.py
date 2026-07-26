@@ -34,7 +34,10 @@ class IngestAutomationTest(unittest.TestCase):
         self.assertIn("startsWith(github.event.head_commit.message, 'chore: publish First Light AI')", text)
         self.assertNotIn("environment:", text)
         self.assertIn("mkdir -p _site", text)
-        self.assertIn("cp index.html archive.html articles.json .nojekyll _site/", text)
+        self.assertIn(
+            "cp index.html archive.html markdown-renderer.js articles.json .nojekyll _site/",
+            text,
+        )
         self.assertIn("cp -R exports _site/exports", text)
 
     def test_local_all_source_ingest_refuses_github_actions(self):

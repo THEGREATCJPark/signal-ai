@@ -493,7 +493,7 @@
     overflow-wrap: break-word;
   }
   .summary-copy p:last-child { margin-bottom: 0; }
-  .summary-copy p:first-of-type::first-letter {
+  .summary-copy > p:first-child::first-letter {
     font-size: 3.2rem;
     line-height: .9;
     float: left;
@@ -501,6 +501,45 @@
     color: var(--accent);
     margin: 8px 10px 0 0;
   }
+  .summary-copy h1,
+  .summary-copy h2,
+  .summary-copy h3,
+  .summary-copy h4 {
+    font-family: var(--serif);
+    color: var(--ink);
+    line-height: 1.35;
+    margin: 28px 0 12px;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+  .summary-copy h1, .summary-copy h2 { font-size: 1.35rem; }
+  .summary-copy h3 { font-size: 1.16rem; }
+  .summary-copy h4 { font-size: 1.05rem; }
+  .summary-copy ul, .summary-copy ol {
+    font-family: var(--serif);
+    font-size: clamp(1.02rem, 2vw, 1.13rem);
+    line-height: 1.8;
+    color: var(--ink-2);
+    margin: 0 0 20px 1.4em;
+  }
+  .summary-copy li { margin-bottom: 8px; }
+  .summary-copy blockquote {
+    margin: 20px 0;
+    padding: 2px 0 2px 18px;
+    border-left: 3px solid var(--accent);
+    color: var(--ink-3);
+  }
+  .summary-copy pre, .reader .body pre {
+    overflow-x: auto;
+    margin: 20px 0;
+    padding: 16px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule-soft);
+    font: .82rem/1.6 var(--mono);
+  }
+  .summary-copy code, .reader .body code { font-family: var(--mono); font-size: .88em; }
+  .summary-copy a, .reader .body a { color: var(--accent); text-underline-offset: 3px; }
+  .summary-copy img, .reader .body img { display: block; max-width: 100%; height: auto; margin: 20px auto; }
   @media (max-width: 720px) {
     .daily-ribbon-stage {
       top: 84px;
@@ -797,7 +836,7 @@
     word-break: keep-all;
     overflow-wrap: break-word;
   }
-  .reader .body p:first-of-type::first-letter {
+  .reader .body > p:first-child::first-letter {
     font-size: 3.6rem;
     font-weight: 700;
     float: left;
@@ -805,6 +844,29 @@
     margin: 6px 10px 0 0;
     color: var(--accent);
     font-family: var(--serif);
+  }
+  .reader .body h1,
+  .reader .body h2,
+  .reader .body h3,
+  .reader .body h4 {
+    font-family: var(--serif);
+    color: var(--ink);
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    margin: 32px 0 12px;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+  .reader .body h1, .reader .body h2 { font-size: 1.5rem; }
+  .reader .body h3 { font-size: 1.28rem; }
+  .reader .body h4 { font-size: 1.12rem; }
+  .reader .body ul, .reader .body ol { margin: 0 0 20px 1.5em; }
+  .reader .body li { margin-bottom: 8px; }
+  .reader .body blockquote {
+    margin: 22px 0;
+    padding-left: 18px;
+    border-left: 3px solid var(--accent);
+    color: var(--ink-3);
   }
 
   /* ── Footer ── */
@@ -888,6 +950,8 @@
   <div id="footer-meta">—</div>
 </footer>
 
+<script src="third_party/marked.min.js"></script>
+<script src="markdown-renderer.js"></script>
 <script id="articles-data" type="application/json">__ARTICLES_JSON__</script>
 <script>
 (async function() {
@@ -937,12 +1001,9 @@
   function formatInlineText(s) {
     return esc(s).replace(/([A-Za-z0-9])\/([A-Za-z0-9])/g, '$1&#8288;/&#8288;$2');
   }
-  function excerpt(s, n = 160) {
-    const clean = String(s).replace(/^\*+\s*/, '').replace(/\*\*/g, '').split('\n')[0];
+  function excerpt(s, n = 160, headline = '') {
+    const clean = SignalMarkdown.toPlainText(s, { headline });
     return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
-  }
-  function paragraphs(body) {
-    return String(body).replace(/\*\*/g, '').split(/\n{2,}|\n/).map(p => p.trim()).filter(Boolean);
   }
   function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
@@ -988,9 +1049,7 @@
             </div>
             <button class="summary-close" id="${closeId}" type="button">접기</button>
           </div>
-          <div class="summary-copy">
-            ${paragraphs(summary.body).map(p => `<p>${formatInlineText(p)}</p>`).join('')}
-          </div>
+          <div class="summary-copy">${SignalMarkdown.render(summary.body, { headline: title })}</div>
         </article>
       </div>
     `;
@@ -1206,14 +1265,14 @@
   }
 
   function cardCopy(a) {
-    const copy = excerpt(a.body, 180).trim();
+    const copy = excerpt(a.body, 180, a.headline).trim();
     if (!copy) return '';
     if (isModelFocusArticle(a) && copy === String(a.headline || '').trim()) return '';
     return `<p>${formatInlineText(copy)}</p>`;
   }
 
   function sideCard(a, n, withSnip) {
-    const snip = withSnip ? `<div class="snip">${formatInlineText(excerpt(a.body, 120))}</div>` : '';
+    const snip = withSnip ? `<div class="snip">${formatInlineText(excerpt(a.body, 120, a.headline))}</div>` : '';
     return `
       <div class="side-item" data-id="${esc(a.id)}">
         <div class="num">No. ${String(n).padStart(2, '0')} ${tagBadges(a)}</div>
@@ -1236,7 +1295,7 @@
       <article class="hero" data-id="${esc(t.id)}">
         <div class="kicker">LEAD ${tagBadges(t)}</div>
         <h2>${formatInlineText(t.headline)}</h2>
-        <p class="lede">${formatInlineText(excerpt(t.body, 240))}</p>
+        <p class="lede">${formatInlineText(excerpt(t.body, 240, t.headline))}</p>
         <div class="read-more">Read the full story</div>
       </article>
     `;
@@ -1296,7 +1355,7 @@
     if (!a) return;
     $('reader-title').innerHTML = formatInlineText(a.headline);
     $('reader-byline').textContent = `FIRST LIGHT AI · ${fmtDate(a.created_at || a.placed_at || gen)}`;
-    $('reader-body').innerHTML = paragraphs(a.body).map(p => `<p>${formatInlineText(p)}</p>`).join('');
+    $('reader-body').innerHTML = SignalMarkdown.render(a.body, { headline: a.headline });
     reader.classList.add('open');
     document.body.style.overflow = 'hidden';
   }

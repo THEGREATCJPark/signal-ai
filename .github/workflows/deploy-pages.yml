@@ -7,6 +7,8 @@ on:
     paths:
       - index.html
       - archive.html
+      - markdown-renderer.js
+      - third_party/marked.min.js
       - articles.json
       - exports/articles/**
       - .github/workflows/deploy-pages.yml
@@ -35,7 +37,9 @@ jobs:
       - name: Build static artifact
         run: |
           mkdir -p _site
-          cp index.html archive.html articles.json .nojekyll _site/
+          cp index.html archive.html markdown-renderer.js articles.json .nojekyll _site/
+          mkdir -p _site/third_party
+          cp third_party/marked.min.js _site/third_party/
           if [ -d exports ]; then cp -R exports _site/exports; fi
       - uses: actions/upload-pages-artifact@v3
         with:

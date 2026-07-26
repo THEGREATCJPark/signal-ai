@@ -24,7 +24,7 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("function formatInlineText", html)
         self.assertIn("&#8288;/&#8288;", html)
         self.assertIn("<h3>${formatInlineText(a.headline)} ${tags.join(' ')}</h3>", html)
-        self.assertIn("<p>${formatInlineText(excerpt(a.body))}</p>", html)
+        self.assertIn("<p>${formatInlineText(excerpt(a.body, 140, a.headline))}</p>", html)
         self.assertRegex(html, r"entry \.content h3 \{[^}]*word-break: keep-all;")
 
     def test_daily_summary_ribbon_does_not_shift_article_flow(self):

@@ -212,11 +212,45 @@
     word-break: keep-all;
     overflow-wrap: break-word;
   }
-  .reader .body p:first-of-type::first-letter {
+  .reader .body > p:first-child::first-letter {
     font-size: 3.6rem; font-weight: 700; float: left;
     line-height: 0.9; margin: 6px 10px 0 0;
     color: var(--accent); font-family: var(--serif);
   }
+  .reader .body h1,
+  .reader .body h2,
+  .reader .body h3,
+  .reader .body h4 {
+    font-family: var(--serif);
+    color: var(--ink);
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    margin: 32px 0 12px;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+  .reader .body h1, .reader .body h2 { font-size: 1.5rem; }
+  .reader .body h3 { font-size: 1.28rem; }
+  .reader .body h4 { font-size: 1.12rem; }
+  .reader .body ul, .reader .body ol { margin: 0 0 20px 1.5em; }
+  .reader .body li { margin-bottom: 8px; }
+  .reader .body blockquote {
+    margin: 22px 0;
+    padding-left: 18px;
+    border-left: 3px solid var(--accent);
+    color: var(--ink-3);
+  }
+  .reader .body pre {
+    overflow-x: auto;
+    margin: 20px 0;
+    padding: 16px;
+    background: var(--paper-2);
+    border: 1px solid var(--rule-soft);
+    font: .82rem/1.6 var(--mono);
+  }
+  .reader .body code { font-family: var(--mono); font-size: .88em; }
+  .reader .body a { color: var(--accent); text-underline-offset: 3px; }
+  .reader .body img { display: block; max-width: 100%; height: auto; margin: 20px auto; }
 
   .loading, .error, .empty {
     text-align: center; padding: 80px 20px;
@@ -262,6 +296,8 @@
   </div>
 </div>
 
+<script src="../third_party/marked.min.js"></script>
+<script src="../markdown-renderer.js"></script>
 <script id="articles-data" type="application/json">__ARTICLES_JSON__</script>
 <script>
 (async function() {
@@ -289,12 +325,9 @@
       return d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     } catch { return iso; }
   }
-  function excerpt(s, n = 140) {
-    const clean = String(s).replace(/^\*+\s*/, '').replace(/\*\*/g, '').split('\n')[0];
+  function excerpt(s, n = 140, headline = '') {
+    const clean = SignalMarkdown.toPlainText(s, { headline });
     return clean.length > n ? clean.slice(0, n).trim() + '…' : clean;
-  }
-  function paragraphs(body) {
-    return String(body).replace(/\*\*/g, '').split(/\n{2,}|\n/).map(p => p.trim()).filter(Boolean);
   }
 
   let data;
@@ -348,7 +381,7 @@
         <span class="badge ${esc(a.placement || 'side')}">${esc((a.placement || 'side').toUpperCase())}</span>
         <div class="content">
           <h3>${formatInlineText(a.headline)} ${tags.join(' ')}</h3>
-          <p>${formatInlineText(excerpt(a.body))}</p>
+          <p>${formatInlineText(excerpt(a.body, 140, a.headline))}</p>
         </div>
       </article>`);
     });
@@ -373,7 +406,7 @@
     const a = byId[id]; if (!a) return;
     $('reader-title').innerHTML = formatInlineText(a.headline);
     $('reader-byline').textContent = `FIRST LIGHT AI · ${fmtDT(a.created_at)} · ${(a.placement||'side').toUpperCase()}`;
-    $('reader-body').innerHTML = paragraphs(a.body).map(p => `<p>${formatInlineText(p)}</p>`).join('');
+    $('reader-body').innerHTML = SignalMarkdown.render(a.body, { headline: a.headline });
     reader.classList.add('open');
     document.body.style.overflow = 'hidden';
   }

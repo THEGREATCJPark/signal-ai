@@ -82,12 +82,8 @@
   }
 
   function fallbackRender(source) {
-    return String(source || '')
-      .split(/\n{2,}|\n/)
-      .map(function (line) { return line.trim(); })
-      .filter(Boolean)
-      .map(function (line) { return `<p>${escapeHtml(line)}</p>`; })
-      .join('');
+    const clean = fallbackPlainText(source);
+    return clean ? `<p>${escapeHtml(clean)}</p>` : '';
   }
 
   function render(body, options) {

@@ -24,6 +24,23 @@
     return '';
   }
 
+  function normalizePunctuationStrong(value) {
+    return String(value || '').replace(
+      /([\p{P}\p{S}])(\*\*)([\p{L}\p{N}])/gu,
+      function (_match, punctuation, delimiter, next) {
+        return punctuation + delimiter + '&#' + next.codePointAt(0) + ';';
+      }
+    );
+  }
+
+  function decodeNumericEntities(value) {
+    return String(value || '').replace(/&#(\d+);/g, function (entity, decimal) {
+      const codePoint = Number(decimal);
+      if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return entity;
+      return String.fromCodePoint(codePoint);
+    });
+  }
+
   const renderer = {
     html(token) {
       const escaped = escapeHtml(token.text || token.raw || '');
@@ -87,7 +104,9 @@
   }
 
   function render(body, options) {
-    const source = withoutDuplicateHeading(body, options && options.headline);
+    const source = normalizePunctuationStrong(
+      withoutDuplicateHeading(body, options && options.headline)
+    );
     if (!source) return '';
     if (!parser) return fallbackRender(source);
     try {
@@ -123,11 +142,13 @@
   }
 
   function toPlainText(body, options) {
-    const source = withoutDuplicateHeading(body, options && options.headline);
+    const source = normalizePunctuationStrong(
+      withoutDuplicateHeading(body, options && options.headline)
+    );
     if (!source) return '';
     if (!parser) return fallbackPlainText(source);
     try {
-      return collectText(parser.lexer(source)).replace(/\s+/g, ' ').trim();
+      return decodeNumericEntities(collectText(parser.lexer(source))).replace(/\s+/g, ' ').trim();
     } catch (_error) {
       return fallbackPlainText(source);
     }

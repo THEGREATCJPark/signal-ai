@@ -80,6 +80,36 @@ process.stdout.write(JSON.stringify({ ready: md.ready, html, plain }));
         self.assertIn(f'MODEL_FOCUS_INSTRUCTION = """{instruction}"""', source)
         self.assertNotIn("body 안에는 기사 제목을 다시 쓰지 말 것", source)
 
+    @unittest.skipUnless(shutil.which("node"), "Node.js is required for the renderer behavior test")
+    def test_strong_emphasis_before_korean_particle_survives_punctuation(self):
+        script = r"""
+const md = require('./markdown-renderer.js');
+const body = `**ARC-AGI-3 테스트에서 30%**를 기록했다.
+
+**불안정성(Inconsistency)**이 지적됐다.
+
+**정상 강조**입니다.`;
+const html = md.render(body);
+const plain = md.toPlainText(body);
+process.stdout.write(JSON.stringify({ html, plain }));
+"""
+        result = subprocess.run(
+            ["node", "-e", script],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        rendered = json.loads(result.stdout)
+
+        self.assertIn("<strong>ARC-AGI-3 테스트에서 30%</strong>&#47484;", rendered["html"])
+        self.assertIn("<strong>불안정성(Inconsistency)</strong>&#51060;", rendered["html"])
+        self.assertIn("<strong>정상 강조</strong>입니다", rendered["html"])
+        self.assertNotIn("**", rendered["html"])
+        self.assertNotIn("&#47484;", rendered["plain"])
+        self.assertNotIn("&#51060;", rendered["plain"])
+        self.assertNotIn("**", rendered["plain"])
+
 
 if __name__ == "__main__":
     unittest.main()

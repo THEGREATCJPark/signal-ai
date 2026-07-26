@@ -1003,6 +1003,10 @@ class DailyExportsTest(unittest.TestCase):
             calls[2],
             [
                 "git",
+                "-c",
+                "user.name=pineapplesour",
+                "-c",
+                "user.email=59020461+pineapplesour@users.noreply.github.com",
                 "commit",
                 "-m",
                 "chore: publish First Light AI 2026-04-20",
@@ -1013,6 +1017,41 @@ class DailyExportsTest(unittest.TestCase):
             ],
         )
         self.assertEqual(calls[3], ["git", "push", "origin", "HEAD:dev"])
+
+    def test_publish_retries_from_origin_worktree_after_non_fast_forward(self):
+        run_at = datetime(2026, 7, 26, 8, 0, tzinfo=KST)
+
+        def fake_run(cmd, **kwargs):
+            if cmd[:4] == ["git", "diff", "--cached", "--quiet"]:
+                return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+            if cmd[:2] == ["git", "push"]:
+                return subprocess.CompletedProcess(
+                    cmd,
+                    1,
+                    stdout="",
+                    stderr="! [rejected] HEAD -> dev (non-fast-forward)",
+                )
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with (
+            patch.object(run_hourly, "PUBLISH_BRANCH", "dev"),
+            patch.object(run_hourly.subprocess, "run", side_effect=fake_run),
+            patch.object(
+                run_hourly,
+                "publish_public_artifacts_from_remote_branch",
+                return_value=True,
+            ) as isolated_publish,
+        ):
+            published = run_hourly.publish_public_artifacts(
+                [run_hourly.ARTICLES_PATH, run_hourly.PAGES_ARTICLES_PATH],
+                run_at,
+            )
+
+        self.assertTrue(published)
+        isolated_publish.assert_called_once_with(
+            ["docs/articles.json", "articles.json"],
+            "2026-07-26",
+        )
 
     def test_publish_public_artifacts_skips_when_no_changes(self):
         run_at = datetime(2026, 4, 20, 8, 0, tzinfo=KST)

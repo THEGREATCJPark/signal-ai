@@ -15,7 +15,7 @@
 7) articles.json 저장 + build_gist.py 호출 + GitHub Pages 공개 산출물 푸시
 """
 from __future__ import annotations
-import argparse, json, os, re, subprocess, sys, time, threading, random
+import argparse, json, os, re, shutil, subprocess, sys, tempfile, time, threading, random
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import requests
@@ -25,6 +25,8 @@ ARTICLES_PATH = ROOT / "docs" / "articles.json"
 PAGES_ARTICLES_PATH = ROOT / "articles.json"
 EXPORTS_ARTICLES_DIR = ROOT / "exports" / "articles"
 JOURNAL_NAME = "First Light AI"
+GIT_USER_NAME = "pineapplesour"
+GIT_USER_EMAIL = "59020461+pineapplesour@users.noreply.github.com"
 DAILY_SUMMARY_FALLBACK_TITLE = "오늘의 AI 업데이트"
 MODEL = "gemini-3.5-flash-lite"
 ENDPOINT_TPL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -457,6 +459,82 @@ def save_state(state):
 def git_relative(path: Path) -> str:
     return str(Path(path).resolve().relative_to(ROOT.resolve()))
 
+
+def is_non_fast_forward_push(stderr: str) -> bool:
+    message = str(stderr or "").lower()
+    return "non-fast-forward" in message or "fetch first" in message
+
+
+def publish_public_artifacts_from_remote_branch(rels: list[str], date_key: str) -> bool:
+    """Publish from origin when the long-lived runtime checkout has diverged."""
+    fetch = subprocess.run(
+        ["git", "fetch", "origin", PUBLISH_BRANCH],
+        capture_output=True,
+        text=True,
+    )
+    if fetch.returncode != 0:
+        raise RuntimeError(f"git fetch failed: {fetch.stderr.strip()}")
+
+    with tempfile.TemporaryDirectory(prefix="signal-pages-publish-") as td:
+        worktree = Path(td) / "worktree"
+        add_worktree = subprocess.run(
+            ["git", "worktree", "add", "--detach", str(worktree), f"origin/{PUBLISH_BRANCH}"],
+            capture_output=True,
+            text=True,
+        )
+        if add_worktree.returncode != 0:
+            raise RuntimeError(f"git worktree add failed: {add_worktree.stderr.strip()}")
+        try:
+            for rel in rels:
+                source = ROOT / rel
+                target = worktree / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
+
+            add = subprocess.run(
+                ["git", "-C", str(worktree), "add", "--", *rels],
+                capture_output=True,
+                text=True,
+            )
+            if add.returncode != 0:
+                raise RuntimeError(f"isolated git add failed: {add.stderr.strip()}")
+            diff = subprocess.run(
+                ["git", "-C", str(worktree), "diff", "--cached", "--quiet", "--", *rels],
+                capture_output=True,
+                text=True,
+            )
+            if diff.returncode == 0:
+                return False
+            if diff.returncode != 1:
+                raise RuntimeError(f"isolated git diff failed: {diff.stderr.strip()}")
+
+            commit = subprocess.run(
+                [
+                    "git", "-C", str(worktree),
+                    "-c", f"user.name={GIT_USER_NAME}",
+                    "-c", f"user.email={GIT_USER_EMAIL}",
+                    "commit", "-m", f"chore: publish {JOURNAL_NAME} {date_key}", "--", *rels,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if commit.returncode != 0:
+                raise RuntimeError(f"isolated git commit failed: {commit.stderr.strip()}")
+            push = subprocess.run(
+                ["git", "-C", str(worktree), "push", "origin", f"HEAD:{PUBLISH_BRANCH}"],
+                capture_output=True,
+                text=True,
+            )
+            if push.returncode != 0:
+                raise RuntimeError(f"isolated git push failed: {push.stderr.strip()}")
+            return True
+        finally:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(worktree)],
+                capture_output=True,
+                text=True,
+            )
+
 def publish_public_artifacts(paths: list[Path], run_at: datetime) -> bool:
     """Commit and push only public artifacts needed by GitHub Pages."""
     rels = []
@@ -485,7 +563,12 @@ def publish_public_artifacts(paths: list[Path], run_at: datetime) -> bool:
 
     date_key = run_at.astimezone(KST).date().isoformat()
     commit = subprocess.run(
-        ["git", "commit", "-m", f"chore: publish {JOURNAL_NAME} {date_key}", "--", *rels],
+        [
+            "git",
+            "-c", f"user.name={GIT_USER_NAME}",
+            "-c", f"user.email={GIT_USER_EMAIL}",
+            "commit", "-m", f"chore: publish {JOURNAL_NAME} {date_key}", "--", *rels,
+        ],
         capture_output=True,
         text=True,
     )
@@ -494,6 +577,9 @@ def publish_public_artifacts(paths: list[Path], run_at: datetime) -> bool:
 
     push = subprocess.run(["git", "push", "origin", f"HEAD:{PUBLISH_BRANCH}"], capture_output=True, text=True)
     if push.returncode != 0:
+        if is_non_fast_forward_push(push.stderr):
+            LOG("pages publish branch diverged; retrying from an isolated origin worktree")
+            return publish_public_artifacts_from_remote_branch(rels, date_key)
         raise RuntimeError(f"git push failed: {push.stderr.strip()}")
     return True
 

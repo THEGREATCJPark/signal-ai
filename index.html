@@ -1236,6 +1236,10 @@
     }
     close.addEventListener('pointerdown', closeSummarySheet);
     close.addEventListener('click', closeSummarySheet);
+    document.addEventListener('pointerdown', (e) => {
+      if (!state.open || sheet.contains(e.target) || ribbon.contains(e.target)) return;
+      setOpen(false);
+    });
     window.addEventListener('resize', draw);
     draw();
   }

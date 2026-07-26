@@ -129,6 +129,9 @@ class FrontendMarkupTest(unittest.TestCase):
         self.assertIn("e.stopPropagation();", html)
         self.assertIn("close.addEventListener('pointerdown', closeSummarySheet);", html)
         self.assertIn("close.addEventListener('click', closeSummarySheet);", html)
+        self.assertIn("document.addEventListener('pointerdown', (e) => {", html)
+        self.assertIn("if (!state.open || sheet.contains(e.target) || ribbon.contains(e.target)) return;", html)
+        self.assertIn("setOpen(false);", html)
 
     def test_open_close_animation_stays_on_compositor_and_sleeps_when_idle(self):
         html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")

@@ -62,7 +62,8 @@ class XTriggerScanTest(unittest.TestCase):
     def test_trigger_scan_workflow_passes_gemini_keys_for_korean_summary(self):
         workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")
 
-        self.assertIn("GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS_CJ }}", workflow)
+        self.assertIn("GEMINI_API_KEYS_CJ: ${{ secrets.GEMINI_API_KEYS_CJ }}", workflow)
+        self.assertIn("GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}", workflow)
         self.assertIn('TRIGGER_SUMMARY_MODEL: "gemini-3.1-flash-lite-preview"', workflow)
 
     def test_trigger_scan_workflow_defaults_to_nitter_with_rsshub_fallbacks(self):
@@ -71,17 +72,58 @@ class XTriggerScanTest(unittest.TestCase):
         self.assertIn("X_TRIGGER_FEED_MODE: ${{ vars.X_TRIGGER_FEED_MODE || 'nitter-first' }}", workflow)
         self.assertIn("https://rsshub.pseudoyu.com,https://rsshub.app,https://rsshub.rssforever.com,https://rss.detools.dev", workflow)
 
-    def test_load_google_keys_prefers_cj_gemini_keys(self):
+    def test_load_google_keys_prefers_cj_keys_and_keeps_unique_backups(self):
         from scripts import x_trigger_scan
 
         env = {
-            "GOOGLE_API_KEY": "bad-google",
-            "GEMINI_API_KEYS": "other-one",
+            "GOOGLE_API_KEY": "google-one",
+            "GEMINI_API_KEYS": "other-one,cj-two",
             "GEMINI_API_KEYS_CJ": "cj-one,cj-two",
         }
 
         with patch.dict("os.environ", env, clear=True):
-            self.assertEqual(["cj-one", "cj-two"], x_trigger_scan._load_google_keys())
+            self.assertEqual(
+                ["cj-one", "cj-two", "other-one", "google-one"],
+                x_trigger_scan._load_google_keys(),
+            )
+
+    def test_google_model_tries_backup_key_after_leaked_key_is_rejected(self):
+        from scripts import x_trigger_scan
+
+        requested_urls = []
+
+        class Response:
+            def __init__(self, ok, status_code, payload=None, text=""):
+                self.ok = ok
+                self.status_code = status_code
+                self._payload = payload
+                self.text = text
+
+            def json(self):
+                return self._payload
+
+        def fake_post(url, **kwargs):
+            requested_urls.append(url)
+            if "key=leaked-key" in url:
+                return Response(
+                    False,
+                    403,
+                    text='{"error":{"message":"Your API key was reported as leaked."}}',
+                )
+            return Response(
+                True,
+                200,
+                {"candidates": [{"content": {"parts": [{"text": "backup summary"}]}}]},
+            )
+
+        with patch.dict("os.environ", {"GEMINI_API_KEYS_CJ": "leaked-key,backup-key"}, clear=True), \
+             patch.object(x_trigger_scan.requests, "post", side_effect=fake_post):
+            text = x_trigger_scan.call_google_model("원문을 요약")
+
+        self.assertEqual("backup summary", text)
+        self.assertEqual(2, len(requested_urls))
+        self.assertIn("key=leaked-key", requested_urls[0])
+        self.assertIn("key=backup-key", requested_urls[1])
 
     def test_gemini_flash_lite_config_uses_structured_outputs_and_light_thinking(self):
         from scripts import x_trigger_scan
@@ -402,6 +444,29 @@ class XTriggerScanTest(unittest.TestCase):
 
         self.assertGreaterEqual(score_trigger_candidate(candidate), 80)
         self.assertTrue(should_auto_publish_candidate(candidate))
+
+    def test_fallback_summary_never_auto_publishes_even_with_high_score(self):
+        from scripts.x_trigger_scan import score_trigger_candidate_detail, should_auto_publish_candidate
+
+        candidate = {
+            "account": {"username": "vllm_project", "category": "open_source"},
+            "tweet": {
+                "text": "Qwen support is available in vLLM.",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "summary": {
+                "title": "@vllm_project 새 X 게시글",
+                "body": "AI 요약을 생성하지 못했습니다. 원문을 확인하세요.",
+                "confidence": "fallback",
+                "score": 100,
+            },
+        }
+
+        detail = score_trigger_candidate_detail(candidate)
+
+        self.assertEqual("review", detail["decision"])
+        self.assertIn("summary_generation_failed", detail["hard_blocks"])
+        self.assertFalse(should_auto_publish_candidate(candidate))
 
     def test_trigger_scan_workflow_auto_publishes_to_both_platforms_by_default(self):
         workflow = Path(".github/workflows/x-trigger-scan.yml").read_text(encoding="utf-8")

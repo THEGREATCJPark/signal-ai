@@ -458,6 +458,9 @@ def _collect_penalties_and_blocks(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     penalties: list[dict[str, Any]] = []
     hard_blocks: list[str] = []
+    summary_confidence = str((candidate.get("summary") or {}).get("confidence") or "").strip().lower()
+    if summary_confidence == "fallback":
+        hard_blocks.append("summary_generation_failed")
     if duplicate:
         penalties.append(_penalty("duplicate_story_key", -45, "same story_key was already published recently"))
         hard_blocks.append("duplicate_story_key")

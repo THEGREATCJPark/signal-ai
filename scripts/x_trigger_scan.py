@@ -414,10 +414,7 @@ def summarize_tweet(
 
 def _load_google_keys() -> list[str]:
     keys: list[str] = []
-    cj_keys = os.getenv("GEMINI_API_KEYS_CJ")
-    if cj_keys:
-        return [key.strip() for key in cj_keys.split(",") if key.strip()]
-    for env_name in ("GEMINI_API_KEYS", "GOOGLE_API_KEYS"):
+    for env_name in ("GEMINI_API_KEYS_CJ", "GEMINI_API_KEYS", "GOOGLE_API_KEYS"):
         raw = os.getenv(env_name)
         if raw:
             keys.extend(key.strip() for key in raw.split(",") if key.strip())
@@ -426,7 +423,7 @@ def _load_google_keys() -> list[str]:
         if raw:
             keys.append(raw.strip())
     if keys:
-        return keys
+        return list(dict.fromkeys(keys))
     key_file = Path.home() / ".config" / "legal_evidence_rag" / "keys.env"
     if key_file.exists():
         for line in key_file.read_text(encoding="utf-8").splitlines():

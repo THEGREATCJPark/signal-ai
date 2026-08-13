@@ -71,7 +71,8 @@ jobs:
       X_TRIGGER_FEED_MODE: ${{ vars.X_TRIGGER_FEED_MODE || 'nitter-first' }}
       X_TRIGGER_NITTER_INSTANCES: ${{ vars.X_TRIGGER_NITTER_INSTANCES }}
       NITTER_INSTANCES: ${{ vars.NITTER_INSTANCES }}
-      GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS_CJ }}
+      GEMINI_API_KEYS_CJ: ${{ secrets.GEMINI_API_KEYS_CJ }}
+      GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
       TRIGGER_SUMMARY_MODEL: "gemini-3.1-flash-lite-preview"
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
